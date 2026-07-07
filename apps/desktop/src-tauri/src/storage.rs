@@ -1046,13 +1046,14 @@ mod tests {
         collections::HashMap,
         env, fs,
         path::{Path, PathBuf},
-        time::Instant,
+        time::{Duration, Instant},
     };
 
     use chrono::Utc;
 
     use super::{
-        LibrarySearchRequest, ReadexStore, SaveBookmarkRequest, SaveReadingPositionRequest,
+        BookExportView, LibrarySearchRequest, ReaderChapterView, ReaderDocumentView, ReadexStore,
+        SaveBookmarkRequest, SaveReadingPositionRequest,
     };
     use crate::epub_import::{import_epub_file, ImportedBook, ImportedChapter};
 
@@ -1278,6 +1279,41 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "measures synthetic and local EPUB performance for manual QA"]
+    fn large_book_performance_harness_reports_reader_timings() {
+        let temp_dir = temp_store_dir();
+        fs::create_dir_all(&temp_dir).expect("performance store dir should be created");
+        let store =
+            ReadexStore::open_at(temp_dir.join("readex.sqlite3")).expect("store should initialize");
+
+        measure_imported_book_performance(
+            &store,
+            "synthetic-large-book",
+            None,
+            None,
+            synthetic_large_book(),
+        );
+
+        for epub_path in configured_qa_epub_paths() {
+            let file_size = fs::metadata(&epub_path).ok().map(|metadata| metadata.len());
+            let import_started_at = Instant::now();
+            let imported = import_epub_file(&epub_path).expect("epub should import");
+            let import_elapsed = import_started_at.elapsed();
+            assert_chapter_titles_are_diverse(&imported, &epub_path);
+
+            measure_imported_book_performance(
+                &store,
+                &epub_path.display().to_string(),
+                file_size,
+                Some(import_elapsed),
+                imported,
+            );
+        }
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
     #[ignore = "runs against local EPUB files for manual real-book QA"]
     fn real_book_qa_imports_configured_epubs_through_storage_workflow() {
         let epub_paths = configured_qa_epub_paths();
@@ -1399,6 +1435,174 @@ mod tests {
         fs::remove_dir_all(temp_dir).ok();
     }
 
+    fn measure_imported_book_performance(
+        store: &ReadexStore,
+        source_label: &str,
+        source_size_bytes: Option<u64>,
+        import_elapsed: Option<Duration>,
+        imported: ImportedBook,
+    ) {
+        let persist_started_at = Instant::now();
+        let document = store
+            .save_imported_book(imported)
+            .expect("performance book should persist");
+        let persist_elapsed = persist_started_at.elapsed();
+
+        let full_document = store
+            .export_book_data(&document.book.id)
+            .expect("performance book should export");
+        let total_sentences = total_exported_sentences(&full_document);
+        let largest_chapter = full_document
+            .chapters
+            .iter()
+            .max_by_key(|chapter| chapter.sentences.len())
+            .expect("performance book should have chapters");
+
+        let open_started_at = Instant::now();
+        let opened = store
+            .open_book(&document.book.id, None)
+            .expect("performance book should open");
+        let open_elapsed = open_started_at.elapsed();
+        assert_reader_payload_is_lightweight(&opened);
+
+        let switch_measurements =
+            measure_chapter_switches(store, &document.book.id, &full_document.chapters);
+        let max_switch = switch_measurements
+            .iter()
+            .max_by_key(|measurement| measurement.elapsed)
+            .expect("chapter switch measurements should exist");
+
+        println!(
+            "PERF {} | source={} | chapters={} | sentences={} | largest={:?} ({} sentences) | import={} | persist={} | open={} | max_switch={} ({:?}, {} sentences)",
+            document.book.title,
+            source_size_bytes.map(format_bytes).unwrap_or_else(|| "synthetic".to_string()),
+            full_document.chapters.len(),
+            total_sentences,
+            largest_chapter.title,
+            largest_chapter.sentences.len(),
+            import_elapsed
+                .map(format_duration_ms)
+                .unwrap_or_else(|| "n/a".to_string()),
+            format_duration_ms(persist_elapsed),
+            format_duration_ms(open_elapsed),
+            format_duration_ms(max_switch.elapsed),
+            max_switch.title,
+            max_switch.sentence_count
+        );
+        println!("PERF source path: {source_label}");
+    }
+
+    fn measure_chapter_switches(
+        store: &ReadexStore,
+        book_id: &str,
+        chapters: &[ReaderChapterView],
+    ) -> Vec<ChapterSwitchMeasurement> {
+        let mut chapter_ids = Vec::<String>::new();
+        for chapter in [
+            chapters.first(),
+            chapters.get(chapters.len() / 2),
+            chapters
+                .iter()
+                .max_by_key(|chapter| chapter.sentences.len()),
+            chapters.last(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if !chapter_ids.contains(&chapter.id) {
+                chapter_ids.push(chapter.id.clone());
+            }
+        }
+
+        chapter_ids
+            .into_iter()
+            .map(|chapter_id| {
+                let started_at = Instant::now();
+                let document = store
+                    .open_book(book_id, Some(&chapter_id))
+                    .expect("performance chapter should open");
+                let elapsed = started_at.elapsed();
+                assert_eq!(
+                    document.active_chapter_id.as_deref(),
+                    Some(chapter_id.as_str())
+                );
+                assert_reader_payload_is_lightweight(&document);
+                let chapter = document
+                    .chapters
+                    .iter()
+                    .find(|chapter| chapter.id == chapter_id)
+                    .expect("active chapter should exist");
+
+                ChapterSwitchMeasurement {
+                    title: chapter.title.clone(),
+                    sentence_count: chapter.sentences.len(),
+                    elapsed,
+                }
+            })
+            .collect()
+    }
+
+    fn assert_reader_payload_is_lightweight(document: &ReaderDocumentView) {
+        let hydrated_chapters = document
+            .chapters
+            .iter()
+            .filter(|chapter| !chapter.sentences.is_empty())
+            .count();
+
+        assert!(
+            hydrated_chapters <= 1,
+            "reader payload should hydrate only the active chapter for {}",
+            document.book.title
+        );
+    }
+
+    fn total_exported_sentences(document: &BookExportView) -> usize {
+        document
+            .chapters
+            .iter()
+            .map(|chapter| chapter.sentences.len())
+            .sum()
+    }
+
+    fn synthetic_large_book() -> ImportedBook {
+        ImportedBook {
+            id: "synthetic-large-book".to_string(),
+            title: "Synthetic Large Book".to_string(),
+            author: "Readex QA".to_string(),
+            source_path: "synthetic://large-book".to_string(),
+            chapters: (0..14)
+                .map(|chapter_index| {
+                    let sentence_count = if chapter_index == 6 { 2_000 } else { 600 };
+                    ImportedChapter {
+                        id: format!("synthetic-large-book:chapter-{}", chapter_index + 1),
+                        title: format!("Synthetic Chapter {}", chapter_index + 1),
+                        index: chapter_index,
+                        body: synthetic_chapter_body(chapter_index, sentence_count),
+                    }
+                })
+                .collect(),
+        }
+    }
+
+    fn synthetic_chapter_body(chapter_index: usize, sentence_count: usize) -> String {
+        (0..sentence_count)
+            .map(|sentence_index| {
+                format!(
+                    "Synthetic chapter {} sentence {} keeps performance measurement repeatable.",
+                    chapter_index + 1,
+                    sentence_index + 1
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    struct ChapterSwitchMeasurement {
+        title: String,
+        sentence_count: usize,
+        elapsed: Duration,
+    }
+
     fn temp_store_dir() -> PathBuf {
         std::env::temp_dir().join(format!(
             "readex-store-test-{}",
@@ -1489,5 +1693,21 @@ mod tests {
                     .to_string()
             })
             .find(|word| word.chars().count() >= 5 && word.chars().all(char::is_alphabetic))
+    }
+
+    fn format_duration_ms(duration: Duration) -> String {
+        format!("{:.2}ms", duration.as_secs_f64() * 1_000.0)
+    }
+
+    fn format_bytes(bytes: u64) -> String {
+        if bytes >= 1_048_576 {
+            return format!("{:.2} MiB", bytes as f64 / 1_048_576.0);
+        }
+
+        if bytes >= 1_024 {
+            return format!("{:.2} KiB", bytes as f64 / 1_024.0);
+        }
+
+        format!("{bytes} B")
     }
 }

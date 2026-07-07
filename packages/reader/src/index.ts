@@ -64,6 +64,19 @@ export interface SentenceRenderWindowOptions {
   trailCount: number;
 }
 
+export interface ReadingPositionScheduler<TPosition> {
+  schedulePlaybackSave(position: TPosition): void;
+  saveNow(position: TPosition): void;
+  flush(): void;
+  cancel(): void;
+}
+
+export interface ReadingPositionSchedulerOptions<TPosition> {
+  delayMs: number;
+  save(position: TPosition): void | Promise<void>;
+  onError?(error: unknown): void;
+}
+
 export function highlightSentence(sentenceId: string | null): HighlightState {
   return { activeSentenceId: sentenceId };
 }
@@ -280,6 +293,53 @@ export function calculateSentenceRenderWindow(
     end,
     hiddenBefore: start,
     hiddenAfter: sentenceCount - end
+  };
+}
+
+export function createReadingPositionScheduler<TPosition>(
+  options: ReadingPositionSchedulerOptions<TPosition>
+): ReadingPositionScheduler<TPosition> {
+  let pendingPosition: TPosition | null = null;
+  let timerId: ReturnType<typeof setTimeout> | null = null;
+
+  const clearPendingTimer = () => {
+    if (timerId == null) return;
+
+    clearTimeout(timerId);
+    timerId = null;
+  };
+
+  const persist = (position: TPosition) => {
+    Promise.resolve(options.save(position)).catch((error: unknown) => options.onError?.(error));
+  };
+
+  const flush = () => {
+    clearPendingTimer();
+    const position = pendingPosition;
+    pendingPosition = null;
+
+    if (position != null) {
+      persist(position);
+    }
+  };
+
+  return {
+    schedulePlaybackSave(position) {
+      pendingPosition = position;
+      if (timerId != null) return;
+
+      timerId = setTimeout(flush, Math.max(0, options.delayMs));
+    },
+    saveNow(position) {
+      clearPendingTimer();
+      pendingPosition = null;
+      persist(position);
+    },
+    flush,
+    cancel() {
+      clearPendingTimer();
+      pendingPosition = null;
+    }
   };
 }
 

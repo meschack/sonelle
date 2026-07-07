@@ -43,6 +43,12 @@
       "color": "red"
     },
     {
+      "name": "PERF",
+      "dir": ".",
+      "cmd": "pnpm perf:large-books",
+      "color": "magenta"
+    },
+    {
       "name": "VOICE",
       "dir": ".",
       "cmd": "pnpm setup:piper",

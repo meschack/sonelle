@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   advancePlayback,
   calculateReaderProgress,
   calculateSentenceRenderWindow,
+  createReadingPositionScheduler,
   createPlaybackState,
   createReaderPreferences,
   finishSentencePlayback,
@@ -14,6 +15,12 @@ import {
   serializeReaderPreferences,
   sentenceMatchesQuery
 } from "./index";
+
+interface TestReadingPosition {
+  bookId: string;
+  chapterId: string;
+  sentenceIndex: number;
+}
 
 describe("reader playback", () => {
   it("starts at the first sentence", () => {
@@ -149,6 +156,82 @@ describe("sentence render window", () => {
   });
 });
 
+describe("reading position scheduler", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("coalesces playback-driven saves to the latest pending position", () => {
+    vi.useFakeTimers();
+    const savedPositions: TestReadingPosition[] = [];
+    const scheduler = createReadingPositionScheduler<TestReadingPosition>({
+      delayMs: 2_000,
+      save: (position) => {
+        savedPositions.push(position);
+      }
+    });
+
+    scheduler.schedulePlaybackSave(position(1));
+    scheduler.schedulePlaybackSave(position(2));
+
+    vi.advanceTimersByTime(1_999);
+    expect(savedPositions).toEqual([]);
+
+    vi.advanceTimersByTime(1);
+    expect(savedPositions).toEqual([position(2)]);
+  });
+
+  it("saves manual jumps immediately and clears any pending playback save", () => {
+    vi.useFakeTimers();
+    const savedPositions: TestReadingPosition[] = [];
+    const scheduler = createReadingPositionScheduler<TestReadingPosition>({
+      delayMs: 2_000,
+      save: (position) => {
+        savedPositions.push(position);
+      }
+    });
+
+    scheduler.schedulePlaybackSave(position(1));
+    scheduler.saveNow(position(7));
+    vi.advanceTimersByTime(2_000);
+
+    expect(savedPositions).toEqual([position(7)]);
+  });
+
+  it("flushes pending playback progress when playback stops", () => {
+    vi.useFakeTimers();
+    const savedPositions: TestReadingPosition[] = [];
+    const scheduler = createReadingPositionScheduler<TestReadingPosition>({
+      delayMs: 2_000,
+      save: (position) => {
+        savedPositions.push(position);
+      }
+    });
+
+    scheduler.schedulePlaybackSave(position(3));
+    scheduler.flush();
+
+    expect(savedPositions).toEqual([position(3)]);
+  });
+
+  it("drops pending playback progress when cancelled", () => {
+    vi.useFakeTimers();
+    const savedPositions: TestReadingPosition[] = [];
+    const scheduler = createReadingPositionScheduler<TestReadingPosition>({
+      delayMs: 2_000,
+      save: (position) => {
+        savedPositions.push(position);
+      }
+    });
+
+    scheduler.schedulePlaybackSave(position(4));
+    scheduler.cancel();
+    vi.advanceTimersByTime(2_000);
+
+    expect(savedPositions).toEqual([]);
+  });
+});
+
 describe("reader preferences", () => {
   it("keeps workflow preferences inside supported values", () => {
     expect(
@@ -184,3 +267,11 @@ describe("reader preferences", () => {
     });
   });
 });
+
+function position(sentenceIndex: number): TestReadingPosition {
+  return {
+    bookId: "book-1",
+    chapterId: "chapter-1",
+    sentenceIndex
+  };
+}

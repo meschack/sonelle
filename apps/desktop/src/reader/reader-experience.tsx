@@ -30,6 +30,7 @@ import {
   calculateReaderProgress,
   calculateSentenceRenderWindow,
   createPlaybackState,
+  createReadingPositionScheduler,
   finishSentencePlayback,
   highlightSentence,
   movePlayback,
@@ -102,6 +103,9 @@ interface OpenBookOptions {
 
 const renderedSentenceLead = 36;
 const renderedSentenceTrail = 96;
+const playbackPositionSaveDelayMs = 2_500;
+
+type PositionSaveIntent = "immediate" | "playback";
 
 export function ReaderExperience() {
   const repository = createBookRepository();
@@ -147,10 +151,16 @@ export function ReaderExperience() {
     Record<string, DictionaryLookupResult>
   >({});
   const [selectedWord, setSelectedWord] = createSignal<SelectedWord | null>(null);
+  const readingPositionScheduler = createReadingPositionScheduler<SaveReadingPositionInput>({
+    delayMs: playbackPositionSaveDelayMs,
+    save: (position) => repository.saveReadingPosition(position),
+    onError: () => setLibraryNotice("We couldn't save your place just now.")
+  });
 
   let activeHtmlAudio: HTMLAudioElement | null = null;
   let narrationRun = 0;
   let librarySearchRun = 0;
+  let nextPositionSaveIntent: PositionSaveIntent | null = null;
   let readerSearchInput: HTMLInputElement | undefined;
   const sentenceElements = new Map<string, HTMLParagraphElement>();
 
@@ -257,6 +267,7 @@ export function ReaderExperience() {
     window.addEventListener("keydown", handleShortcut);
     onCleanup(() => window.removeEventListener("keydown", handleShortcut));
   });
+  onCleanup(() => readingPositionScheduler.flush());
 
   createEffect(() => {
     const settings = audioSettings();
@@ -341,8 +352,13 @@ export function ReaderExperience() {
     const currentReader = reader();
     const currentPlayback = playback();
     const sentence = currentReader.sentences[currentPlayback.activeSentenceIndex];
+    const saveIntent = nextPositionSaveIntent;
+    nextPositionSaveIntent = null;
 
-    if (currentReader.source !== "library" || sentence == null) return;
+    if (currentReader.source !== "library" || sentence == null) {
+      if (currentReader.source !== "library") readingPositionScheduler.flush();
+      return;
+    }
 
     const position: SaveReadingPositionInput = {
       bookId: currentReader.book.id,
@@ -350,9 +366,12 @@ export function ReaderExperience() {
       sentenceIndex: sentence.index
     };
 
-    void repository.saveReadingPosition(position).catch(() => {
-      setLibraryNotice("We couldn't save your place just now.");
-    });
+    if (saveIntent === "immediate" || currentPlayback.status !== "playing") {
+      readingPositionScheduler.saveNow(position);
+      return;
+    }
+
+    readingPositionScheduler.schedulePlaybackSave(position);
   });
 
   const handleShortcut = (event: KeyboardEvent) => {
@@ -499,6 +518,7 @@ export function ReaderExperience() {
   const commitPlaybackJump = (
     resolvePlayback: (current: ReaderPlaybackState) => ReaderPlaybackState
   ) => {
+    nextPositionSaveIntent = "immediate";
     batch(() => {
       setPlayback(resolvePlayback);
       setActiveNarration(null);
@@ -514,6 +534,8 @@ export function ReaderExperience() {
     sentenceIndex = nextReader.initialSentenceIndex,
     playbackStatus: PlaybackStatus = "idle"
   ) => {
+    readingPositionScheduler.flush();
+    nextPositionSaveIntent = "immediate";
     sentenceElements.clear();
     batch(() => {
       setReader(nextReader);
@@ -561,6 +583,7 @@ export function ReaderExperience() {
       }
 
       if (runId !== narrationRun) return;
+      nextPositionSaveIntent = "playback";
       setPlayback((current) =>
         finishSentencePlayback(current, currentReader.sentences.length, audioSettings().autoAdvance)
       );

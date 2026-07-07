@@ -36,6 +36,7 @@ pnpm build
 pnpm check
 pnpm check:native
 pnpm qa:real-books
+pnpm perf:large-books
 cargo check
 ```
 
@@ -50,6 +51,7 @@ The project includes a small local TUI at `scripts/dev-tui.mjs`. It reads `.dev-
 - full JS/TS check
 - native Rust/Tauri check
 - real-book QA
+- large-book performance harness
 
 Run it with:
 
@@ -106,6 +108,22 @@ READEX_QA_EPUBS="/path/book-one.epub;/path/book-two.epub" pnpm qa:real-books
 ```
 
 Use at least two books. The check imports each EPUB, verifies chapter titles do not collapse into the book title, saves and reopens reading position, creates a bookmark, searches the imported text, and exports the book data.
+
+## Large-Book Performance Harness
+
+Run the reader performance harness with:
+
+```bash
+pnpm perf:large-books
+```
+
+The harness always measures a synthetic large book, then adds any configured real EPUBs from `READEX_QA_EPUBS` or `~/Downloads/books`. It reports book size, chapter count, sentence count, import timing, persistence timing, open-book timing, and chapter-switch timing.
+
+Use the same EPUB override format as real-book QA:
+
+```bash
+READEX_QA_EPUBS="/path/book-one.epub;/path/book-two.epub" pnpm perf:large-books
+```
 
 ## Local Narration Voice
 
