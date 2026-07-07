@@ -5,7 +5,7 @@ import type { LibraryBookSummary, ReaderDocumentDto } from "../reader/reader-doc
 export interface BookRepository {
   importBookFromDialog(): Promise<ReaderDocumentDto | null>;
   listBooks(): Promise<LibraryBookSummary[]>;
-  openBook(bookId: string): Promise<ReaderDocumentDto>;
+  openBook(bookId: string, chapterId?: string): Promise<ReaderDocumentDto>;
   saveReadingPosition(input: SaveReadingPositionInput): Promise<void>;
   listBookmarks(bookId?: string): Promise<LibraryBookmarkDto[]>;
   saveBookmark(input: SaveBookmarkInput): Promise<LibraryBookmarkDto>;
@@ -98,8 +98,8 @@ const nativeBookRepository: BookRepository = {
     return invoke<LibraryBookSummary[]>("list_books");
   },
 
-  openBook(bookId) {
-    return invoke<ReaderDocumentDto>("open_book", { bookId });
+  openBook(bookId, chapterId) {
+    return invoke<ReaderDocumentDto>("open_book", { bookId, chapterId: chapterId ?? null });
   },
 
   saveReadingPosition(position) {

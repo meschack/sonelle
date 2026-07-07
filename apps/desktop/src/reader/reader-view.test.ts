@@ -29,11 +29,13 @@ describe("fixture reader view", () => {
         title: "Imported",
         author: "Author"
       },
+      activeChapterId: "chapter-1",
       chapters: [
         {
           id: "chapter-1",
           title: "One",
           index: 0,
+          sentenceCount: 1,
           sentences: [{ id: "sentence-1", index: 0, text: "Hello reader." }]
         }
       ],
@@ -72,17 +74,20 @@ describe("fixture reader view", () => {
           title: "Imported",
           author: "Author"
         },
+        activeChapterId: "chapter-2",
         chapters: [
           {
             id: "chapter-1",
             title: "One",
             index: 0,
-            sentences: [{ id: "sentence-1", index: 0, text: "First." }]
+            sentenceCount: 1,
+            sentences: []
           },
           {
             id: "chapter-2",
             title: "Two",
             index: 1,
+            sentenceCount: 1,
             sentences: [{ id: "sentence-2", index: 0, text: "Second." }]
           }
         ],
@@ -109,17 +114,20 @@ describe("fixture reader view", () => {
           title: "Imported",
           author: "Author"
         },
+        activeChapterId: "chapter-2",
         chapters: [
           {
             id: "chapter-1",
             title: "One",
             index: 0,
-            sentences: [{ id: "sentence-1", index: 0, text: "First." }]
+            sentenceCount: 1,
+            sentences: []
           },
           {
             id: "chapter-2",
             title: "Two",
             index: 1,
+            sentenceCount: 2,
             sentences: [
               { id: "sentence-2", index: 0, text: "Second." },
               { id: "sentence-3", index: 1, text: "Third." }
@@ -138,5 +146,41 @@ describe("fixture reader view", () => {
 
     expect(reader.initialSentenceIndex).toBe(0);
     expect(reader.totalSentenceCount).toBe(3);
+  });
+
+  it("keeps inactive chapter summaries lightweight while preserving book totals", () => {
+    const reader = buildReaderViewFromDocument({
+      book: {
+        id: "book-1",
+        title: "Imported",
+        author: "Author"
+      },
+      activeChapterId: "chapter-2",
+      chapters: [
+        {
+          id: "chapter-1",
+          title: "One",
+          index: 0,
+          sentenceCount: 50,
+          sentences: []
+        },
+        {
+          id: "chapter-2",
+          title: "Two",
+          index: 1,
+          sentenceCount: 2,
+          sentences: [
+            { id: "sentence-2", index: 0, text: "Second." },
+            { id: "sentence-3", index: 1, text: "Third." }
+          ]
+        }
+      ],
+      position: null
+    });
+
+    expect(reader.chapter.id).toBe("chapter-2");
+    expect(reader.sentences.map((sentence) => sentence.text)).toEqual(["Second.", "Third."]);
+    expect(reader.chapters.map((chapter) => chapter.sentenceCount)).toEqual([50, 2]);
+    expect(reader.totalSentenceCount).toBe(52);
   });
 });

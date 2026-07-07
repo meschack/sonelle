@@ -29,6 +29,7 @@ pub struct LibraryBookView {
 #[serde(rename_all = "camelCase")]
 pub struct ReaderDocumentView {
     pub book: ReaderBookView,
+    pub active_chapter_id: Option<String>,
     pub chapters: Vec<ReaderChapterView>,
     pub position: Option<ReadingPositionView>,
 }
@@ -47,6 +48,7 @@ pub struct ReaderChapterView {
     pub id: String,
     pub title: String,
     pub index: i64,
+    pub sentence_count: i64,
     pub sentences: Vec<ReaderSentenceView>,
 }
 
@@ -250,7 +252,7 @@ impl ReadexStore {
         transaction
             .commit()
             .map_err(|_| "We couldn't finish saving that book.".to_string())?;
-        self.open_book(&book.id)
+        self.open_book(&book.id, Some(&first_chapter.id))
     }
 
     pub fn list_books(&self) -> Result<Vec<LibraryBookView>, String> {
@@ -303,43 +305,50 @@ impl ReadexStore {
         Ok(books)
     }
 
-    pub fn open_book(&self, book_id: &str) -> Result<ReaderDocumentView, String> {
+    pub fn open_book(
+        &self,
+        book_id: &str,
+        requested_chapter_id: Option<&str>,
+    ) -> Result<ReaderDocumentView, String> {
         let connection = self.connect()?;
-        let book = connection
-            .query_row(
-                "SELECT id, title, author FROM books WHERE id = ?1",
-                params![book_id],
-                |row| {
-                    Ok(ReaderBookView {
-                        id: row.get(0)?,
-                        title: row.get(1)?,
-                        author: row.get(2)?,
-                    })
-                },
-            )
-            .optional()
-            .map_err(|_| "We couldn't open that book.".to_string())?
-            .ok_or_else(|| "We couldn't find that book in your library.".to_string())?;
-        let chapters = self.read_chapters(&connection, book_id)?;
-        let position = connection
-            .query_row(
-                "SELECT book_id, chapter_id, sentence_index, updated_at
-                 FROM reading_positions WHERE book_id = ?1",
-                params![book_id],
-                |row| {
-                    Ok(ReadingPositionView {
-                        book_id: row.get(0)?,
-                        chapter_id: row.get(1)?,
-                        sentence_index: row.get(2)?,
-                        updated_at: row.get(3)?,
-                    })
-                },
-            )
-            .optional()
-            .map_err(|_| "We couldn't restore your reading place.".to_string())?;
+        let book = self.read_book(&connection, book_id)?;
+        let mut chapters = self.read_chapter_summaries(&connection, book_id)?;
+        let position = self.read_position(&connection, book_id)?;
+        let active_chapter_id = resolve_active_chapter_id(
+            &chapters,
+            requested_chapter_id,
+            position.as_ref().map(|entry| entry.chapter_id.as_str()),
+        );
+
+        if let Some(chapter_id) = active_chapter_id.as_deref() {
+            let sentences = self.read_sentences_for_chapter(&connection, chapter_id)?;
+            if let Some(chapter) = chapters.iter_mut().find(|entry| entry.id == chapter_id) {
+                chapter.sentences = sentences;
+            }
+        }
 
         Ok(ReaderDocumentView {
             book,
+            active_chapter_id,
+            chapters,
+            position,
+        })
+    }
+
+    fn open_book_for_export(&self, book_id: &str) -> Result<ReaderDocumentView, String> {
+        let connection = self.connect()?;
+        let book = self.read_book(&connection, book_id)?;
+        let chapters = self.read_chapters_with_sentences(&connection, book_id)?;
+        let position = self.read_position(&connection, book_id)?;
+        let active_chapter_id = resolve_active_chapter_id(
+            &chapters,
+            None,
+            position.as_ref().map(|entry| entry.chapter_id.as_str()),
+        );
+
+        Ok(ReaderDocumentView {
+            book,
+            active_chapter_id,
             chapters,
             position,
         })
@@ -560,7 +569,7 @@ impl ReadexStore {
             }),
         )?;
 
-        let document = self.open_book(book_id)?;
+        let document = self.open_book_for_export(book_id)?;
         let bookmarks = self.list_bookmarks(Some(book_id))?;
         insert_event(
             &connection,
@@ -650,24 +659,78 @@ impl ReadexStore {
             .map_err(|_| "We couldn't prepare the local library.".to_string())
     }
 
-    fn read_chapters(
+    fn read_book(&self, connection: &Connection, book_id: &str) -> Result<ReaderBookView, String> {
+        connection
+            .query_row(
+                "SELECT id, title, author FROM books WHERE id = ?1",
+                params![book_id],
+                |row| {
+                    Ok(ReaderBookView {
+                        id: row.get(0)?,
+                        title: row.get(1)?,
+                        author: row.get(2)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|_| "We couldn't open that book.".to_string())?
+            .ok_or_else(|| "We couldn't find that book in your library.".to_string())
+    }
+
+    fn read_position(
+        &self,
+        connection: &Connection,
+        book_id: &str,
+    ) -> Result<Option<ReadingPositionView>, String> {
+        connection
+            .query_row(
+                "SELECT book_id, chapter_id, sentence_index, updated_at
+                 FROM reading_positions WHERE book_id = ?1",
+                params![book_id],
+                |row| {
+                    Ok(ReadingPositionView {
+                        book_id: row.get(0)?,
+                        chapter_id: row.get(1)?,
+                        sentence_index: row.get(2)?,
+                        updated_at: row.get(3)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|_| "We couldn't restore your reading place.".to_string())
+    }
+
+    fn read_chapter_summaries(
         &self,
         connection: &Connection,
         book_id: &str,
     ) -> Result<Vec<ReaderChapterView>, String> {
         let mut statement = connection
             .prepare(
-                "SELECT id, title, position FROM chapters
-                 WHERE book_id = ?1
-                 ORDER BY position ASC",
+                "WITH sentence_counts AS (
+                    SELECT chapter_id, COUNT(*) AS sentence_count
+                    FROM sentences
+                    WHERE book_id = ?1
+                    GROUP BY chapter_id
+                 )
+                 SELECT
+                    chapters.id,
+                    chapters.title,
+                    chapters.position,
+                    COALESCE(sentence_counts.sentence_count, 0) AS sentence_count
+                 FROM chapters
+                 LEFT JOIN sentence_counts ON sentence_counts.chapter_id = chapters.id
+                 WHERE chapters.book_id = ?1
+                 ORDER BY chapters.position ASC",
             )
             .map_err(|_| "We couldn't read that book.".to_string())?;
-        let mut chapters = statement
+        let chapters = statement
             .query_map(params![book_id], |row| {
                 Ok(ReaderChapterView {
                     id: row.get(0)?,
                     title: row.get(1)?,
                     index: row.get(2)?,
+                    sentence_count: row.get(3)?,
                     sentences: Vec::new(),
                 })
             })
@@ -675,6 +738,15 @@ impl ReadexStore {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|_| "We couldn't read that book.".to_string())?;
 
+        Ok(chapters)
+    }
+
+    fn read_chapters_with_sentences(
+        &self,
+        connection: &Connection,
+        book_id: &str,
+    ) -> Result<Vec<ReaderChapterView>, String> {
+        let mut chapters = self.read_chapter_summaries(connection, book_id)?;
         let chapter_indexes = chapters
             .iter()
             .enumerate()
@@ -688,6 +760,34 @@ impl ReadexStore {
         }
 
         Ok(chapters)
+    }
+
+    fn read_sentences_for_chapter(
+        &self,
+        connection: &Connection,
+        chapter_id: &str,
+    ) -> Result<Vec<ReaderSentenceView>, String> {
+        let mut statement = connection
+            .prepare(
+                "SELECT id, position, text FROM sentences
+                 WHERE chapter_id = ?1
+                 ORDER BY position ASC",
+            )
+            .map_err(|_| "We couldn't read that chapter.".to_string())?;
+
+        let sentences = statement
+            .query_map(params![chapter_id], |row| {
+                Ok(ReaderSentenceView {
+                    id: row.get(0)?,
+                    index: row.get(1)?,
+                    text: row.get(2)?,
+                })
+            })
+            .map_err(|_| "We couldn't read that chapter.".to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| "We couldn't read that chapter.".to_string())?;
+
+        Ok(sentences)
     }
 
     fn read_sentences_for_book(
@@ -887,6 +987,21 @@ fn read_bookmark_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<BookmarkView> 
     })
 }
 
+fn resolve_active_chapter_id(
+    chapters: &[ReaderChapterView],
+    requested_chapter_id: Option<&str>,
+    saved_chapter_id: Option<&str>,
+) -> Option<String> {
+    requested_chapter_id
+        .filter(|chapter_id| chapters.iter().any(|chapter| chapter.id == *chapter_id))
+        .or_else(|| {
+            saved_chapter_id
+                .filter(|chapter_id| chapters.iter().any(|chapter| chapter.id == *chapter_id))
+        })
+        .or_else(|| chapters.first().map(|chapter| chapter.id.as_str()))
+        .map(str::to_string)
+}
+
 fn bookmark_id(book_id: &str, chapter_id: &str, sentence_id: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(book_id.as_bytes());
@@ -974,7 +1089,9 @@ mod tests {
             })
             .expect("position should save");
 
-        let reopened = store.open_book("book-test").expect("book should reopen");
+        let reopened = store
+            .open_book("book-test", None)
+            .expect("book should reopen");
         assert_eq!(
             reopened
                 .position
@@ -1021,6 +1138,79 @@ mod tests {
         assert_eq!(books.len(), 1);
         assert_eq!(books[0].chapter_count, 2);
         assert_eq!(books[0].sentence_count, 3);
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn opens_reader_payload_with_only_active_chapter_sentences() {
+        let temp_dir = temp_store_dir();
+        fs::create_dir_all(&temp_dir).expect("test store dir should be created");
+        let store =
+            ReadexStore::open_at(temp_dir.join("readex.sqlite3")).expect("store should initialize");
+
+        let document = store
+            .save_imported_book(ImportedBook {
+                id: "book-active".to_string(),
+                title: "Active Book".to_string(),
+                author: "Test Author".to_string(),
+                source_path: "/tmp/active.epub".to_string(),
+                chapters: vec![
+                    ImportedChapter {
+                        id: "book-active:chapter-1".to_string(),
+                        title: "Chapter One".to_string(),
+                        index: 0,
+                        body: "First sentence. Second sentence.".to_string(),
+                    },
+                    ImportedChapter {
+                        id: "book-active:chapter-2".to_string(),
+                        title: "Chapter Two".to_string(),
+                        index: 1,
+                        body: "Third sentence.".to_string(),
+                    },
+                ],
+            })
+            .expect("book should save");
+
+        assert_eq!(document.chapters.len(), 2);
+        assert_eq!(
+            document.active_chapter_id.as_deref(),
+            Some("book-active:chapter-1")
+        );
+        assert_eq!(document.chapters[0].sentence_count, 2);
+        assert_eq!(document.chapters[0].sentences.len(), 2);
+        assert_eq!(document.chapters[1].sentence_count, 1);
+        assert!(
+            document.chapters[1].sentences.is_empty(),
+            "inactive chapters should stay lightweight in reader payloads"
+        );
+
+        let requested = store
+            .open_book("book-active", Some("book-active:chapter-2"))
+            .expect("requested chapter should open");
+        assert_eq!(
+            requested.active_chapter_id.as_deref(),
+            Some("book-active:chapter-2")
+        );
+        assert!(requested.chapters[0].sentences.is_empty());
+        assert_eq!(requested.chapters[1].sentences.len(), 1);
+
+        store
+            .save_reading_position(SaveReadingPositionRequest {
+                book_id: "book-active".to_string(),
+                chapter_id: "book-active:chapter-2".to_string(),
+                sentence_index: 0,
+            })
+            .expect("position should save");
+        let restored = store
+            .open_book("book-active", None)
+            .expect("saved chapter should reopen");
+        assert_eq!(
+            restored.active_chapter_id.as_deref(),
+            Some("book-active:chapter-2")
+        );
+        assert!(restored.chapters[0].sentences.is_empty());
+        assert_eq!(restored.chapters[1].sentences.len(), 1);
 
         fs::remove_dir_all(temp_dir).ok();
     }
@@ -1109,12 +1299,15 @@ mod tests {
             let document = store
                 .save_imported_book(imported)
                 .expect("imported epub should persist");
-            let total_sentences = document
+            let full_document = store
+                .export_book_data(&document.book.id)
+                .expect("full book data should export for QA");
+            let total_sentences = full_document
                 .chapters
                 .iter()
                 .map(|chapter| chapter.sentences.len())
                 .sum::<usize>();
-            let largest_chapter = document
+            let largest_chapter = full_document
                 .chapters
                 .iter()
                 .max_by_key(|chapter| chapter.sentences.len())
@@ -1140,7 +1333,7 @@ mod tests {
                 })
                 .expect("reading position should save");
             let reopened = store
-                .open_book(&document.book.id)
+                .open_book(&document.book.id, None)
                 .expect("book should reopen after position save");
             assert_eq!(
                 reopened
@@ -1190,7 +1383,7 @@ mod tests {
             println!(
                 "QA {}: {} chapters, {} sentences, largest chapter {:?} has {} sentences, imported in {:?}",
                 document.book.title,
-                document.chapters.len(),
+                full_document.chapters.len(),
                 total_sentences,
                 largest_chapter.title,
                 largest_chapter.sentences.len(),

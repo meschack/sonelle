@@ -707,7 +707,7 @@ export function ReaderExperience() {
 
   const openLibraryBook = async (bookId: string, options: OpenBookOptions = {}) => {
     try {
-      const document = await repository.openBook(bookId);
+      const document = await repository.openBook(bookId, options.chapterId);
       const nextReader = buildReaderViewFromDocument(document, options);
       activateReader(
         nextReader,
@@ -1946,6 +1946,7 @@ function createSampleExport(
         id: currentReader.chapter.id,
         title: currentReader.chapter.title,
         index: 0,
+        sentenceCount: currentReader.sentences.length,
         sentences: currentReader.sentences.map((sentence) => ({
           id: sentence.id,
           index: sentence.index,

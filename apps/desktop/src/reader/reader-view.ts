@@ -100,9 +100,11 @@ export function buildReaderViewFromDocument(
   document: ReaderDocumentDto,
   options: BuildReaderViewOptions = {}
 ): ReaderView {
+  const targetChapterId =
+    options.chapterId ?? document.activeChapterId ?? document.position?.chapterId;
   const chapter =
-    document.chapters.find((entry) => entry.id === options.chapterId) ??
-    document.chapters.find((entry) => entry.id === document.position?.chapterId) ??
+    document.chapters.find((entry) => entry.id === targetChapterId) ??
+    document.chapters.find((entry) => entry.id === document.activeChapterId) ??
     document.chapters[0];
 
   if (chapter == null) {
@@ -131,7 +133,7 @@ export function buildReaderViewFromDocument(
       id: entry.id,
       title: entry.title,
       index: entry.index,
-      sentenceCount: entry.sentences.length
+      sentenceCount: entry.sentenceCount
     })),
     initialSentenceIndex: resolveInitialSentenceIndex(
       chapter.sentences.length,
@@ -141,10 +143,7 @@ export function buildReaderViewFromDocument(
           ? document.position.sentenceIndex
           : undefined
     ),
-    totalSentenceCount: document.chapters.reduce(
-      (total, entry) => total + entry.sentences.length,
-      0
-    ),
+    totalSentenceCount: document.chapters.reduce((total, entry) => total + entry.sentenceCount, 0),
     sentences: chapter.sentences.map((sentence) => ({
       id: sentence.id,
       index: sentence.index,

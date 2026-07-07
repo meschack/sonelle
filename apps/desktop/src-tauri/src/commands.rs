@@ -22,8 +22,12 @@ pub fn list_books(app: AppHandle) -> Result<Vec<LibraryBookView>, String> {
 }
 
 #[tauri::command]
-pub fn open_book(app: AppHandle, book_id: String) -> Result<ReaderDocumentView, String> {
-    ReadexStore::open(&app)?.open_book(&book_id)
+pub fn open_book(
+    app: AppHandle,
+    book_id: String,
+    chapter_id: Option<String>,
+) -> Result<ReaderDocumentView, String> {
+    ReadexStore::open(&app)?.open_book(&book_id, chapter_id.as_deref())
 }
 
 #[tauri::command]

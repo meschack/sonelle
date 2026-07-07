@@ -15,6 +15,7 @@ export interface ReaderDocumentDto {
     title: string;
     author: string;
   };
+  activeChapterId: string | null;
   chapters: ReaderChapterDto[];
   position: ReadingPositionDto | null;
 }
@@ -23,6 +24,7 @@ export interface ReaderChapterDto {
   id: string;
   title: string;
   index: number;
+  sentenceCount: number;
   sentences: ReaderSentenceDto[];
 }
 
