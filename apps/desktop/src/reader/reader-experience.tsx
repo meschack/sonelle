@@ -15,7 +15,14 @@ import {
   type SentenceNarration,
   type SentenceNarrationRequest
 } from "@readex/audio";
-import { bookmarkedBookIds, filterLibraryBooks, type LibraryBookFilter } from "@readex/library";
+import {
+  bookmarkedBookIds,
+  filterLibraryBooks,
+  hasLibrarySearchQuery,
+  resolveLibraryBookListState,
+  type LibraryBookFilter,
+  type LibraryBookListState
+} from "@readex/library";
 import {
   calculateReaderProgress,
   calculateSentenceRenderWindow,
@@ -111,6 +118,8 @@ export function ReaderExperience() {
   const [bookmarkNotice, setBookmarkNotice] = createSignal<string | null>(null);
   const [readerSearchQuery, setReaderSearchQuery] = createSignal("");
   const [inspectorTab, setInspectorTab] = createSignal<InspectorTab>("word");
+  const [isLibraryLoading, setIsLibraryLoading] = createSignal(false);
+  const [isLibrarySearching, setIsLibrarySearching] = createSignal(false);
   const [isImporting, setIsImporting] = createSignal(false);
   const [playback, setPlayback] = createSignal(createPlaybackState());
   const [activeNarration, setActiveNarration] = createSignal<SentenceNarration | null>(null);
@@ -184,6 +193,15 @@ export function ReaderExperience() {
       bookmarkedBookIds: bookmarkedBookIds(bookmarks())
     })
   );
+  const libraryBookListState = createMemo(() =>
+    resolveLibraryBookListState({
+      totalBookCount: libraryBooks().length,
+      visibleBookCount: filteredBooks().length,
+      query: libraryQuery(),
+      filter: libraryFilter(),
+      loading: isLibraryLoading()
+    })
+  );
   const readerSearchResults = createMemo(() =>
     searchReaderSentences(reader().sentences, readerSearchQuery())
   );
@@ -254,17 +272,24 @@ export function ReaderExperience() {
     const runId = ++librarySearchRun;
 
     if (query.trim().length < 2) {
+      setIsLibrarySearching(false);
       setLibrarySearchResults([]);
       return;
     }
 
+    setIsLibrarySearching(true);
     void repository
       .searchLibrary({ query, limit: 8 })
       .then((results) => {
-        if (runId === librarySearchRun) setLibrarySearchResults(results);
+        if (runId !== librarySearchRun) return;
+        setLibrarySearchResults(results);
+        setIsLibrarySearching(false);
       })
       .catch(() => {
-        if (runId === librarySearchRun) setLibrarySearchResults([]);
+        if (runId !== librarySearchRun) return;
+        setLibrarySearchResults([]);
+        setIsLibrarySearching(false);
+        setLibraryNotice("We couldn't search your library just now.");
       });
   });
 
@@ -567,6 +592,7 @@ export function ReaderExperience() {
   };
 
   const refreshLibrary = async () => {
+    setIsLibraryLoading(true);
     try {
       const books = await repository.listBooks();
       setLibraryBooks(books);
@@ -576,6 +602,8 @@ export function ReaderExperience() {
       }
     } catch (error) {
       setLibraryNotice(toFriendlyLibraryError(error));
+    } finally {
+      setIsLibraryLoading(false);
     }
   };
 
@@ -786,15 +814,19 @@ export function ReaderExperience() {
       <LibraryRail
         activeBookId={reader().book.id}
         books={filteredBooks()}
+        bookListState={libraryBookListState()}
+        hasLibraryBooks={libraryBooks().length > 0}
         query={libraryQuery()}
         filter={libraryFilter()}
         importing={isImporting()}
+        searching={isLibrarySearching()}
         notice={libraryNotice()}
         searchResults={librarySearchResults()}
         onQueryChange={setLibraryQuery}
         onFilterChange={setLibraryFilter}
         onImport={importBook}
         onOpenBook={openLibraryBook}
+        onRetryLibrary={refreshLibrary}
         onOpenSample={openSampleReader}
         onOpenSearchResult={openLibrarySearchResult}
         onOpenToolTab={setInspectorTab}
@@ -1009,15 +1041,19 @@ function ChapterNavigator(props: ChapterNavigatorProps) {
 interface LibraryRailProps {
   activeBookId: string;
   books: LibraryBookSummary[];
+  bookListState: LibraryBookListState;
+  hasLibraryBooks: boolean;
   query: string;
   filter: LibraryBookFilter;
   importing: boolean;
+  searching: boolean;
   notice: string | null;
   searchResults: LibrarySearchResultDto[];
   onQueryChange: (query: string) => void;
   onFilterChange: (filter: LibraryBookFilter) => void;
   onImport: () => void;
   onOpenBook: (bookId: string) => void;
+  onRetryLibrary: () => void;
   onOpenSample: () => void;
   onOpenSearchResult: (result: LibrarySearchResultDto) => void;
   onOpenToolTab: (tab: InspectorTab) => void;
@@ -1025,6 +1061,7 @@ interface LibraryRailProps {
 
 function LibraryRail(props: LibraryRailProps) {
   let librarySearchInput: HTMLInputElement | undefined;
+  const hasSearchQuery = () => hasLibrarySearchQuery(props.query);
 
   return (
     <aside class="library-rail" aria-label="Library">
@@ -1050,7 +1087,7 @@ function LibraryRail(props: LibraryRailProps) {
           disabled={props.importing}
           onClick={props.onImport}
         >
-          {props.importing ? "Adding..." : "Add EPUB"}
+          {props.importing ? "Adding book..." : "Add EPUB"}
         </button>
         <div class="library-controls">
           <input
@@ -1075,22 +1112,15 @@ function LibraryRail(props: LibraryRailProps) {
             <option value="bookmarked">Bookmarked</option>
           </select>
         </div>
-        <Show when={props.notice}>{(notice) => <p class="library-notice">{notice()}</p>}</Show>
-        <Show when={props.searchResults.length > 0}>
-          <div class="library-search-results" role="list">
-            <For each={props.searchResults}>
-              {(result) => (
-                <button type="button" onClick={() => props.onOpenSearchResult(result)}>
-                  <span>{result.kind === "book" ? result.bookTitle : result.excerpt}</span>
-                  <small>
-                    {result.kind === "book"
-                      ? result.author
-                      : `${result.bookTitle} · ${result.chapterTitle ?? "Chapter"}`}
-                  </small>
-                </button>
-              )}
-            </For>
-          </div>
+        <Show when={props.notice}>
+          {(notice) => <StateNotice message={notice()} onRetry={props.onRetryLibrary} compact />}
+        </Show>
+        <Show when={hasSearchQuery()}>
+          <LibrarySearchState
+            searching={props.searching}
+            results={props.searchResults}
+            onOpenSearchResult={props.onOpenSearchResult}
+          />
         </Show>
         <div class="book-list" role="list">
           <button
@@ -1121,10 +1151,138 @@ function LibraryRail(props: LibraryRailProps) {
               </button>
             )}
           </For>
+          <BookListState
+            state={props.bookListState}
+            hasLibraryBooks={props.hasLibraryBooks}
+            importing={props.importing}
+            onImport={props.onImport}
+          />
         </div>
       </section>
     </aside>
   );
+}
+
+interface LibrarySearchStateProps {
+  searching: boolean;
+  results: LibrarySearchResultDto[];
+  onOpenSearchResult: (result: LibrarySearchResultDto) => void;
+}
+
+function LibrarySearchState(props: LibrarySearchStateProps) {
+  return (
+    <div class="library-search-results" role="list" aria-busy={props.searching}>
+      <Show
+        when={!props.searching}
+        fallback={<StateBlock title="Searching library" body="Looking through saved books." />}
+      >
+        <Show
+          when={props.results.length > 0}
+          fallback={
+            <StateBlock
+              title="No library matches"
+              body="Try a different title, author, or sentence."
+            />
+          }
+        >
+          <For each={props.results}>
+            {(result) => (
+              <button type="button" onClick={() => props.onOpenSearchResult(result)}>
+                <span>{result.kind === "book" ? result.bookTitle : result.excerpt}</span>
+                <small>
+                  {result.kind === "book"
+                    ? result.author
+                    : `${result.bookTitle} · ${result.chapterTitle ?? "Chapter"}`}
+                </small>
+              </button>
+            )}
+          </For>
+        </Show>
+      </Show>
+    </div>
+  );
+}
+
+interface BookListStateProps {
+  state: LibraryBookListState;
+  hasLibraryBooks: boolean;
+  importing: boolean;
+  onImport: () => void;
+}
+
+function BookListState(props: BookListStateProps) {
+  if (props.state === "ready") return null;
+
+  if (props.state === "loading") {
+    return <StateBlock title="Opening library" body="Your saved books will appear here." />;
+  }
+
+  if (!props.hasLibraryBooks) {
+    return (
+      <StateBlock
+        title="No imported books"
+        body="The sample stays available until a book is added."
+        actionLabel={props.importing ? "Adding book..." : "Add EPUB"}
+        actionDisabled={props.importing}
+        onAction={props.onImport}
+      />
+    );
+  }
+
+  return <StateBlock title="No books in this view" body="Try All books or clear the search." />;
+}
+
+interface StateBlockProps {
+  title: string;
+  body: string;
+  actionLabel?: string;
+  actionDisabled?: boolean;
+  onAction?: () => void;
+}
+
+function StateBlock(props: StateBlockProps) {
+  return (
+    <div class="state-block">
+      <strong>{props.title}</strong>
+      <p>{props.body}</p>
+      <Show when={props.actionLabel != null && props.onAction != null}>
+        <button type="button" disabled={props.actionDisabled} onClick={() => props.onAction?.()}>
+          {props.actionLabel}
+        </button>
+      </Show>
+    </div>
+  );
+}
+
+interface StateNoticeProps {
+  message: string;
+  onRetry: () => void;
+  compact?: boolean;
+}
+
+function StateNotice(props: StateNoticeProps) {
+  const retryable = () => isRecoverableNotice(props.message);
+
+  return (
+    <div
+      classList={{
+        "state-notice": true,
+        compact: props.compact === true,
+        attention: retryable()
+      }}
+    >
+      <p>{props.message}</p>
+      <Show when={retryable()}>
+        <button type="button" onClick={props.onRetry}>
+          Retry
+        </button>
+      </Show>
+    </div>
+  );
+}
+
+function isRecoverableNotice(message: string): boolean {
+  return message.startsWith("We couldn't") || message.includes("Please try again");
 }
 
 interface SentenceTokenProps {
@@ -1319,7 +1477,10 @@ function WordPanel(props: WordPanelProps) {
       when={props.insight}
       fallback={
         <>
-          <strong>No word selected</strong>
+          <StateBlock
+            title="No word selected"
+            body="Definitions and saved-word actions appear here."
+          />
           <SavedWordList words={props.savedWords} onSelect={props.onSelectSavedWord} />
         </>
       }
@@ -1413,6 +1574,8 @@ interface SearchPanelProps {
 }
 
 function SearchPanel(props: SearchPanelProps) {
+  const hasQuery = () => props.query.trim().length > 0;
+
   return (
     <section class="inspector-panel" aria-label="Search this chapter">
       <input
@@ -1423,7 +1586,17 @@ function SearchPanel(props: SearchPanelProps) {
         placeholder="Search chapter"
         onInput={(event) => props.onQueryChange(event.currentTarget.value)}
       />
-      <Show when={props.results.length > 0} fallback={<p class="inspector-empty">No matches.</p>}>
+      <Show
+        when={props.results.length > 0}
+        fallback={
+          <StateBlock
+            title={hasQuery() ? "No matches" : "Search this chapter"}
+            body={
+              hasQuery() ? "Try a different word or phrase." : "Matching sentences appear here."
+            }
+          />
+        }
+      >
         <div class="result-list" role="list">
           <For each={props.results}>
             {(result) => (
@@ -1457,7 +1630,9 @@ function BookmarkPanel(props: BookmarkPanelProps) {
       <Show when={props.notice}>{(notice) => <p class="library-notice">{notice()}</p>}</Show>
       <Show
         when={props.bookmarks.length > 0}
-        fallback={<p class="inspector-empty">No bookmarks in this book.</p>}
+        fallback={
+          <StateBlock title="No bookmarks in this book" body="Saved sentences appear here." />
+        }
       >
         <div class="result-list" role="list">
           <For each={props.bookmarks}>
@@ -1602,7 +1777,7 @@ function SavedWordList(props: SavedWordListProps) {
   return (
     <Show
       when={props.words.length > 0}
-      fallback={<p class="inspector-empty">No saved words yet.</p>}
+      fallback={<StateBlock title="No saved words" body="Saved definitions appear here." />}
     >
       <section class="saved-word-list" aria-label="Saved words">
         <span class="inspector-section-title">Saved words</span>

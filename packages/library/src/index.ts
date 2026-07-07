@@ -29,6 +29,16 @@ export interface BookmarkRef {
   createdAt: string;
 }
 
+export type LibraryBookListState = "ready" | "loading" | "empty-library" | "empty-filter";
+
+export interface ResolveLibraryBookListStateInput {
+  totalBookCount: number;
+  visibleBookCount: number;
+  query: string;
+  filter: LibraryBookFilter;
+  loading: boolean;
+}
+
 export function filterLibraryBooks<TBook extends LibraryBookSearchTarget>({
   books,
   query,
@@ -58,4 +68,24 @@ export function normalizeLibraryQuery(query: string): string {
 
 export function bookmarkedBookIds(bookmarks: BookmarkRef[]): Set<string> {
   return new Set(bookmarks.map((bookmark) => bookmark.bookId));
+}
+
+export function hasLibrarySearchQuery(query: string): boolean {
+  return normalizeLibraryQuery(query).length >= 2;
+}
+
+export function resolveLibraryBookListState({
+  totalBookCount,
+  visibleBookCount,
+  query,
+  filter,
+  loading
+}: ResolveLibraryBookListStateInput): LibraryBookListState {
+  if (loading) return "loading";
+  if (totalBookCount <= 0) return "empty-library";
+  if (visibleBookCount <= 0 && (hasLibrarySearchQuery(query) || filter !== "all")) {
+    return "empty-filter";
+  }
+
+  return "ready";
 }

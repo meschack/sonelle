@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   bookmarkedBookIds,
   filterLibraryBooks,
+  hasLibrarySearchQuery,
   isBookInProgress,
   normalizeLibraryQuery,
+  resolveLibraryBookListState,
   type BookmarkRef,
   type LibraryBookSearchTarget
 } from "./index";
@@ -69,5 +71,40 @@ describe("library filters", () => {
         bookmarkedBookIds: bookmarkedBookIds(bookmarks)
       }).map((book) => book.id)
     ).toEqual(["book-2"]);
+  });
+
+  it("recognizes only usable library search queries", () => {
+    expect(hasLibrarySearchQuery("a")).toBe(false);
+    expect(hasLibrarySearchQuery("  ai ")).toBe(true);
+  });
+
+  it("separates loading, empty library, and empty filtered views", () => {
+    expect(
+      resolveLibraryBookListState({
+        totalBookCount: 0,
+        visibleBookCount: 0,
+        query: "",
+        filter: "all",
+        loading: true
+      })
+    ).toBe("loading");
+    expect(
+      resolveLibraryBookListState({
+        totalBookCount: 0,
+        visibleBookCount: 0,
+        query: "",
+        filter: "all",
+        loading: false
+      })
+    ).toBe("empty-library");
+    expect(
+      resolveLibraryBookListState({
+        totalBookCount: 2,
+        visibleBookCount: 0,
+        query: "missing",
+        filter: "all",
+        loading: false
+      })
+    ).toBe("empty-filter");
   });
 });

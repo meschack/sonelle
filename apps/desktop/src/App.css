@@ -688,6 +688,73 @@ button {
   color: #6d6a60;
 }
 
+.state-block,
+.state-notice {
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid #dedbd1;
+  border-radius: 8px;
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+}
+
+.state-block strong,
+.inspector .state-block strong {
+  color: #171713;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.state-block p,
+.state-notice p,
+.inspector .state-block p,
+.inspector .state-notice p {
+  color: #6d6a60;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.state-block button,
+.state-notice button {
+  background: #171713;
+  border: 0;
+  border-radius: 7px;
+  color: #fffdfa;
+  justify-self: start;
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.state-block button:focus-visible,
+.state-notice button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(36, 91, 255, 0.16);
+  outline: none;
+}
+
+.state-block button:disabled,
+.state-notice button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.state-notice {
+  background: rgba(36, 91, 255, 0.08);
+  border-color: rgba(36, 91, 255, 0.18);
+}
+
+.state-notice.attention {
+  background: rgba(155, 58, 32, 0.1);
+  border-color: rgba(155, 58, 32, 0.22);
+}
+
+.state-notice.attention p {
+  color: #7f321e;
+}
+
 .saved-word-list {
   display: grid;
   gap: 8px;
@@ -924,6 +991,7 @@ button {
   }
 
   .library-notice,
+  .library-rail .state-notice,
   .library-controls,
   .library-search-results,
   .book-list {
