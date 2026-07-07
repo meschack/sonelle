@@ -1,5 +1,5 @@
 pub fn normalize_reader_text(input: &str) -> String {
-    input
+    let normalized = input
         .replace('\u{00a0}', " ")
         .replace('\u{00ad}', "")
         .replace(['\u{200b}', '\u{200c}', '\u{200d}', '\u{feff}'], "")
@@ -10,7 +10,25 @@ pub fn normalize_reader_text(input: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ")
         .trim()
-        .to_string()
+        .to_string();
+
+    trim_space_before_punctuation(&normalized)
+}
+
+fn trim_space_before_punctuation(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+
+    for character in input.chars() {
+        if matches!(character, '.' | ',' | ';' | ':' | '!' | '?' | ')' | ']')
+            && output.ends_with(' ')
+        {
+            output.pop();
+        }
+
+        output.push(character);
+    }
+
+    output
 }
 
 pub fn segment_sentences(input: &str) -> Vec<String> {
@@ -72,6 +90,7 @@ mod tests {
             normalize_reader_text("“Hello”\u{00a0}reader — line."),
             "\"Hello\" reader - line."
         );
+        assert_eq!(normalize_reader_text("Hello reader ."), "Hello reader.");
     }
 
     #[test]
