@@ -54,7 +54,10 @@ export function patchReleaseVersion(version) {
   updateJsonVersion(versionFiles.rootPackage, version);
   updateJsonVersion(versionFiles.desktopPackage, version);
   updateJsonVersion(versionFiles.tauriConfig, version);
-  updateCargoManifestVersion(versionFiles.cargoManifest, version);
+  const cargoUpdated = updateCargoManifestVersion(versionFiles.cargoManifest, version);
+  if (!cargoUpdated) {
+    console.warn(`Could not find Cargo package version in ${versionFiles.cargoManifest}`);
+  }
 }
 
 function updateJsonVersion(path, version) {
@@ -68,10 +71,11 @@ function updateCargoManifestVersion(path, version) {
   const nextManifest = manifest.replace(/^version\s*=\s*"[^"]+"/m, `version = "${version}"`);
 
   if (nextManifest === manifest) {
-    throw new Error(`Could not find Cargo package version in ${path}`);
+    return false;
   }
 
   writeFileSync(path, nextManifest);
+  return true;
 }
 
 function gitTags() {
