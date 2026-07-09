@@ -639,11 +639,6 @@ svg {
   padding: 0 16px;
 }
 
-.word-shell {
-  display: inline;
-  position: relative;
-}
-
 .word-token {
   appearance: none;
   background: transparent;
@@ -655,6 +650,7 @@ svg {
   line-height: inherit;
   margin: 0 -1px;
   padding: 0 1px;
+  position: relative;
   text-align: inherit;
 }
 
@@ -1382,6 +1378,11 @@ svg {
   overflow: hidden;
 }
 
+.library-workspace.drop-active {
+  outline: 2px dashed var(--green);
+  outline-offset: -10px;
+}
+
 .library-topbar h1 {
   font-size: 30px;
   margin: 0;
@@ -1490,6 +1491,11 @@ svg {
   min-width: 0;
   padding: 0;
   text-align: left;
+}
+
+.library-book-card {
+  contain-intrinsic-size: 320px;
+  content-visibility: auto;
 }
 
 .library-book-card:hover .library-book-cover,
@@ -1668,6 +1674,11 @@ svg {
   min-height: 54px;
   padding: 9px 10px;
   text-align: left;
+}
+
+.book-row {
+  contain-intrinsic-size: 54px;
+  content-visibility: auto;
 }
 
 .book-row.active {

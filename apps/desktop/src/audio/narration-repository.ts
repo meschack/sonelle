@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import {
   FakeNarrationGateway,
   type NarrationGateway,
@@ -10,8 +10,12 @@ export function createNarrationRepository(): NarrationGateway {
 }
 
 const nativeNarrationRepository: NarrationGateway = {
-  prepareSentenceAudio(request) {
-    return invoke<SentenceNarration>("prepare_sentence_audio", { request });
+  async prepareSentenceAudio(request) {
+    const narration = await invoke<SentenceNarration>("prepare_sentence_audio", { request });
+    return {
+      ...narration,
+      sourceUrl: narration.sourceUrl == null ? null : convertFileSrc(narration.sourceUrl, "asset")
+    };
   },
 
   async playPreparedSentenceAudio(request, narration) {

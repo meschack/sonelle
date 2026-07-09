@@ -355,10 +355,14 @@ interface LibraryWorkspaceProps {
   query: string;
   filter: LibraryBookFilter;
   importing: boolean;
+  dropActive: boolean;
   notice: string | null;
   onQueryChange: (query: string) => void;
   onFilterChange: (filter: LibraryBookFilter) => void;
   onImport: () => void;
+  onDragEnter: () => void;
+  onDragLeave: () => void;
+  onDropFiles: (files: File[]) => void;
   onOpenBook: (bookId: string) => void;
   onRetryLibrary: () => void;
   onOpenSample: () => void;
@@ -368,7 +372,25 @@ export function LibraryWorkspace(props: LibraryWorkspaceProps) {
   const hasNoBooks = () => props.totalBookCount === 0 && props.bookListState !== "loading";
 
   return (
-    <section class="library-workspace" aria-label="Library workspace">
+    <section
+      classList={{ "library-workspace": true, "drop-active": props.dropActive }}
+      aria-label="Library workspace"
+      onDragEnter={(event) => {
+        event.preventDefault();
+        props.onDragEnter();
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        if (event.dataTransfer != null) event.dataTransfer.dropEffect = "copy";
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget === event.target) props.onDragLeave();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        props.onDropFiles(Array.from(event.dataTransfer?.files ?? []));
+      }}
+    >
       <header class="library-topbar">
         <h1>Library</h1>
         <div class="top-app-actions">

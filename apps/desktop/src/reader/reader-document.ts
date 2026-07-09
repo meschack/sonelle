@@ -34,7 +34,8 @@ export interface ReaderChapterDto {
 export interface ReaderParagraphDto {
   id: string;
   index: number;
-  sentences: ReaderSentenceDto[];
+  startSentenceIndex: number;
+  sentenceCount: number;
 }
 
 export interface ReaderSentenceDto {

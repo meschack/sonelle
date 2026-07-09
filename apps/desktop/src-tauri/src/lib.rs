@@ -4,6 +4,12 @@ mod epub_import;
 mod storage;
 mod text;
 
+use std::io;
+
+use tauri::Manager;
+
+use crate::storage::SonelleStore;
+
 #[tauri::command]
 fn app_status() -> &'static str {
     "ready"
@@ -14,6 +20,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            let store = SonelleStore::open(app.handle()).map_err(io::Error::other)?;
+            app.manage(store);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             app_status,
             commands::clear_prepared_audio_cache,

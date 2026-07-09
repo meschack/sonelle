@@ -65,7 +65,10 @@ import { createNarrationRepository, toFriendlyNarrationError } from "../audio/na
 import { createDictionaryRepository } from "../learning/dictionary-repository";
 import {
   createBookRepository,
+  listenForBookDrops,
+  resolveDroppedEpubPath,
   toFriendlyLibraryError,
+  type BookDropEvent,
   type LibraryBookmarkDto,
   type LibrarySearchResultDto,
   type SaveReadingPositionInput
@@ -74,7 +77,7 @@ import { ChapterNavigator, PlaybackRail, ReaderTopAppBar } from "./reader-chrome
 import { nextReaderChapter } from "./reader-chapter-flow";
 import { ReaderParagraph } from "./reader-content";
 import { createSampleExport, downloadJson } from "./reader-export";
-import type { LibraryBookSummary } from "./reader-document";
+import type { LibraryBookSummary, ReaderDocumentDto } from "./reader-document";
 import type {
   AppView,
   InspectorTab,
@@ -93,13 +96,14 @@ import { LibraryRail, LibraryWorkspace } from "./library-surfaces";
 import {
   buildFixtureReaderView,
   buildReaderViewFromDocument,
+  paragraphsInSentenceRange,
   type ReaderSentenceView,
   type ReaderView
 } from "./reader-view";
 import { createReaderPreferencesRepository } from "./reader-preferences-repository";
 
-const renderedSentenceLead = 36;
-const renderedSentenceTrail = 96;
+const renderedSentenceLead = 24;
+const renderedSentenceTrail = 48;
 const librarySearchDelayMs = 180;
 const playbackPositionSaveDelayMs = 2_500;
 const chapterTransitionDelayMs = 5_000;
@@ -140,6 +144,7 @@ export function ReaderExperience() {
   const [isLibraryLoading, setIsLibraryLoading] = createSignal(false);
   const [isLibrarySearching, setIsLibrarySearching] = createSignal(false);
   const [isImporting, setIsImporting] = createSignal(false);
+  const [isLibraryDropTarget, setIsLibraryDropTarget] = createSignal(false);
   const [playback, setPlayback] = createSignal(createPlaybackState());
   const [activeNarration, setActiveNarration] = createSignal<SentenceNarration | null>(null);
   const [isPreparingNarration, setIsPreparingNarration] = createSignal(false);
@@ -190,10 +195,7 @@ export function ReaderExperience() {
   const visibleParagraphs = createMemo(() => {
     const range = visibleSentenceRange();
 
-    return reader().paragraphs.filter(
-      (paragraph) =>
-        paragraph.endSentenceIndex > range.start && paragraph.startSentenceIndex < range.end
-    );
+    return paragraphsInSentenceRange(reader().paragraphs, range.start, range.end);
   });
   const readerProgressIndex = createMemo(() => createReaderProgressIndex(reader().chapters));
   const readerProgress = createMemo(() =>
@@ -270,12 +272,25 @@ export function ReaderExperience() {
   });
 
   onMount(() => {
+    let disposed = false;
+    let unlistenBookDrops: (() => void) | undefined;
     void refreshLibrary();
     void refreshAllBookmarks();
     void refreshAudioCacheStats();
+    void listenForBookDrops(handleBookDropEvent).then((unlisten) => {
+      if (disposed) {
+        unlisten();
+      } else {
+        unlistenBookDrops = unlisten;
+      }
+    });
 
     window.addEventListener("keydown", handleShortcut);
-    onCleanup(() => window.removeEventListener("keydown", handleShortcut));
+    onCleanup(() => {
+      disposed = true;
+      window.removeEventListener("keydown", handleShortcut);
+      unlistenBookDrops?.();
+    });
   });
   onCleanup(() => readingPositionScheduler.flush());
 
@@ -359,7 +374,9 @@ export function ReaderExperience() {
       setIsPreparingNarration(false);
       activeHtmlAudio?.pause();
       activeHtmlAudio = null;
-      void narrationRepository.stopPreparedSentenceAudio().catch(() => undefined);
+      if (activeNarration()?.playbackMode === "native-speech") {
+        void narrationRepository.stopPreparedSentenceAudio().catch(() => undefined);
+      }
     });
   });
 
@@ -619,7 +636,6 @@ export function ReaderExperience() {
 
       setActiveNarration(narration);
       setIsPreparingNarration(false);
-      if (!narration.cached) void refreshAudioCacheStats();
 
       if (narration.readiness !== "ready") {
         setNarrationNotice(narration.message ?? "Narration needs attention.");
@@ -627,7 +643,7 @@ export function ReaderExperience() {
         return;
       }
 
-      prefetchNextSentenceNarration(currentReader, activeSentenceIndex, runId);
+      prefetchNextSentenceNarration(currentReader, activeSentenceIndex);
 
       if (narration.playbackMode === "html-audio" && narration.sourceUrl != null) {
         await playHtmlAudio(narration.sourceUrl, runId);
@@ -683,8 +699,7 @@ export function ReaderExperience() {
 
   const prefetchNextSentenceNarration = (
     currentReader: ReaderView,
-    activeSentenceIndex: number,
-    runId: number
+    activeSentenceIndex: number
   ) => {
     const nextSentence = currentReader.sentences[activeSentenceIndex + 1];
     if (nextSentence == null) return;
@@ -695,12 +710,7 @@ export function ReaderExperience() {
       audioSettings().voiceId
     );
 
-    void narrationRepository
-      .prefetchSentenceAudio(request)
-      .then(() => {
-        if (runId === narrationRun) void refreshAudioCacheStats();
-      })
-      .catch(() => undefined);
+    void narrationRepository.prefetchSentenceAudio(request).catch(() => undefined);
   };
 
   const refreshLibrary = async () => {
@@ -828,10 +838,47 @@ export function ReaderExperience() {
       setActiveView("reader");
       sendLibraryRailEvent({ type: "reader-opened", bookId: nextReader.book.id });
       setLibraryNotice(null);
-      await refreshBookmarks(bookId);
     } catch (error) {
       setLibraryNotice(toFriendlyLibraryError(error));
     }
+  };
+
+  const handleBookDropEvent = (event: BookDropEvent) => {
+    if (activeView() !== "library") return;
+
+    if (event.type === "leave") {
+      setIsLibraryDropTarget(false);
+      return;
+    }
+
+    if (event.type === "enter" || event.type === "over") {
+      setIsLibraryDropTarget(true);
+      return;
+    }
+
+    setIsLibraryDropTarget(false);
+    const path = resolveDroppedEpubPath(event.paths);
+    if (path == null) {
+      setLibraryNotice("Drop an EPUB file to add it to your library.");
+      return;
+    }
+
+    void importBookFromPath(path);
+  };
+
+  const handleBrowserDrop = (files: File[]) => {
+    setIsLibraryDropTarget(false);
+    const paths = files
+      .map((file) => (file as File & { path?: unknown }).path)
+      .filter((value): value is string => typeof value === "string");
+    const path = resolveDroppedEpubPath(paths);
+
+    if (path == null) {
+      setLibraryNotice("Drop an EPUB file into the desktop app to add it to your library.");
+      return;
+    }
+
+    void importBookFromPath(path);
   };
 
   const importBook = async () => {
@@ -845,18 +892,39 @@ export function ReaderExperience() {
       const document = await repository.importBookFromDialog();
       if (document == null) return;
 
-      const nextReader = buildReaderViewFromDocument(document);
-      const importOutcome = existingBookIds.has(nextReader.book.id) ? "reopened" : "added";
-      activateReader(nextReader);
-      setActiveView("reader");
-      setLibraryNotice(libraryImportNotice(importOutcome));
-      setLibraryBooks(await repository.listBooks());
-      await refreshBookmarks(nextReader.book.id);
+      await finishImportedBook(document, existingBookIds);
     } catch (error) {
       setLibraryNotice(toFriendlyLibraryError(error));
     } finally {
       setIsImporting(false);
     }
+  };
+
+  const importBookFromPath = async (path: string) => {
+    if (isImporting()) return;
+
+    const existingBookIds = new Set(libraryBooks().map((book) => book.id));
+    setIsImporting(true);
+    setLibraryNotice(null);
+
+    try {
+      const document = await repository.importBookFromPath(path);
+      await finishImportedBook(document, existingBookIds);
+    } catch (error) {
+      setLibraryNotice(toFriendlyLibraryError(error));
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const finishImportedBook = async (document: ReaderDocumentDto, existingBookIds: Set<string>) => {
+    const nextReader = buildReaderViewFromDocument(document);
+    const importOutcome = existingBookIds.has(nextReader.book.id) ? "reopened" : "added";
+    activateReader(nextReader);
+    setActiveView("reader");
+    setLibraryNotice(libraryImportNotice(importOutcome));
+    setLibraryBooks(await repository.listBooks());
+    await refreshBookmarks(nextReader.book.id);
   };
 
   const toggleActiveBookmark = async () => {
@@ -1005,10 +1073,14 @@ export function ReaderExperience() {
             query={libraryQuery()}
             filter={libraryFilter()}
             importing={isImporting()}
+            dropActive={isLibraryDropTarget()}
             notice={libraryNotice()}
             onQueryChange={setLibraryQuery}
             onFilterChange={setLibraryFilter}
             onImport={importBook}
+            onDragEnter={() => setIsLibraryDropTarget(true)}
+            onDragLeave={() => setIsLibraryDropTarget(false)}
+            onDropFiles={handleBrowserDrop}
             onOpenBook={openLibraryBook}
             onRetryLibrary={refreshLibrary}
             onOpenSample={openSampleReader}

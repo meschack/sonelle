@@ -105,25 +105,27 @@ function SentenceToken(props: SentenceTokenProps) {
   if (props.token.kind === "text") return <>{props.token.text}</>;
 
   const token = props.token;
-  const inspectWord = (event: MouseEvent) => {
+  const inspectWord = (event: MouseEvent | KeyboardEvent) => {
     event.preventDefault();
     event.stopPropagation();
     props.onSelect(props.sentence, token);
   };
 
   return (
-    <span class="word-shell">
-      <button
-        classList={{
-          "word-token": true,
-          selected: props.selected
-        }}
-        type="button"
-        aria-label={`Right click to inspect ${token.text}`}
-        onContextMenu={inspectWord}
-      >
-        {token.text}
-      </button>
+    <span
+      classList={{
+        "word-token": true,
+        selected: props.selected
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Right click to inspect ${token.text}`}
+      onContextMenu={inspectWord}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") inspectWord(event);
+      }}
+    >
+      {token.text}
       <Show when={props.selected ? props.insight : null}>
         {(insight) => (
           <WordPopover insight={insight()} onClear={props.onClear} onSave={props.onSave} />
