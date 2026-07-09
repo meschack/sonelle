@@ -13,13 +13,13 @@
     "noEmit": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@readex/domain": ["./packages/domain/src/index.ts"],
-      "@readex/text": ["./packages/text/src/index.ts"],
-      "@readex/reader": ["./packages/reader/src/index.ts"],
-      "@readex/library": ["./packages/library/src/index.ts"],
-      "@readex/audio": ["./packages/audio/src/index.ts"],
-      "@readex/storage": ["./packages/storage/src/index.ts"],
-      "@readex/learning": ["./packages/learning/src/index.ts"]
+      "@sonelle/domain": ["./packages/domain/src/index.ts"],
+      "@sonelle/text": ["./packages/text/src/index.ts"],
+      "@sonelle/reader": ["./packages/reader/src/index.ts"],
+      "@sonelle/library": ["./packages/library/src/index.ts"],
+      "@sonelle/audio": ["./packages/audio/src/index.ts"],
+      "@sonelle/storage": ["./packages/storage/src/index.ts"],
+      "@sonelle/learning": ["./packages/learning/src/index.ts"]
     }
   }
 }

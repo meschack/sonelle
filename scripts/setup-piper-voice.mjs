@@ -17,9 +17,9 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const voiceConfig = JSON.parse(
   readFileSync(join(repoRoot, "packages", "audio", "src", "narration-voices.json"), "utf8")
 );
-const readexDir = join(repoRoot, ".readex");
-const venvDir = join(readexDir, "piper-venv");
-const voiceDir = join(readexDir, "voices", "piper");
+const sonelleDir = join(repoRoot, ".sonelle");
+const venvDir = join(sonelleDir, "piper-venv");
+const voiceDir = join(sonelleDir, "voices", "piper");
 const defaultVoice = voiceConfig.defaultVoiceId;
 const supportedVoices = voiceConfig.voices.map((voice) => voice.id);
 const piperVoiceBaseUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/main";
@@ -33,7 +33,7 @@ const venvPython =
     : join(venvDir, "bin", "python");
 
 export function resolveVoicesToInstall(env = process.env) {
-  const requestedVoices = env.READEX_PIPER_VOICE ?? env.READEX_PIPER_VOICES;
+  const requestedVoices = env.SONELLE_PIPER_VOICE ?? env.SONELLE_PIPER_VOICES;
   if (requestedVoices == null || requestedVoices.trim().length === 0) return supportedVoices;
 
   return uniqueVoiceList(requestedVoices);
@@ -42,7 +42,7 @@ export function resolveVoicesToInstall(env = process.env) {
 export async function setupPiperVoice(env = process.env) {
   const voices = resolveVoicesToInstall(env);
 
-  mkdirSync(readexDir, { recursive: true });
+  mkdirSync(sonelleDir, { recursive: true });
   mkdirSync(voiceDir, { recursive: true });
 
   if (!existsSync(venvPython)) {
@@ -66,7 +66,7 @@ export async function setupPiperVoice(env = process.env) {
         "-f",
         smokePath,
         "--",
-        "Readex is ready to listen."
+        "Sonelle is ready to listen."
       ],
       `testing ${voice}`,
       env
@@ -111,7 +111,7 @@ async function downloadVoiceFile(voice, extension, env) {
   const outputPath = join(voiceDir, `${voice}${extension}`);
   if (voiceFileReady(voice, extension)) return;
 
-  const timeoutMs = Number(env.READEX_PIPER_DOWNLOAD_TIMEOUT_MS ?? defaultDownloadTimeoutMs);
+  const timeoutMs = Number(env.SONELLE_PIPER_DOWNLOAD_TIMEOUT_MS ?? defaultDownloadTimeoutMs);
   const temporaryPath = `${outputPath}.download`;
   const resumeFrom = existsSync(temporaryPath) ? statSync(temporaryPath).size : 0;
   const response = await fetchWithRetries(url, timeoutMs, env, `${voice}${extension}`, resumeFrom);
@@ -170,7 +170,7 @@ function readContentLength(response) {
 }
 
 async function fetchWithRetries(url, timeoutMs, env, label, resumeFrom = 0) {
-  const attempts = Number(env.READEX_PIPER_DOWNLOAD_RETRIES ?? 3);
+  const attempts = Number(env.SONELLE_PIPER_DOWNLOAD_RETRIES ?? 3);
   let lastError;
   const headers = resumeFrom > 0 ? { Range: `bytes=${resumeFrom}-` } : undefined;
 
@@ -215,8 +215,8 @@ function uniqueVoiceList(value) {
 }
 
 function smokePathForVoice(voice, voiceCount) {
-  if (voiceCount === 1) return join(readexDir, "piper-smoke.wav");
-  return join(readexDir, `piper-smoke-${voice}.wav`);
+  if (voiceCount === 1) return join(sonelleDir, "piper-smoke.wav");
+  return join(sonelleDir, `piper-smoke-${voice}.wav`);
 }
 
 function run(command, args, label, env) {

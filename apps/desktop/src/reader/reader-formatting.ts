@@ -6,7 +6,7 @@ export function slugify(value: string): string {
       .normalize("NFKC")
       .toLocaleLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "readex-book"
+      .replace(/^-+|-+$/g, "") || "sonelle-book"
   );
 }
 

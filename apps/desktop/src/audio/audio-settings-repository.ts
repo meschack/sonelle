@@ -1,6 +1,6 @@
-import { parseAudioSettings, serializeAudioSettings, type AudioSettings } from "@readex/audio";
+import { parseAudioSettings, serializeAudioSettings, type AudioSettings } from "@sonelle/audio";
 
-const audioSettingsStorageKey = "readex.audio.settings.v1";
+const audioSettingsStorageKey = "sonelle.audio.settings.v1";
 
 export interface AudioSettingsRepository {
   load(): AudioSettings;

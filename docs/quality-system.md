@@ -56,7 +56,7 @@ Every substantial module should have a short module note with this shape:
 
 ## Review Rhythm
 
-Before finalizing a substantial change, run the Readex Steward checklist:
+Before finalizing a substantial change, run the Sonelle Steward checklist:
 
 `.codex/skills/readex-steward/SKILL.md`
 

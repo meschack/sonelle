@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Readex Next is pre-1.0. Security fixes target the latest `main` branch and the latest published release.
+Sonelle is pre-1.0. Security fixes target the latest `main` branch and the latest published release.
 
 ## Reporting a Vulnerability
 
@@ -29,4 +29,4 @@ Relevant areas include:
 - Tauri command boundaries
 - release artifacts and update metadata
 
-Readex is local-first, so reports involving local data privacy and filesystem boundaries are especially important.
+Sonelle is local-first, so reports involving local data privacy and filesystem boundaries are especially important.

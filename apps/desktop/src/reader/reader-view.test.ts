@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tokenizeReaderText } from "@readex/text";
+import { tokenizeReaderText } from "@sonelle/text";
 import { buildFixtureReaderView, buildReaderViewFromDocument } from "./reader-view";
 
 describe("fixture reader view", () => {

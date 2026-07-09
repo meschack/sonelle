@@ -100,7 +100,7 @@ jobs:
           tagName: ${{ steps.version.outputs.tag }}
           releaseName: ${{ steps.version.outputs.release_name }}
           releaseBody: |
-            Automated Readex Next desktop release from ${{ github.event.workflow_run.head_sha || github.sha }}.
+            Automated Sonelle desktop release from ${{ github.event.workflow_run.head_sha || github.sha }}.
 
             Assets include platform bundles for Linux, macOS, and Windows.
             macOS builds use ad-hoc signing until a Developer ID certificate is configured.

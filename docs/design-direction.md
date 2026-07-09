@@ -2,7 +2,7 @@
 
 The chosen design direction is Listening Manuscript.
 
-Readex should look like a serious reading desk with audio intelligence, not like a podcast dashboard wearing a book costume.
+Sonelle should look like a serious reading desk with audio intelligence, not like a podcast dashboard wearing a book costume.
 
 ## Layout
 

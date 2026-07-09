@@ -1,4 +1,4 @@
-import type { SentenceRef } from "@readex/domain";
+import type { SentenceRef } from "@sonelle/domain";
 
 export type PlaybackStatus = "idle" | "playing" | "paused" | "ended";
 export type ReaderToolTab = "word" | "search" | "bookmarks" | "settings";

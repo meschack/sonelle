@@ -1,5 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
-import { FakeNarrationGateway, type NarrationGateway, type SentenceNarration } from "@readex/audio";
+import {
+  FakeNarrationGateway,
+  type NarrationGateway,
+  type SentenceNarration
+} from "@sonelle/audio";
 
 export function createNarrationRepository(): NarrationGateway {
   return isTauriRuntime() ? nativeNarrationRepository : new FakeNarrationGateway();

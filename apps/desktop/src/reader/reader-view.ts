@@ -1,5 +1,5 @@
-import { createSentenceId, normalizeReaderSearchText } from "@readex/reader";
-import { segmentParagraphs, segmentSentences } from "@readex/text";
+import { createSentenceId, normalizeReaderSearchText } from "@sonelle/reader";
+import { segmentParagraphs, segmentSentences } from "@sonelle/text";
 import type { ReaderDocumentDto, ReaderSentenceDto } from "./reader-document";
 import { fixtureBook, type FixtureBook } from "./fixture-book";
 

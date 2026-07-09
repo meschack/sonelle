@@ -26,19 +26,19 @@ importers:
       '@fontsource/commit-mono':
         specifier: ^5.2.5
         version: 5.2.5
-      '@readex/audio':
+      '@sonelle/audio':
         specifier: workspace:*
         version: link:../../packages/audio
-      '@readex/learning':
+      '@sonelle/learning':
         specifier: workspace:*
         version: link:../../packages/learning
-      '@readex/library':
+      '@sonelle/library':
         specifier: workspace:*
         version: link:../../packages/library
-      '@readex/reader':
+      '@sonelle/reader':
         specifier: workspace:*
         version: link:../../packages/reader
-      '@readex/text':
+      '@sonelle/text':
         specifier: workspace:*
         version: link:../../packages/text
       '@tauri-apps/api':
@@ -69,7 +69,7 @@ importers:
 
   packages/audio:
     dependencies:
-      '@readex/domain':
+      '@sonelle/domain':
         specifier: workspace:*
         version: link:../domain
 
@@ -79,19 +79,19 @@ importers:
 
   packages/library:
     dependencies:
-      '@readex/domain':
+      '@sonelle/domain':
         specifier: workspace:*
         version: link:../domain
 
   packages/reader:
     dependencies:
-      '@readex/domain':
+      '@sonelle/domain':
         specifier: workspace:*
         version: link:../domain
 
   packages/storage:
     dependencies:
-      '@readex/domain':
+      '@sonelle/domain':
         specifier: workspace:*
         version: link:../domain
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SUPPORTED_NARRATION_VOICES } from "@readex/audio";
+import { SUPPORTED_NARRATION_VOICES } from "@sonelle/audio";
 import { piperVoiceFileUrl, resolveVoicesToInstall } from "./setup-piper-voice.mjs";
 
 describe("Piper voice setup", () => {
@@ -10,12 +10,12 @@ describe("Piper voice setup", () => {
   it("keeps explicit voice overrides available for focused setup", () => {
     expect(
       resolveVoicesToInstall({
-        READEX_PIPER_VOICE: "en_GB-alba-medium"
+        SONELLE_PIPER_VOICE: "en_GB-alba-medium"
       })
     ).toEqual(["en_GB-alba-medium"]);
     expect(
       resolveVoicesToInstall({
-        READEX_PIPER_VOICES: "en_US-lessac-medium, en_GB-alba-medium, en_US-lessac-medium"
+        SONELLE_PIPER_VOICES: "en_US-lessac-medium, en_GB-alba-medium, en_US-lessac-medium"
       })
     ).toEqual(["en_US-lessac-medium", "en_GB-alba-medium"]);
   });

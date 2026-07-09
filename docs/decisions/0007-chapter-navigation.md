@@ -4,7 +4,7 @@ Status: accepted
 
 ## Context
 
-Readex needs real-book navigation before progress, jumping, and QA can be useful. The reader previously rendered only the active chapter, which meant the UI had no stable table-of-contents model.
+Sonelle needs real-book navigation before progress, jumping, and QA can be useful. The reader previously rendered only the active chapter, which meant the UI had no stable table-of-contents model.
 
 ## Decision
 

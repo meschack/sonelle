@@ -8,3 +8,4 @@ src-tauri/target/
 .env.*
 !.env.example
 .readex/
+.sonelle/

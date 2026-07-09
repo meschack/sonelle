@@ -226,18 +226,18 @@ enum PiperRunner {
 
 impl PiperRunner {
     fn resolve() -> Option<Self> {
-        if let Some(path) = env_path("READEX_PIPER_BIN").filter(|path| path.exists()) {
+        if let Some(path) = env_path("SONELLE_PIPER_BIN").filter(|path| path.exists()) {
             return Some(Self::Binary(path));
         }
 
-        for readex_dir in readex_state_dirs() {
-            let local_python = venv_python_path(&readex_dir.join("piper-venv"));
+        for sonelle_dir in sonelle_state_dirs() {
+            let local_python = venv_python_path(&sonelle_dir.join("piper-venv"));
             if local_python.exists() {
                 return Some(Self::Python(local_python));
             }
         }
 
-        if let Some(path) = env_path("READEX_PIPER_PYTHON").filter(|path| path.exists()) {
+        if let Some(path) = env_path("SONELLE_PIPER_PYTHON").filter(|path| path.exists()) {
             return Some(Self::Python(path));
         }
 
@@ -264,7 +264,7 @@ struct PiperVoice {
 
 impl PiperVoice {
     fn resolve(cache: &SentenceAudioCache, requested_voice: &str) -> Option<Self> {
-        if let Some(model) = env_path("READEX_PIPER_MODEL").filter(|path| piper_model_exists(path))
+        if let Some(model) = env_path("SONELLE_PIPER_MODEL").filter(|path| piper_model_exists(path))
         {
             return Some(Self {
                 model: model.to_string_lossy().to_string(),
@@ -274,7 +274,7 @@ impl PiperVoice {
 
         let requested_voice = requested_voice.trim();
         let voice = if requested_voice.is_empty() {
-            env::var("READEX_PIPER_VOICE")
+            env::var("SONELLE_PIPER_VOICE")
                 .ok()
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| DEFAULT_PIPER_VOICE.to_string())
@@ -437,31 +437,31 @@ fn env_path(key: &str) -> Option<PathBuf> {
 fn piper_data_dirs(cache: &SentenceAudioCache) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
 
-    if let Some(dir) = env_path("READEX_PIPER_DATA_DIR") {
+    if let Some(dir) = env_path("SONELLE_PIPER_DATA_DIR") {
         dirs.push(dir);
     }
 
-    for readex_dir in readex_state_dirs() {
-        dirs.push(readex_dir.join("voices/piper"));
+    for sonelle_dir in sonelle_state_dirs() {
+        dirs.push(sonelle_dir.join("voices/piper"));
     }
 
     dirs.push(cache.app_data_dir.join("voices/piper"));
     dirs
 }
 
-fn readex_state_dirs() -> Vec<PathBuf> {
+fn sonelle_state_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     if let Ok(current_dir) = env::current_dir() {
-        push_readex_state_dirs(&mut dirs, &current_dir);
+        push_sonelle_state_dirs(&mut dirs, &current_dir);
     }
 
-    push_readex_state_dirs(&mut dirs, Path::new(env!("CARGO_MANIFEST_DIR")));
+    push_sonelle_state_dirs(&mut dirs, Path::new(env!("CARGO_MANIFEST_DIR")));
     dirs
 }
 
-fn push_readex_state_dirs(dirs: &mut Vec<PathBuf>, start: &Path) {
+fn push_sonelle_state_dirs(dirs: &mut Vec<PathBuf>, start: &Path) {
     for ancestor in start.ancestors() {
-        let candidate = ancestor.join(".readex");
+        let candidate = ancestor.join(".sonelle");
         if !dirs.contains(&candidate) {
             dirs.push(candidate);
         }
@@ -650,7 +650,7 @@ mod tests {
             sentence_id: "piper-sentence".to_string(),
             sentence_index: 0,
             voice_id: DEFAULT_PIPER_VOICE.to_string(),
-            text: "Readex is ready to listen.".to_string(),
+            text: "Sonelle is ready to listen.".to_string(),
         };
         let temp_dir = temp_audio_dir();
         let cache =
@@ -729,7 +729,7 @@ mod tests {
 
     fn temp_audio_dir() -> PathBuf {
         std::env::temp_dir().join(format!(
-            "readex-audio-test-{}",
+            "sonelle-audio-test-{}",
             Utc::now().timestamp_nanos_opt().unwrap_or_default()
         ))
     }

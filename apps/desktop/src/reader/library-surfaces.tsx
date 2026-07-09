@@ -3,7 +3,7 @@ import {
   hasLibrarySearchQuery,
   type LibraryBookFilter,
   type LibraryBookListState
-} from "@readex/library";
+} from "@sonelle/library";
 import type { LibrarySearchResultDto } from "../library/book-repository";
 import { BookCover } from "./book-cover";
 import type { LibraryBookSummary } from "./reader-document";
@@ -139,7 +139,7 @@ function NavigationRail(props: NavigationRailProps) {
   return (
     <>
       <header class="side-brand">
-        <strong>Readex</strong>
+        <strong>Sonelle</strong>
         <span>Premium Immersive Reading</span>
       </header>
 
@@ -514,7 +514,7 @@ function EmptyLibraryState(props: EmptyLibraryStateProps) {
       </div>
       <h2>Your library is empty.</h2>
       <p>
-        Import your first EPUB to start reading. Readex supports rich formatting, deep annotations,
+        Import your first EPUB to start reading. Sonelle supports rich formatting, deep annotations,
         and seamless narration.
       </p>
       <button

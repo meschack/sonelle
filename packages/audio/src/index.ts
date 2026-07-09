@@ -1,4 +1,4 @@
-import type { SentenceRef } from "@readex/domain";
+import type { SentenceRef } from "@sonelle/domain";
 import narrationVoiceConfig from "./narration-voices.json";
 
 export type AudioReadiness = "ready" | "preparing" | "needs-attention" | "unavailable";

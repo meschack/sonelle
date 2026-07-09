@@ -1,6 +1,6 @@
-import { createMemo, For, onCleanup, Show } from "solid-js";
-import { primaryDefinition, type WordInsight } from "@readex/learning";
-import { tokenizeReaderText, type ReaderTextToken } from "@readex/text";
+import { createMemo, For, onCleanup, onMount, Show } from "solid-js";
+import { primaryDefinition, type WordInsight } from "@sonelle/learning";
+import { tokenizeReaderText, type ReaderTextToken } from "@sonelle/text";
 import { DictionaryStatus } from "./reader-feedback";
 import type { SelectedWord } from "./reader-experience-types";
 import type { ReaderParagraphView, ReaderSentenceView } from "./reader-view";
@@ -140,6 +140,20 @@ interface WordPopoverProps {
 }
 
 function WordPopover(props: WordPopoverProps) {
+  let popoverElement: HTMLSpanElement | undefined;
+
+  onMount(() => {
+    const closeFromOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || popoverElement?.contains(target)) return;
+
+      props.onClear();
+    };
+
+    document.addEventListener("pointerdown", closeFromOutsidePointer, true);
+    onCleanup(() => document.removeEventListener("pointerdown", closeFromOutsidePointer, true));
+  });
+
   const runAction = (event: MouseEvent, action: () => void) => {
     event.stopPropagation();
     action();
@@ -148,6 +162,9 @@ function WordPopover(props: WordPopoverProps) {
 
   return (
     <span
+      ref={(element) => {
+        popoverElement = element;
+      }}
       class="word-popover"
       role="dialog"
       aria-label={`Insight for ${props.insight.surface}`}

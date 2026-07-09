@@ -6,9 +6,9 @@ import {
   serializeSavedDictionary,
   type DictionaryEntry,
   type SavedDictionary
-} from "@readex/learning";
+} from "@sonelle/learning";
 
-const savedDictionaryKey = "readex.dictionary.saved.v1";
+const savedDictionaryKey = "sonelle.dictionary.saved.v1";
 const dictionaryApiUrl = "https://api.dictionaryapi.dev/api/v2/entries/en";
 
 export interface DictionaryRepository {

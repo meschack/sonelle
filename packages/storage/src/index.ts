@@ -1,4 +1,4 @@
-import type { DomainEvent, DomainEventName } from "@readex/domain";
+import type { DomainEvent, DomainEventName } from "@sonelle/domain";
 
 export interface EventStore {
   append<TName extends DomainEventName, TPayload>(

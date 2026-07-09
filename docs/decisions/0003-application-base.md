@@ -6,7 +6,7 @@ Accepted.
 
 ## Decision
 
-Readex Next starts as a desktop-first TypeScript monorepo:
+Sonelle starts as a desktop-first TypeScript monorepo:
 
 - desktop shell: Tauri
 - renderer: Vite + Solid
@@ -26,7 +26,7 @@ Vite + Solid is enough for the renderer. Solid's fine-grained reactivity fits a 
 
 SSR-style application frameworks add routing/build complexity that does not buy much in a local desktop app.
 
-SQLite is the right persistence shape because Readex has durable local relational state:
+SQLite is the right persistence shape because Sonelle has durable local relational state:
 
 - books
 - chapters

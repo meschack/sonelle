@@ -14,14 +14,14 @@ import {
   type AudioSettings,
   type SentenceNarration,
   type SentenceNarrationRequest
-} from "@readex/audio";
+} from "@sonelle/audio";
 import {
   bookmarkedBookIds,
   filterLibraryBooks,
   libraryImportNotice,
   resolveLibraryBookListState,
   type LibraryBookFilter
-} from "@readex/library";
+} from "@sonelle/library";
 import {
   calculateReaderProgressFromIndex,
   calculateSentenceRenderWindow,
@@ -39,7 +39,7 @@ import {
   type PlaybackStatus,
   type ReaderPlaybackState,
   type ReaderSearchResult
-} from "@readex/reader";
+} from "@sonelle/reader";
 import {
   createWordInsight,
   dictionaryLookupFailed,
@@ -54,8 +54,8 @@ import {
   type SavedDictionary,
   type SavedDictionaryEntry,
   type WordInsight
-} from "@readex/learning";
-import type { ReaderTextToken } from "@readex/text";
+} from "@sonelle/learning";
+import type { ReaderTextToken } from "@sonelle/text";
 import {
   createAudioCacheRepository,
   type AudioCacheStatsDto
@@ -956,7 +956,7 @@ export function ReaderExperience() {
           ? await repository.exportBookData(reader().book.id)
           : createSampleExport(reader(), playback().activeSentenceIndex, currentBookBookmarks());
 
-      const fileName = `${slugify(reader().book.title)}-readex-export.json`;
+      const fileName = `${slugify(reader().book.title)}-sonelle-export.json`;
       downloadJson(fileName, data);
       setExportNotice(`Downloaded ${fileName}. Check your Downloads folder.`);
     } catch (error) {
@@ -965,7 +965,7 @@ export function ReaderExperience() {
   };
 
   return (
-    <main class="readex-shell">
+    <main class="sonelle-shell">
       <LibraryRail
         mode={libraryRailMode()}
         activeView={activeView()}

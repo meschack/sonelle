@@ -6,7 +6,7 @@ Accepted.
 
 ## Decision
 
-Readex Next plays narration one sentence at a time and prefetches upcoming sentence audio while the current sentence is playing.
+Sonelle plays narration one sentence at a time and prefetches upcoming sentence audio while the current sentence is playing.
 
 The renderer talks to a small `NarrationGateway` from `packages/audio`. The gateway exposes three actions:
 
@@ -16,7 +16,7 @@ The renderer talks to a small `NarrationGateway` from `packages/audio`. The gate
 
 The desktop app provides the real gateway through Tauri commands. Browser and test workflows use a deterministic fake gateway.
 
-Native audio preparation caches sentence narration locally. The native layer prefers Piper, stores `sentence.wav`, and returns it as an audio data URL. Robotic system speech is not acceptable as normal narration; if no neural local voice is configured, Readex reports that narration needs attention.
+Native audio preparation caches sentence narration locally. The native layer prefers Piper, stores `sentence.wav`, and returns it as an audio data URL. Robotic system speech is not acceptable as normal narration; if no neural local voice is configured, Sonelle reports that narration needs attention.
 
 The renderer wraps the active gateway with a small bounded prefetch cache. When playback starts for a sentence, the next sentence begins preparing in the background so the handoff feels closer to continuous reading instead of isolated sentence clips.
 

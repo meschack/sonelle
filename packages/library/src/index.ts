@@ -1,4 +1,4 @@
-import type { BookRef } from "@readex/domain";
+import type { BookRef } from "@sonelle/domain";
 
 export interface LibraryBook extends BookRef {
   lastOpenedAt: string | null;

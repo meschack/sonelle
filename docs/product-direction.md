@@ -1,6 +1,6 @@
 # Product Direction
 
-Readex Next is a private reading and listening app for books the user owns.
+Sonelle is a private reading and listening app for books the user owns.
 
 The product promise is simple: import a book, read it comfortably, listen locally, and follow the narration sentence by sentence without giving up privacy or control.
 
@@ -70,4 +70,4 @@ Good:
 
 ## Design Goal
 
-Readex should feel calm, precise, and reader-first. The user should trust it with long books and long sessions.
+Sonelle should feel calm, precise, and reader-first. The user should trust it with long books and long sessions.

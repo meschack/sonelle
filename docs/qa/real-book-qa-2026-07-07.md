@@ -15,7 +15,7 @@ cargo test real_book_qa_imports_configured_epubs_through_storage_workflow -- --i
 By default, the ignored QA test looks for EPUBs in `~/Downloads/books`. It can also be pointed at explicit files:
 
 ```sh
-READEX_QA_EPUBS="/path/book-a.epub;/path/book-b.epub" cargo test real_book_qa_imports_configured_epubs_through_storage_workflow -- --ignored --nocapture
+SONELLE_QA_EPUBS="/path/book-a.epub;/path/book-b.epub" cargo test real_book_qa_imports_configured_epubs_through_storage_workflow -- --ignored --nocapture
 ```
 
 ## Books Tested

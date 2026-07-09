@@ -15,7 +15,7 @@ The primary desktop layout is a reader-first workspace:
 
 ## Why
 
-Readex is not a podcast app. The text is the primary artifact. Audio, learning tools, bookmarks, and export all orbit the act of reading.
+Sonelle is not a podcast app. The text is the primary artifact. Audio, learning tools, bookmarks, and export all orbit the act of reading.
 
 This layout keeps the book visible and stable while still making playback and word lookup immediately available.
 

@@ -1,5 +1,5 @@
 import { For, Show } from "solid-js";
-import type { PlaybackStatus, ReaderProgress } from "@readex/reader";
+import type { PlaybackStatus, ReaderProgress } from "@sonelle/reader";
 import { BookCover } from "./book-cover";
 import type { ReaderChapterNavigationItem } from "./reader-view";
 import {

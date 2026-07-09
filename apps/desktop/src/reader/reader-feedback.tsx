@@ -1,5 +1,5 @@
 import { Show } from "solid-js";
-import type { WordInsight } from "@readex/learning";
+import type { WordInsight } from "@sonelle/learning";
 
 interface StateBlockProps {
   title: string;

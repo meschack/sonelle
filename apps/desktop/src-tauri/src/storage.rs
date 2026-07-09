@@ -154,11 +154,11 @@ pub struct BookExportView {
     pub bookmarks: Vec<BookmarkView>,
 }
 
-pub struct ReadexStore {
+pub struct SonelleStore {
     db_path: PathBuf,
 }
 
-impl ReadexStore {
+impl SonelleStore {
     pub fn open(app: &AppHandle) -> Result<Self, String> {
         let app_dir = app
             .path()
@@ -167,7 +167,7 @@ impl ReadexStore {
         fs::create_dir_all(&app_dir)
             .map_err(|_| "We couldn't prepare the local library folder.".to_string())?;
         let store = Self {
-            db_path: app_dir.join("readex.sqlite3"),
+            db_path: app_dir.join("sonelle.sqlite3"),
         };
 
         store.init()?;
@@ -1333,7 +1333,7 @@ mod tests {
     use chrono::Utc;
 
     use super::{
-        BookExportView, LibrarySearchRequest, ReaderChapterView, ReaderDocumentView, ReadexStore,
+        BookExportView, LibrarySearchRequest, ReaderChapterView, ReaderDocumentView, SonelleStore,
         SaveBookmarkRequest, SaveReadingPositionRequest,
     };
     use crate::epub_import::{import_epub_file, ImportedBook, ImportedChapter};
@@ -1344,7 +1344,7 @@ mod tests {
         let temp_dir = temp_store_dir();
         fs::create_dir_all(&temp_dir).expect("test store dir should be created");
         let store =
-            ReadexStore::open_at(temp_dir.join("readex.sqlite3")).expect("store should initialize");
+            SonelleStore::open_at(temp_dir.join("sonelle.sqlite3")).expect("store should initialize");
         let document = store
             .save_imported_book(ImportedBook {
                 id: "book-test".to_string(),
@@ -1391,7 +1391,7 @@ mod tests {
     fn migrates_existing_books_table_and_persists_cover_image() {
         let temp_dir = temp_store_dir();
         fs::create_dir_all(&temp_dir).expect("test store dir should be created");
-        let db_path = temp_dir.join("readex.sqlite3");
+        let db_path = temp_dir.join("sonelle.sqlite3");
         Connection::open(&db_path)
             .expect("legacy database should open")
             .execute_batch(
@@ -1406,7 +1406,7 @@ mod tests {
                 ",
             )
             .expect("legacy books table should be created");
-        let store = ReadexStore::open_at(db_path).expect("store should migrate");
+        let store = SonelleStore::open_at(db_path).expect("store should migrate");
         let cover_image_src = "data:image/png;base64,Y292ZXI=".to_string();
         let document = store
             .save_imported_book(ImportedBook {
@@ -1449,7 +1449,7 @@ mod tests {
         let temp_dir = temp_store_dir();
         fs::create_dir_all(&temp_dir).expect("test store dir should be created");
         let store =
-            ReadexStore::open_at(temp_dir.join("readex.sqlite3")).expect("store should initialize");
+            SonelleStore::open_at(temp_dir.join("sonelle.sqlite3")).expect("store should initialize");
 
         store
             .save_imported_book(ImportedBook {
@@ -1489,7 +1489,7 @@ mod tests {
         let temp_dir = temp_store_dir();
         fs::create_dir_all(&temp_dir).expect("test store dir should be created");
         let store =
-            ReadexStore::open_at(temp_dir.join("readex.sqlite3")).expect("store should initialize");
+            SonelleStore::open_at(temp_dir.join("sonelle.sqlite3")).expect("store should initialize");
 
         let document = store
             .save_imported_book(ImportedBook {
@@ -1563,7 +1563,7 @@ mod tests {
         let temp_dir = temp_store_dir();
         fs::create_dir_all(&temp_dir).expect("test store dir should be created");
         let store =
-            ReadexStore::open_at(temp_dir.join("readex.sqlite3")).expect("store should initialize");
+            SonelleStore::open_at(temp_dir.join("sonelle.sqlite3")).expect("store should initialize");
 
         let document = store
             .save_imported_book(ImportedBook {
@@ -1609,7 +1609,7 @@ mod tests {
         let temp_dir = temp_store_dir();
         fs::create_dir_all(&temp_dir).expect("test store dir should be created");
         let store =
-            ReadexStore::open_at(temp_dir.join("readex.sqlite3")).expect("store should initialize");
+            SonelleStore::open_at(temp_dir.join("sonelle.sqlite3")).expect("store should initialize");
         store
             .save_imported_book(ImportedBook {
                 id: "book-search".to_string(),
@@ -1673,7 +1673,7 @@ mod tests {
         let temp_dir = temp_store_dir();
         fs::create_dir_all(&temp_dir).expect("performance store dir should be created");
         let store =
-            ReadexStore::open_at(temp_dir.join("readex.sqlite3")).expect("store should initialize");
+            SonelleStore::open_at(temp_dir.join("sonelle.sqlite3")).expect("store should initialize");
 
         measure_imported_book_performance(
             &store,
@@ -1708,13 +1708,13 @@ mod tests {
         let epub_paths = configured_qa_epub_paths();
         assert!(
             epub_paths.len() >= 2,
-            "real-book QA needs at least two EPUBs; set READEX_QA_EPUBS with semicolon-separated paths"
+            "real-book QA needs at least two EPUBs; set SONELLE_QA_EPUBS with semicolon-separated paths"
         );
 
         let temp_dir = temp_store_dir();
         fs::create_dir_all(&temp_dir).expect("qa store dir should be created");
         let store =
-            ReadexStore::open_at(temp_dir.join("readex.sqlite3")).expect("store should initialize");
+            SonelleStore::open_at(temp_dir.join("sonelle.sqlite3")).expect("store should initialize");
 
         for epub_path in &epub_paths {
             let started_at = Instant::now();
@@ -1825,7 +1825,7 @@ mod tests {
     }
 
     fn measure_imported_book_performance(
-        store: &ReadexStore,
+        store: &SonelleStore,
         source_label: &str,
         source_size_bytes: Option<u64>,
         import_elapsed: Option<Duration>,
@@ -1882,7 +1882,7 @@ mod tests {
     }
 
     fn measure_chapter_switches(
-        store: &ReadexStore,
+        store: &SonelleStore,
         book_id: &str,
         chapters: &[ReaderChapterView],
     ) -> Vec<ChapterSwitchMeasurement> {
@@ -1957,7 +1957,7 @@ mod tests {
         ImportedBook {
             id: "synthetic-large-book".to_string(),
             title: "Synthetic Large Book".to_string(),
-            author: "Readex QA".to_string(),
+            author: "Sonelle QA".to_string(),
             cover_image_src: None,
             source_path: "synthetic://large-book".to_string(),
             chapters: (0..14)
@@ -1995,13 +1995,13 @@ mod tests {
 
     fn temp_store_dir() -> PathBuf {
         std::env::temp_dir().join(format!(
-            "readex-store-test-{}",
+            "sonelle-store-test-{}",
             Utc::now().timestamp_nanos_opt().unwrap_or_default()
         ))
     }
 
     fn configured_qa_epub_paths() -> Vec<PathBuf> {
-        if let Ok(paths) = env::var("READEX_QA_EPUBS") {
+        if let Ok(paths) = env::var("SONELLE_QA_EPUBS") {
             return paths
                 .split([';', '\n'])
                 .map(str::trim)

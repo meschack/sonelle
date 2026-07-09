@@ -16,14 +16,14 @@ const processTable = await readProcessTable();
 for (const port of ports) {
   for (const pid of await pidsListeningOnPort(port)) {
     const processInfo = processTable.find((entry) => entry.pid === pid);
-    if (await isReadexOwnedProcess(processInfo)) {
+    if (await isSonelleOwnedProcess(processInfo)) {
       addCandidate(pid, `listening on port ${port}`);
     }
   }
 }
 
 for (const processInfo of processTable) {
-  if (await isReadexDevProcess(processInfo)) {
+  if (await isSonelleDevProcess(processInfo)) {
     addCandidate(processInfo.pid, processInfo.command);
   }
 }
@@ -32,12 +32,12 @@ const ownPid = process.pid;
 candidates.delete(ownPid);
 
 if (candidates.size === 0) {
-  console.log("No Readex dev server processes found.");
+  console.log("No Sonelle dev server processes found.");
   process.exit(0);
 }
 
 console.log(
-  `Stopping ${candidates.size} Readex dev process${candidates.size === 1 ? "" : "es"}...`
+  `Stopping ${candidates.size} Sonelle dev process${candidates.size === 1 ? "" : "es"}...`
 );
 
 for (const pid of candidates.keys()) {
@@ -61,7 +61,7 @@ if (failed.length > 0) {
   process.exit(1);
 }
 
-console.log("Readex dev server stopped.");
+console.log("Sonelle dev server stopped.");
 
 function addCandidate(pid, reason) {
   if (!Number.isInteger(pid) || pid <= 0) return;
@@ -105,15 +105,15 @@ async function readProcessTable() {
     .filter(Boolean);
 }
 
-async function isReadexDevProcess(processInfo) {
+async function isSonelleDevProcess(processInfo) {
   if (processInfo.pid === process.pid || processInfo.command.includes("dev-stop")) return false;
   if (processInfo.command.includes("dev:stop")) return false;
   if (!matchesDevCommand(processInfo.command)) return false;
 
-  return isReadexOwnedProcess(processInfo);
+  return isSonelleOwnedProcess(processInfo);
 }
 
-async function isReadexOwnedProcess(processInfo) {
+async function isSonelleOwnedProcess(processInfo) {
   if (processInfo == null) return false;
 
   const cwd = await processCwd(processInfo.pid);
@@ -128,8 +128,8 @@ function matchesDevCommand(command) {
   return [
     "pnpm dev:desktop",
     "pnpm dev:web",
-    "@readex/desktop tauri dev",
-    "@readex/desktop dev",
+    "@sonelle/desktop tauri dev",
+    "@sonelle/desktop dev",
     "tauri dev",
     "vite --"
   ].some((pattern) => command.includes(pattern));

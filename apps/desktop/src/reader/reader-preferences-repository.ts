@@ -2,9 +2,9 @@ import {
   parseReaderPreferences,
   serializeReaderPreferences,
   type ReaderPreferences
-} from "@readex/reader";
+} from "@sonelle/reader";
 
-const readerPreferencesStorageKey = "readex.reader.preferences.v1";
+const readerPreferencesStorageKey = "sonelle.reader.preferences.v1";
 
 export interface ReaderPreferencesRepository {
   load(): ReaderPreferences;

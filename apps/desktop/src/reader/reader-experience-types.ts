@@ -1,4 +1,4 @@
-import type { PlaybackStatus, ReaderToolTab } from "@readex/reader";
+import type { PlaybackStatus, ReaderToolTab } from "@sonelle/reader";
 
 export type InspectorTab = ReaderToolTab;
 export type AppView = "reader" | "library";

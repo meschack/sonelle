@@ -12,13 +12,13 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@readex/domain": resolve(root, "packages/domain/src/index.ts"),
-      "@readex/text": resolve(root, "packages/text/src/index.ts"),
-      "@readex/reader": resolve(root, "packages/reader/src/index.ts"),
-      "@readex/library": resolve(root, "packages/library/src/index.ts"),
-      "@readex/audio": resolve(root, "packages/audio/src/index.ts"),
-      "@readex/storage": resolve(root, "packages/storage/src/index.ts"),
-      "@readex/learning": resolve(root, "packages/learning/src/index.ts")
+      "@sonelle/domain": resolve(root, "packages/domain/src/index.ts"),
+      "@sonelle/text": resolve(root, "packages/text/src/index.ts"),
+      "@sonelle/reader": resolve(root, "packages/reader/src/index.ts"),
+      "@sonelle/library": resolve(root, "packages/library/src/index.ts"),
+      "@sonelle/audio": resolve(root, "packages/audio/src/index.ts"),
+      "@sonelle/storage": resolve(root, "packages/storage/src/index.ts"),
+      "@sonelle/learning": resolve(root, "packages/learning/src/index.ts")
     }
   }
 });

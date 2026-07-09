@@ -1132,7 +1132,7 @@ mod tests {
 
     fn temp_epub_dir() -> PathBuf {
         std::env::temp_dir().join(format!(
-            "readex-epub-import-test-{}",
+            "sonelle-epub-import-test-{}",
             Utc::now().timestamp_nanos_opt().unwrap_or_default()
         ))
     }

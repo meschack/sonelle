@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping with Readex Next.
+Thanks for helping with Sonelle.
 
 ## Local Setup
 

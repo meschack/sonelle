@@ -1,13 +1,13 @@
-# Readex Next
+# Sonelle
 
-[![CI](https://github.com/Meschack/readex-next/actions/workflows/ci.yml/badge.svg)](https://github.com/Meschack/readex-next/actions/workflows/ci.yml)
-[![Release](https://github.com/Meschack/readex-next/actions/workflows/release.yml/badge.svg)](https://github.com/Meschack/readex-next/actions/workflows/release.yml)
-[![Latest Release](https://img.shields.io/github/v/release/Meschack/readex-next?label=latest%20release)](https://github.com/Meschack/readex-next/releases/latest)
+[![CI](https://github.com/Meschack/sonelle/actions/workflows/ci.yml/badge.svg)](https://github.com/Meschack/sonelle/actions/workflows/ci.yml)
+[![Release](https://github.com/Meschack/sonelle/actions/workflows/release.yml/badge.svg)](https://github.com/Meschack/sonelle/actions/workflows/release.yml)
+[![Latest Release](https://img.shields.io/github/v/release/Meschack/sonelle?label=latest%20release)](https://github.com/Meschack/sonelle/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-153f34.svg)](LICENSE)
 
-Readex Next is a local-first desktop reader for EPUB books with sentence-level narration, clean chapter navigation, and dictionary lookup for language learners.
+Sonelle is a local-first desktop reader for EPUB books with sentence-level narration, clean chapter navigation, and dictionary lookup for language learners.
 
-It is a ground-up rebuild of Readex on a saner base: Tauri, Solid, TypeScript, Rust, SQLite, and a reader-first product model.
+It is a ground-up rebuild on a saner base: Tauri, Solid, TypeScript, Rust, SQLite, and a reader-first product model.
 
 ## What It Does
 
@@ -21,7 +21,7 @@ It is a ground-up rebuild of Readex on a saner base: Tauri, Solid, TypeScript, R
 
 ## Downloads
 
-Current desktop builds are published on the [latest release](https://github.com/Meschack/readex-next/releases/latest).
+Current desktop builds are published on the [latest release](https://github.com/Meschack/sonelle/releases/latest).
 
 Automated releases are built for:
 

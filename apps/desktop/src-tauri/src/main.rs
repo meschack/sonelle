@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    readex_next_lib::run()
+    sonelle_lib::run()
 }

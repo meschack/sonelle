@@ -3,16 +3,23 @@ import {
   DEFAULT_AUDIO_SETTINGS,
   SUPPORTED_NARRATION_VOICES,
   type AudioSettings
-} from "@readex/audio";
-import { primaryDefinition, type SavedDictionaryEntry, type WordInsight } from "@readex/learning";
-import type { ReaderSearchResult } from "@readex/reader";
+} from "@sonelle/audio";
+import { primaryDefinition, type SavedDictionaryEntry, type WordInsight } from "@sonelle/learning";
+import type { ReaderSearchResult } from "@sonelle/reader";
 import type { AudioCacheStatsDto } from "../audio/audio-cache-repository";
 import type { LibraryBookmarkDto } from "../library/book-repository";
 import { formatBytes } from "./reader-formatting";
 import { DictionaryStatus, StateBlock } from "./reader-feedback";
 import type { InspectorTab } from "./reader-experience-types";
 import type { ReaderSentenceView } from "./reader-view";
-import { BookmarkIcon, HeadphonesIcon, SearchIcon, SettingsIcon, WordIcon } from "./reader-icons";
+import {
+  BookmarkIcon,
+  HeadphonesIcon,
+  SearchIcon,
+  SettingsIcon,
+  TrashIcon,
+  WordIcon
+} from "./reader-icons";
 
 interface ReaderInspectorProps {
   tab: InspectorTab;
@@ -55,10 +62,6 @@ export function ReaderInspector(props: ReaderInspectorProps) {
 
   return (
     <aside class="inspector" aria-label="Reader tools">
-      <header class="inspector-header">
-        <span>Inspector</span>
-        <strong>Contextual Tools</strong>
-      </header>
       <div class="inspector-tabs" role="tablist" aria-label="Reader tool tabs">
         <For each={tabs}>
           {(tab) => {
@@ -304,17 +307,22 @@ function BookmarkPanel(props: BookmarkPanelProps) {
           <For each={props.bookmarks}>
             {(bookmark) => (
               <div class="bookmark-row">
-                <button type="button" onClick={() => props.onOpenBookmark(bookmark)}>
+                <button
+                  class="bookmark-card-button"
+                  type="button"
+                  onClick={() => props.onOpenBookmark(bookmark)}
+                >
                   <span>Sentence {bookmark.sentenceIndex + 1}</span>
                   <small>{bookmark.text}</small>
                 </button>
                 <button
-                  class="mini-danger"
+                  class="bookmark-delete-button"
                   type="button"
-                  aria-label="Delete bookmark"
+                  aria-label={`Delete sentence ${bookmark.sentenceIndex + 1} bookmark`}
                   onClick={() => props.onDeleteBookmark(bookmark.id)}
+                  title="Delete bookmark"
                 >
-                  Delete
+                  <TrashIcon />
                 </button>
               </div>
             )}

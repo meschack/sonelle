@@ -75,7 +75,7 @@ export function createBookRepository(): BookRepository {
   return isTauriRuntime() ? nativeBookRepository : browserBookRepository;
 }
 
-const bookmarksStorageKey = "readex.bookmarks.v1";
+const bookmarksStorageKey = "sonelle.bookmarks.v1";
 
 const nativeBookRepository: BookRepository = {
   async importBookFromDialog() {

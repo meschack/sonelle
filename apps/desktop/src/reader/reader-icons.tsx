@@ -22,6 +22,14 @@ export function BookmarkIcon() {
   );
 }
 
+export function TrashIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M9.25 3.5h5.5l.75 2H20V7h-1.33l-1.05 12.05a2.25 2.25 0 0 1-2.24 2.05H8.62a2.25 2.25 0 0 1-2.24-2.05L5.33 7H4V5.5h4.5l.75-2Zm1.04 2h3.42l-.19-.5h-3.04l-.19.5ZM6.84 7l1.04 11.92a.75.75 0 0 0 .74.68h6.76a.75.75 0 0 0 .74-.68L17.16 7H6.84Zm2.91 2.25h1.5v7.5h-1.5v-7.5Zm3 0h1.5v7.5h-1.5v-7.5Z" />
+    </svg>
+  );
+}
+
 export function WordIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24">

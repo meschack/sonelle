@@ -1,6 +1,6 @@
 # Architecture Principles
 
-Readex Next should be built around stable domain events, deep modules, and small interfaces.
+Sonelle should be built around stable domain events, deep modules, and small interfaces.
 
 ## Event-Driven Development
 

@@ -6,9 +6,9 @@ Accepted.
 
 ## Decision
 
-Readex word tools are dictionary-first. A user clicks or taps a word, Readex looks up that word through a public dictionary API, then displays the definition in the popover and side inspector.
+Sonelle word tools are dictionary-first. A user clicks or taps a word, Sonelle looks up that word through a public dictionary API, then displays the definition in the popover and side inspector.
 
-Readex uses the Free Dictionary API at:
+Sonelle uses the Free Dictionary API at:
 
 ```text
 https://api.dictionaryapi.dev/api/v2/entries/en/<word>

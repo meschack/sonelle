@@ -6,7 +6,7 @@ Accepted.
 
 ## Decision
 
-Readex Next highlights playback sentence by sentence.
+Sonelle highlights playback sentence by sentence.
 
 Word-level playback highlighting is not part of the core playback system.
 

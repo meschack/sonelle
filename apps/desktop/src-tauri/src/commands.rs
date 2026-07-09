@@ -7,18 +7,18 @@ use crate::audio::{
 use crate::epub_import::import_epub_file;
 use crate::storage::{
     BookExportView, BookmarkView, LibraryBookView, LibrarySearchRequest, LibrarySearchResultView,
-    ReaderDocumentView, ReadexStore, SaveBookmarkRequest, SaveReadingPositionRequest,
+    ReaderDocumentView, SonelleStore, SaveBookmarkRequest, SaveReadingPositionRequest,
 };
 
 #[tauri::command]
 pub fn import_epub(app: AppHandle, path: String) -> Result<ReaderDocumentView, String> {
     let imported = import_epub_file(path.as_ref()).map_err(|error| error.to_string())?;
-    ReadexStore::open(&app)?.save_imported_book(imported)
+    SonelleStore::open(&app)?.save_imported_book(imported)
 }
 
 #[tauri::command]
 pub fn list_books(app: AppHandle) -> Result<Vec<LibraryBookView>, String> {
-    ReadexStore::open(&app)?.list_books()
+    SonelleStore::open(&app)?.list_books()
 }
 
 #[tauri::command]
@@ -27,7 +27,7 @@ pub fn open_book(
     book_id: String,
     chapter_id: Option<String>,
 ) -> Result<ReaderDocumentView, String> {
-    ReadexStore::open(&app)?.open_book(&book_id, chapter_id.as_deref())
+    SonelleStore::open(&app)?.open_book(&book_id, chapter_id.as_deref())
 }
 
 #[tauri::command]
@@ -63,7 +63,7 @@ pub fn save_reading_position(
     app: AppHandle,
     position: SaveReadingPositionRequest,
 ) -> Result<(), String> {
-    ReadexStore::open(&app)?.save_reading_position(position)
+    SonelleStore::open(&app)?.save_reading_position(position)
 }
 
 #[tauri::command]
@@ -71,7 +71,7 @@ pub fn list_bookmarks(
     app: AppHandle,
     book_id: Option<String>,
 ) -> Result<Vec<BookmarkView>, String> {
-    ReadexStore::open(&app)?.list_bookmarks(book_id.as_deref())
+    SonelleStore::open(&app)?.list_bookmarks(book_id.as_deref())
 }
 
 #[tauri::command]
@@ -79,12 +79,12 @@ pub fn save_bookmark(
     app: AppHandle,
     bookmark: SaveBookmarkRequest,
 ) -> Result<BookmarkView, String> {
-    ReadexStore::open(&app)?.save_bookmark(bookmark)
+    SonelleStore::open(&app)?.save_bookmark(bookmark)
 }
 
 #[tauri::command]
 pub fn delete_bookmark(app: AppHandle, bookmark_id: String) -> Result<(), String> {
-    ReadexStore::open(&app)?.delete_bookmark(&bookmark_id)
+    SonelleStore::open(&app)?.delete_bookmark(&bookmark_id)
 }
 
 #[tauri::command]
@@ -92,10 +92,10 @@ pub fn search_library(
     app: AppHandle,
     request: LibrarySearchRequest,
 ) -> Result<Vec<LibrarySearchResultView>, String> {
-    ReadexStore::open(&app)?.search_library(request)
+    SonelleStore::open(&app)?.search_library(request)
 }
 
 #[tauri::command]
 pub fn export_book_data(app: AppHandle, book_id: String) -> Result<BookExportView, String> {
-    ReadexStore::open(&app)?.export_book_data(&book_id)
+    SonelleStore::open(&app)?.export_book_data(&book_id)
 }

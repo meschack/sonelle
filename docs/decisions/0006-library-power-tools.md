@@ -4,15 +4,15 @@ Status: accepted
 
 ## Context
 
-Readex needs to move from a reader/playback demo toward a usable private library. The next layer must help users find books, jump around inside a book, keep useful places, export their data, tune audio playback, and clean prepared audio without exposing internal jobs or cache mechanics.
+Sonelle needs to move from a reader/playback demo toward a usable private library. The next layer must help users find books, jump around inside a book, keep useful places, export their data, tune audio playback, and clean prepared audio without exposing internal jobs or cache mechanics.
 
 ## Decision
 
 Library power tools are split by responsibility:
 
-- `@readex/library` owns pure book filtering, query normalization, and bookmark grouping helpers.
-- `@readex/reader` owns in-reader sentence search and playback completion behavior.
-- `@readex/audio` owns durable audio settings parsing and clamping.
+- `@sonelle/library` owns pure book filtering, query normalization, and bookmark grouping helpers.
+- `@sonelle/reader` owns in-reader sentence search and playback completion behavior.
+- `@sonelle/audio` owns durable audio settings parsing and clamping.
 - The desktop renderer owns user interaction, keyboard shortcuts, local settings storage, and download creation.
 - Tauri commands own persisted library state: bookmarks, library search, book export data, and prepared audio cache cleanup.
 

@@ -105,7 +105,7 @@ pnpm qa:real-books
 By default, the test looks for known local EPUB files in `~/Downloads/books`. To use specific files, pass a semicolon-separated list:
 
 ```bash
-READEX_QA_EPUBS="/path/book-one.epub;/path/book-two.epub" pnpm qa:real-books
+SONELLE_QA_EPUBS="/path/book-one.epub;/path/book-two.epub" pnpm qa:real-books
 ```
 
 Use at least two books. The check imports each EPUB, verifies chapter titles do not collapse into the book title, saves and reopens reading position, creates a bookmark, searches the imported text, and exports the book data.
@@ -118,17 +118,17 @@ Run the reader performance harness with:
 pnpm perf:large-books
 ```
 
-The harness always measures a synthetic large book, then adds any configured real EPUBs from `READEX_QA_EPUBS` or `~/Downloads/books`. It reports book size, chapter count, sentence count, import timing, persistence timing, open-book timing, and chapter-switch timing.
+The harness always measures a synthetic large book, then adds any configured real EPUBs from `SONELLE_QA_EPUBS` or `~/Downloads/books`. It reports book size, chapter count, sentence count, import timing, persistence timing, open-book timing, and chapter-switch timing.
 
 Use the same EPUB override format as real-book QA:
 
 ```bash
-READEX_QA_EPUBS="/path/book-one.epub;/path/book-two.epub" pnpm perf:large-books
+SONELLE_QA_EPUBS="/path/book-one.epub;/path/book-two.epub" pnpm perf:large-books
 ```
 
 ## Local Narration Voice
 
-Readex uses Piper for local neural narration during desktop development.
+Sonelle uses Piper for local neural narration during desktop development.
 
 Install the supported development voices with:
 
@@ -136,7 +136,7 @@ Install the supported development voices with:
 pnpm setup:piper
 ```
 
-This creates a local `.readex/` sandbox containing:
+This creates a local `.sonelle/` sandbox containing:
 
 - `piper-venv`: a Python virtual environment with Piper installed
 - `voices/piper`: downloaded Piper voice files
@@ -147,19 +147,19 @@ The default in-app voice is `en_US-lessac-medium` (American English). `pnpm setu
 To install only a specific voice while debugging, pass it when running setup:
 
 ```bash
-READEX_PIPER_VOICE=en_GB-alba-medium pnpm setup:piper
+SONELLE_PIPER_VOICE=en_GB-alba-medium pnpm setup:piper
 ```
 
 Advanced overrides:
 
-- `READEX_PIPER_BIN`: exact Piper executable
-- `READEX_PIPER_PYTHON`: exact Python executable with the Piper module installed
-- `READEX_PIPER_MODEL`: exact `.onnx` model path with a matching `.onnx.json` beside it; this overrides the in-app voice selection
-- `READEX_PIPER_DATA_DIR`: directory containing downloaded Piper voices
-- `READEX_PIPER_VOICE`: voice to install through `pnpm setup:piper`, and a native fallback for older requests without an explicit in-app voice
-- `READEX_PIPER_VOICES`: comma, semicolon, or space separated list of voices to install through `pnpm setup:piper`
+- `SONELLE_PIPER_BIN`: exact Piper executable
+- `SONELLE_PIPER_PYTHON`: exact Python executable with the Piper module installed
+- `SONELLE_PIPER_MODEL`: exact `.onnx` model path with a matching `.onnx.json` beside it; this overrides the in-app voice selection
+- `SONELLE_PIPER_DATA_DIR`: directory containing downloaded Piper voices
+- `SONELLE_PIPER_VOICE`: voice to install through `pnpm setup:piper`, and a native fallback for older requests without an explicit in-app voice
+- `SONELLE_PIPER_VOICES`: comma, semicolon, or space separated list of voices to install through `pnpm setup:piper`
 
-If no neural local voice is available, Readex shows a friendly needs-attention state instead of playing robotic system speech.
+If no neural local voice is available, Sonelle shows a friendly needs-attention state instead of playing robotic system speech.
 
 ## CI and Releases
 

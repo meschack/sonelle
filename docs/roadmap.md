@@ -1,6 +1,6 @@
 # Roadmap
 
-Readex Next is organized as vertical slices. Each phase should leave the app more usable, not merely more abstract.
+Sonelle is organized as vertical slices. Each phase should leave the app more usable, not merely more abstract.
 
 ## Phase 1: Foundation
 

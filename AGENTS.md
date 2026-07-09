@@ -1,10 +1,10 @@
-# Readex Next Agent Rules
+# Sonelle Agent Rules
 
-Readex Next is a clean restart. Do not copy architecture from the old Readex app unless a specific function is intentionally recovered and documented.
+Sonelle is a clean restart. Do not copy architecture from the old app unless a specific function is intentionally recovered and documented.
 
 ## Product Shape
 
-Readex is a local-first reading and listening app for EPUB books. The primary experience is reading the book text while sentence-level narration plays in sync.
+Sonelle is a local-first reading and listening app for EPUB books. The primary experience is reading the book text while sentence-level narration plays in sync.
 
 The app is reader-first, not podcast-first. Audio supports the text; it does not turn the interface into a music player clone.
 

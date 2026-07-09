@@ -1,5 +1,5 @@
 {
-  "name": "@readex/audio",
+  "name": "@sonelle/audio",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,6 +10,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@readex/domain": "workspace:*"
+    "@sonelle/domain": "workspace:*"
   }
 }

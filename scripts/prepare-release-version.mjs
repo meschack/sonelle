@@ -115,7 +115,7 @@ function main() {
   writeGithubOutput({
     version,
     tag,
-    release_name: `Readex Next ${tag}`
+    release_name: `Sonelle ${tag}`
   });
 
   console.log(`Prepared ${tag}`);

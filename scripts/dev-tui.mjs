@@ -39,7 +39,7 @@ if (process.argv.includes("--list")) {
 }
 
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
-  console.error("The Readex dev TUI needs an interactive terminal.");
+  console.error("The Sonelle dev TUI needs an interactive terminal.");
   console.error("Run a direct command instead, for example: pnpm dev:web");
   process.exit(1);
 }
@@ -124,7 +124,7 @@ function run(entry) {
 
 function render() {
   clear();
-  console.log(`${ansi.bold}Readex Dev TUI${ansi.reset}`);
+  console.log(`${ansi.bold}Sonelle Dev TUI${ansi.reset}`);
   console.log(`${ansi.dim}Use ↑/↓ or k/j, Enter to run, q to quit.${ansi.reset}\n`);
 
   entries.forEach((entry, index) => {

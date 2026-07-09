@@ -1,4 +1,4 @@
-import type { SentenceNarrationRequest } from "@readex/audio";
+import type { SentenceNarrationRequest } from "@sonelle/audio";
 import type { ReaderSentenceView, ReaderView } from "./reader-view";
 
 export function createSentenceNarrationRequest(

@@ -1,7 +1,7 @@
 {
-  "name": "@readex/desktop",
+  "name": "@sonelle/desktop",
   "version": "0.1.0",
-  "description": "Readex Next desktop app built with Tauri and Solid.",
+  "description": "Sonelle desktop app built with Tauri and Solid.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,11 +15,11 @@
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.2.8",
     "@fontsource/commit-mono": "^5.2.5",
-    "@readex/audio": "workspace:*",
-    "@readex/learning": "workspace:*",
-    "@readex/library": "workspace:*",
-    "@readex/reader": "workspace:*",
-    "@readex/text": "workspace:*",
+    "@sonelle/audio": "workspace:*",
+    "@sonelle/learning": "workspace:*",
+    "@sonelle/library": "workspace:*",
+    "@sonelle/reader": "workspace:*",
+    "@sonelle/text": "workspace:*",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-opener": "^2",
