@@ -3,6 +3,7 @@ mod commands;
 mod epub_import;
 mod storage;
 mod text;
+mod voice_installation;
 
 use std::io;
 
@@ -42,7 +43,9 @@ pub fn run() {
             commands::save_bookmark,
             commands::save_reading_position,
             commands::search_library,
-            commands::stop_sentence_audio
+            commands::stop_sentence_audio,
+            commands::get_narration_voice_status,
+            commands::install_narration_voice
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

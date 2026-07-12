@@ -5,25 +5,45 @@
       "id": "en_US-amy-medium",
       "label": "American Female",
       "locale": "en-US",
-      "description": "Soft, narrative American accent"
+      "description": "Soft, narrative American accent",
+      "download": {
+        "sizeBytes": 63206176,
+        "modelSha256": "b3a6e47b57b8c7fbe6a0ce2518161a50f59a9cdd8a50835c02cb02bdd6206c18",
+        "configSha256": "95a23eb4d42909d38df73bb9ac7f45f597dbfcde2d1bf9526fdeaf5466977d77"
+      }
     },
     {
       "id": "en_GB-alba-medium",
       "label": "English Female",
       "locale": "en-GB",
-      "description": "Deep, scholarly British accent"
+      "description": "Deep, scholarly British accent",
+      "download": {
+        "sizeBytes": 63206182,
+        "modelSha256": "401369c4a81d09fdd86c32c5c864440811dbdcc66466cde2d64f7133a66ad03b",
+        "configSha256": "aa965a2f02ecced632c2694e1fc72bbff6d65f265fab567ca945918c73dd89f4"
+      }
     },
     {
       "id": "en_GB-northern_english_male-medium",
       "label": "English Male",
       "locale": "en-GB",
-      "description": "Warm northern British accent"
+      "description": "Warm northern British accent",
+      "download": {
+        "sizeBytes": 63206141,
+        "modelSha256": "57a219ae8e638873db7d18893304be5069c42868f392bb95c3ff17f0690d0689",
+        "configSha256": "69557ed3d974463453e9b0c09dd99a7ed0e52b8b87b64b357dbeeb2540a97d47"
+      }
     },
     {
       "id": "fr_FR-siwis-medium",
       "label": "Femme française",
       "locale": "fr-FR",
-      "description": "Natural French narration"
+      "description": "Natural French narration",
+      "download": {
+        "sizeBytes": 63206169,
+        "modelSha256": "641d1ab097da2b81128c076810edb052b385decc8be3381814802a64a73baf99",
+        "configSha256": "39479916c2db192b5ac9764daddd0c744d83e023ad890c6976c0633ae4df8959"
+      }
     }
   ]
 }

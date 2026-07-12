@@ -9,3 +9,4 @@ src-tauri/target/
 !.env.example
 .readex/
 .sonelle/
+apps/desktop/src-tauri/resources/windows-runtime/*.dll

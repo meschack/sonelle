@@ -17,6 +17,26 @@ describe("language codes", () => {
 });
 
 describe("domain event dispatcher", () => {
+  it("represents offline voice installation as a domain lifecycle", async () => {
+    const dispatcher = createDomainEventDispatcher();
+    const reactions: string[] = [];
+    dispatcher.subscribe("VoiceInstallationRequested", (event) => {
+      reactions.push(`requested:${event.payload.voiceId}`);
+    });
+    dispatcher.subscribe("VoiceInstallationReady", (event) => {
+      reactions.push(`ready:${event.payload.voiceId}`);
+    });
+
+    await dispatcher.dispatch(
+      createDomainEvent("VoiceInstallationRequested", { voiceId: "en_US-amy-medium" })
+    );
+    await dispatcher.dispatch(
+      createDomainEvent("VoiceInstallationReady", { voiceId: "en_US-amy-medium" })
+    );
+
+    expect(reactions).toEqual(["requested:en_US-amy-medium", "ready:en_US-amy-medium"]);
+  });
+
   it("runs independent reactions and supports unsubscribing", async () => {
     const dispatcher = createDomainEventDispatcher();
     const reactions: string[] = [];

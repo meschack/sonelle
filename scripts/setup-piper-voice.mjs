@@ -1,8 +1,10 @@
 import {
+  copyFileSync,
   createWriteStream,
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   renameSync,
   rmSync,
   statSync
@@ -26,11 +28,12 @@ const piperVoiceBaseUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/m
 const defaultDownloadTimeoutMs = 5 * 60 * 1000;
 const piperVoicePattern =
   /^(?<langFamily>[^-]+)_(?<langRegion>[^-]+)-(?<voiceName>[^-]+)-(?<voiceQuality>.+)$/u;
-const python = process.env.PYTHON ?? "python3";
+const python = resolvePythonCommand(process.env, process.platform);
 const venvPython =
   process.platform === "win32"
     ? join(venvDir, "Scripts", "python.exe")
     : join(venvDir, "bin", "python");
+const onnxRuntimeDir = join(venvDir, "Lib", "site-packages", "onnxruntime", "capi");
 
 export function resolveVoicesToInstall(env = process.env) {
   const requestedVoices = env.SONELLE_PIPER_VOICE ?? env.SONELLE_PIPER_VOICES;
@@ -39,11 +42,20 @@ export function resolveVoicesToInstall(env = process.env) {
   return uniqueVoiceList(requestedVoices);
 }
 
+export function resolvePythonCommand(env = process.env, platform = process.platform) {
+  return env.PYTHON ?? (platform === "win32" ? "python" : "python3");
+}
+
 export async function setupPiperVoice(env = process.env) {
   const voices = resolveVoicesToInstall(env);
 
   mkdirSync(sonelleDir, { recursive: true });
   mkdirSync(voiceDir, { recursive: true });
+
+  if (existsSync(venvPython) && pythonVersion(venvPython, env) !== pythonVersion(python, env)) {
+    console.warn("\n> recreating the Piper Python environment for the selected Python version");
+    rmSync(venvDir, { force: true, maxRetries: 5, recursive: true, retryDelay: 200 });
+  }
 
   if (!existsSync(venvPython)) {
     run(python, ["-m", "venv", venvDir], "creating Piper Python environment", env);
@@ -51,6 +63,7 @@ export async function setupPiperVoice(env = process.env) {
 
   run(venvPython, ["-m", "pip", "install", "--upgrade", "pip"], "updating pip", env);
   run(venvPython, ["-m", "pip", "install", "piper-tts"], "installing Piper", env);
+  ensurePiperImportable(env);
   for (const voice of voices) {
     const smokePath = smokePathForVoice(voice, voices.length);
     await downloadPiperVoice(voice, env);
@@ -218,6 +231,93 @@ function uniqueVoiceList(value) {
     .filter(Boolean);
 
   return [...new Set(voices.length > 0 ? voices : [defaultVoice])];
+}
+
+function isPiperImportable(env) {
+  const result = spawnSync(venvPython, ["-c", "import piper"], {
+    cwd: repoRoot,
+    env,
+    stdio: "ignore"
+  });
+
+  return result.error == null && result.status === 0;
+}
+
+function ensurePiperImportable(env) {
+  if (isPiperImportable(env)) return;
+
+  if (process.platform === "win32" && installAppLocalWindowsRuntime(env)) {
+    console.log("\n> using the Visual C++ runtime from the local Visual Studio installation");
+    if (isPiperImportable(env)) return;
+  }
+
+  console.error("Piper could not load its native audio runtime.");
+  if (process.platform === "win32") {
+    console.error(
+      "Install the latest Microsoft Visual C++ x64 Redistributable from https://aka.ms/vc14/vc_redist.x64.exe, then retry."
+    );
+  }
+  process.exit(1);
+}
+
+function installAppLocalWindowsRuntime(env) {
+  const runtimeDir = findWindowsRuntimeDirectory(env);
+  if (runtimeDir == null || !existsSync(runtimeDir) || !existsSync(onnxRuntimeDir)) return false;
+
+  const runtimeFiles = readdirSync(runtimeDir).filter((name) =>
+    /^(?:msvcp140.*|vcruntime140.*)\.dll$/iu.test(name)
+  );
+  if (!runtimeFiles.includes("msvcp140.dll") || !runtimeFiles.includes("vcruntime140.dll")) {
+    return false;
+  }
+
+  for (const name of runtimeFiles) {
+    copyFileSync(join(runtimeDir, name), join(onnxRuntimeDir, name));
+  }
+  return true;
+}
+
+function findWindowsRuntimeDirectory(env) {
+  if (env.SONELLE_MSVC_RUNTIME_DIR != null) {
+    return env.SONELLE_MSVC_RUNTIME_DIR;
+  }
+
+  const programFilesX86 = env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
+  const vswhere = join(programFilesX86, "Microsoft Visual Studio", "Installer", "vswhere.exe");
+  if (!existsSync(vswhere)) return null;
+
+  const result = spawnSync(
+    vswhere,
+    ["-latest", "-products", "*", "-property", "installationPath"],
+    { cwd: repoRoot, encoding: "utf8", env }
+  );
+  const installationPath = result.status === 0 ? result.stdout.trim() : "";
+  if (installationPath.length === 0) return null;
+
+  const redistRoot = join(installationPath, "VC", "Redist", "MSVC");
+  if (existsSync(redistRoot)) {
+    const versions = readdirSync(redistRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort((left, right) => right.localeCompare(left, undefined, { numeric: true }));
+    for (const version of versions) {
+      const directory = join(redistRoot, version, "x64", "Microsoft.VC143.CRT");
+      if (existsSync(directory)) return directory;
+    }
+  }
+
+  const ideDirectory = join(installationPath, "Common7", "IDE");
+  return existsSync(ideDirectory) ? ideDirectory : null;
+}
+
+function pythonVersion(command, env) {
+  const result = spawnSync(
+    command,
+    ["-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+    { cwd: repoRoot, encoding: "utf8", env }
+  );
+
+  return result.status === 0 ? result.stdout.trim() : null;
 }
 
 function smokePathForVoice(voice, voiceCount) {

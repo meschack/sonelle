@@ -6,6 +6,7 @@ import { SUPPORTED_NARRATION_VOICES } from "@sonelle/audio";
 import {
   isPiperVoiceReady,
   piperVoiceFileUrl,
+  resolvePythonCommand,
   resolveVoicesToInstall
 } from "./setup-piper-voice.mjs";
 
@@ -25,6 +26,14 @@ describe("Piper voice setup", () => {
         SONELLE_PIPER_VOICES: "en_US-lessac-medium, en_GB-alba-medium, en_US-lessac-medium"
       })
     ).toEqual(["en_US-lessac-medium", "en_GB-alba-medium"]);
+  });
+
+  it("uses the stable Python launcher by default on Windows", () => {
+    expect(resolvePythonCommand({}, "win32")).toBe("python");
+    expect(resolvePythonCommand({}, "linux")).toBe("python3");
+    expect(resolvePythonCommand({ PYTHON: "C:\\Python312\\python.exe" }, "win32")).toBe(
+      "C:\\Python312\\python.exe"
+    );
   });
 
   it("builds Piper voice file URLs for British English", () => {

@@ -7,6 +7,7 @@ import {
 import { primaryDefinition, type SavedDictionaryEntry, type WordInsight } from "@sonelle/learning";
 import type { ReaderSearchResult } from "@sonelle/reader";
 import type { AudioCacheStatsDto } from "../audio/audio-cache-repository";
+import type { VoiceInstallationState } from "../audio/voice-installation-repository";
 import type { LibraryBookmarkDto } from "../library/book-repository";
 import { formatBytes } from "./reader-formatting";
 import { DictionaryStatus, StateBlock } from "./reader-feedback";
@@ -35,6 +36,7 @@ interface ReaderInspectorProps {
   activeSentence: ReaderSentenceView | null;
   bookmarkNotice: string | null;
   audioSettings: AudioSettings;
+  voiceInstallation: VoiceInstallationState;
   readerContentFontSize: number;
   audioCacheStats: AudioCacheStatsDto | null;
   audioCacheNotice: string | null;
@@ -50,6 +52,7 @@ interface ReaderInspectorProps {
   onOpenBookmark: (bookmark: LibraryBookmarkDto) => void;
   onDeleteBookmark: (bookmarkId: string) => void;
   onAudioSettingsChange: (settings: Partial<AudioSettings>) => void;
+  onInstallVoice: () => void;
   onReaderContentFontSizeChange: (fontSize: number) => void;
   onRefreshCache: () => void;
   onClearCache: () => void;
@@ -117,11 +120,13 @@ export function ReaderInspector(props: ReaderInspectorProps) {
         ) : (
           <SettingsPanel
             audioSettings={props.audioSettings}
+            voiceInstallation={props.voiceInstallation}
             readerContentFontSize={props.readerContentFontSize}
             audioCacheStats={props.audioCacheStats}
             audioCacheNotice={props.audioCacheNotice}
             exportNotice={props.exportNotice}
             onAudioSettingsChange={props.onAudioSettingsChange}
+            onInstallVoice={props.onInstallVoice}
             onReaderContentFontSizeChange={props.onReaderContentFontSizeChange}
             onResetAudioSettings={() => props.onAudioSettingsChange(DEFAULT_AUDIO_SETTINGS)}
             onRefreshCache={props.onRefreshCache}
@@ -353,11 +358,13 @@ function BookmarkPanel(props: BookmarkPanelProps) {
 
 interface SettingsPanelProps {
   audioSettings: AudioSettings;
+  voiceInstallation: VoiceInstallationState;
   readerContentFontSize: number;
   audioCacheStats: AudioCacheStatsDto | null;
   audioCacheNotice: string | null;
   exportNotice: string | null;
   onAudioSettingsChange: (settings: Partial<AudioSettings>) => void;
+  onInstallVoice: () => void;
   onReaderContentFontSizeChange: (fontSize: number) => void;
   onResetAudioSettings: () => void;
   onRefreshCache: () => void;
@@ -411,6 +418,10 @@ function SettingsPanel(props: SettingsPanelProps) {
         voiceId={props.audioSettings.voiceId}
         onChange={(voiceId) => props.onAudioSettingsChange({ voiceId })}
       />
+      <VoiceInstallationCard
+        installation={props.voiceInstallation}
+        onInstall={props.onInstallVoice}
+      />
       <div class="tool-card">
         <span class="inspector-section-title">Prepared audio</span>
         <p>
@@ -440,6 +451,43 @@ function SettingsPanel(props: SettingsPanelProps) {
         </Show>
       </div>
     </section>
+  );
+}
+
+function VoiceInstallationCard(props: {
+  installation: VoiceInstallationState;
+  onInstall: () => void;
+}) {
+  const isPreparing = () => props.installation.status === "preparing";
+  const isReady = () => props.installation.status === "ready";
+  const actionLabel = () =>
+    props.installation.status === "failed" ? "Retry voice" : "Download voice";
+  const sizeLabel = () =>
+    props.installation.downloadSizeBytes > 0
+      ? ` · ${formatBytes(props.installation.downloadSizeBytes)}`
+      : "";
+
+  return (
+    <div classList={{ "tool-card": true, "voice-installation-card": true, ready: isReady() }}>
+      <div class="voice-installation-heading">
+        <span class="inspector-section-title">Offline voice</span>
+        <span class="voice-readiness">{isReady() ? "Ready" : "Not ready"}</span>
+      </div>
+      <p>{props.installation.message}</p>
+      <Show when={isPreparing()}>
+        <progress
+          aria-label="Preparing offline voice"
+          max="100"
+          value={props.installation.progress ?? undefined}
+        />
+      </Show>
+      <Show when={!isPreparing() && !isReady()}>
+        <button class="primary-tool-button" type="button" onClick={props.onInstall}>
+          {actionLabel()}
+          {sizeLabel()}
+        </button>
+      </Show>
+    </div>
   );
 }
 

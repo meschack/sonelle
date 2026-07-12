@@ -164,6 +164,7 @@ Advanced overrides:
 - `SONELLE_PIPER_DATA_DIR`: directory containing downloaded Piper voices
 - `SONELLE_PIPER_VOICE`: voice to install through `pnpm setup:piper`, and a native fallback for older requests without an explicit in-app voice
 - `SONELLE_PIPER_VOICES`: comma, semicolon, or space separated list of voices to install through `pnpm setup:piper`
+- `SONELLE_MSVC_RUNTIME_DIR`: Windows directory containing app-local Visual C++ runtime DLLs when Visual Studio discovery is unavailable
 
 If no neural local voice is available, Sonelle shows a friendly needs-attention state instead of playing robotic system speech.
 

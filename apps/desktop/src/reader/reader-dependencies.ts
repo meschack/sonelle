@@ -15,6 +15,10 @@ import {
 import { createHtmlAudioPlayer, type HtmlAudioPlayer } from "../audio/html-audio-player";
 import { createNarrationRepository } from "../audio/narration-repository";
 import {
+  createVoiceInstallationRepository,
+  type VoiceInstallationRepository
+} from "../audio/voice-installation-repository";
+import {
   createDictionaryRepository,
   type DictionaryRepository
 } from "../learning/dictionary-repository";
@@ -41,6 +45,7 @@ export interface ReaderExperienceDependencies {
   listenForBookDrops(onEvent: (event: BookDropEvent) => void): Promise<() => void>;
   narrationRepository: PrefetchingNarrationGateway;
   readerPreferencesRepository: ReaderPreferencesRepository;
+  voiceInstallationRepository: VoiceInstallationRepository;
 }
 
 export function createReaderExperienceDependencies(): ReaderExperienceDependencies {
@@ -54,6 +59,7 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
     htmlAudioPlayer: createHtmlAudioPlayer(),
     listenForBookDrops,
     narrationRepository: createPrefetchingNarrationGateway(createNarrationRepository()),
-    readerPreferencesRepository: createReaderPreferencesRepository()
+    readerPreferencesRepository: createReaderPreferencesRepository(),
+    voiceInstallationRepository: createVoiceInstallationRepository()
   };
 }

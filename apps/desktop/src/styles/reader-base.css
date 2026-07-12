@@ -987,6 +987,42 @@ svg {
   margin-top: -8px;
 }
 
+.voice-installation-card {
+  display: grid;
+  gap: 12px;
+}
+
+.voice-installation-card.ready {
+  background: var(--green-soft);
+}
+
+.voice-installation-heading {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.voice-readiness {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.voice-installation-card.ready .voice-readiness {
+  color: var(--green);
+}
+
+.voice-installation-card progress {
+  accent-color: var(--green);
+  height: 8px;
+  width: 100%;
+}
+
+.voice-installation-card .primary-tool-button {
+  width: 100%;
+}
+
 .font-size-control {
   align-items: center;
   display: grid;

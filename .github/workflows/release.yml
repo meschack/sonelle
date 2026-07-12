@@ -91,6 +91,21 @@ jobs:
         id: version
         run: node scripts/prepare-release-version.mjs
 
+      - name: Stage Windows voice runtime libraries
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $visualStudio = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $redistVersion = Get-ChildItem "$visualStudio\VC\Redist\MSVC" -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          $crt = Get-ChildItem "$($redistVersion.FullName)\x64" -Directory -Filter "Microsoft.VC*.CRT" | Select-Object -First 1
+          $destination = "apps\desktop\src-tauri\resources\windows-runtime"
+          New-Item -ItemType Directory -Force -Path $destination | Out-Null
+          Copy-Item "$($crt.FullName)\msvcp140.dll" $destination
+          Copy-Item "$($crt.FullName)\msvcp140_1.dll" $destination
+          Copy-Item "$($crt.FullName)\vcruntime140.dll" $destination
+          Copy-Item "$($crt.FullName)\vcruntime140_1.dll" $destination
+
       - name: Build and upload bundles
         uses: tauri-apps/tauri-action@v1
         env:

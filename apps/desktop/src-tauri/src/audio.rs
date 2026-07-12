@@ -11,9 +11,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager};
 
+use crate::voice_installation::managed_piper_path;
+
 const NARRATION_VOICE_CONFIG: &str =
     include_str!("../../../../packages/audio/src/narration-voices.json");
-const MISSING_NEURAL_VOICE_MESSAGE: &str = "Install a natural local voice to listen offline.";
+const MISSING_NEURAL_VOICE_MESSAGE: &str = "Download this voice in Sonelle to listen offline.";
 const NARRATION_CACHE_VERSION: &str = "piper-v2";
 const CACHE_STATS_FILE: &str = "cache-stats.json";
 const LOCAL_VOICE_STATE_DIR_NAMES: &[&str] = &[".sonelle", ".readex"];
@@ -272,7 +274,7 @@ impl PiperRuntime {
             return Some(runtime.clone());
         }
 
-        let Some(runner) = PiperRunner::resolve() else {
+        let Some(runner) = PiperRunner::resolve(&cache.app_data_dir) else {
             log_audio_issue(
                 "resolve",
                 "No Piper runner was found in Sonelle or legacy local voice state.",
@@ -299,7 +301,7 @@ impl PiperRuntime {
                     }
                 }
             }
-            PiperRunner::Binary(_) => None,
+            PiperRunner::Binary(_) | PiperRunner::ManagedBinary(_) => None,
         };
         let runtime = Self {
             runner,
@@ -325,6 +327,10 @@ impl PiperRuntime {
             if result.is_ok() && output.exists() {
                 return Ok(());
             }
+        }
+
+        if let PiperRunner::ManagedBinary(path) = &self.runner {
+            return synthesize_with_managed_binary(path, &self.voice.model_path(), text, output);
         }
 
         let mut command = self.runner.command();
@@ -437,13 +443,27 @@ impl Drop for PiperPythonWorker {
 #[derive(Debug, Clone)]
 enum PiperRunner {
     Binary(PathBuf),
+    ManagedBinary(PathBuf),
     Python(PathBuf),
 }
 
 impl PiperRunner {
-    fn resolve() -> Option<Self> {
+    fn resolve(app_data_dir: &Path) -> Option<Self> {
         if let Some(path) = env_path("SONELLE_PIPER_BIN").filter(|path| path.exists()) {
             return Some(Self::Binary(path));
+        }
+
+        let managed = managed_piper_path(app_data_dir);
+        if managed.exists()
+            && Command::new(&managed)
+                .arg("--help")
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|status| status.success())
+        {
+            return Some(Self::ManagedBinary(managed));
         }
 
         for sonelle_dir in sonelle_state_dirs() {
@@ -462,13 +482,46 @@ impl PiperRunner {
 
     fn command(&self) -> Command {
         match self {
-            Self::Binary(path) => Command::new(path),
+            Self::Binary(path) | Self::ManagedBinary(path) => Command::new(path),
             Self::Python(path) => {
                 let mut command = Command::new(path);
                 command.arg("-m").arg("piper");
                 command
             }
         }
+    }
+}
+
+fn synthesize_with_managed_binary(
+    executable: &Path,
+    model: &Path,
+    text: &str,
+    output: &Path,
+) -> Result<(), String> {
+    let mut child = Command::new(executable)
+        .current_dir(executable.parent().unwrap_or_else(|| Path::new(".")))
+        .arg("--model")
+        .arg(model)
+        .arg("--output_file")
+        .arg(output)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|_| "We couldn't start the local voice.".to_string())?;
+    child
+        .stdin
+        .take()
+        .ok_or_else(|| "We couldn't prepare local narration.".to_string())?
+        .write_all(format!("{text}\n").as_bytes())
+        .map_err(|_| "We couldn't prepare local narration.".to_string())?;
+    let status = child
+        .wait()
+        .map_err(|_| "We couldn't finish local narration.".to_string())?;
+    if status.success() && output.exists() {
+        Ok(())
+    } else {
+        Err("Local voice needs attention. Try reinstalling it.".to_string())
     }
 }
 
@@ -701,6 +754,10 @@ fn env_path(key: &str) -> Option<PathBuf> {
 }
 
 fn piper_data_dirs(cache: &SentenceAudioCache) -> Vec<PathBuf> {
+    piper_data_dirs_for(&cache.app_data_dir)
+}
+
+fn piper_data_dirs_for(app_data_dir: &Path) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
 
     if let Some(dir) = env_path("SONELLE_PIPER_DATA_DIR") {
@@ -711,8 +768,19 @@ fn piper_data_dirs(cache: &SentenceAudioCache) -> Vec<PathBuf> {
         dirs.push(sonelle_dir.join("voices/piper"));
     }
 
-    dirs.push(cache.app_data_dir.join("voices/piper"));
+    dirs.push(app_data_dir.join("voices/piper"));
     dirs
+}
+
+pub fn narration_voice_is_ready(app: &AppHandle, voice_id: &str) -> bool {
+    let Ok(app_data_dir) = app.path().app_data_dir() else {
+        return false;
+    };
+
+    PiperRunner::resolve(&app_data_dir).is_some()
+        && piper_data_dirs_for(&app_data_dir)
+            .into_iter()
+            .any(|directory| piper_voice_exists(&directory, voice_id))
 }
 
 fn sonelle_state_dirs() -> Vec<PathBuf> {

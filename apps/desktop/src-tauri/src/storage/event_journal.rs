@@ -26,11 +26,14 @@ pub(super) fn insert_renderer_event(
     occurred_at: &str,
     payload: &serde_json::Value,
 ) -> Result<(), String> {
-    const ALLOWED_EVENTS: [&str; 4] = [
+    const ALLOWED_EVENTS: [&str; 7] = [
         "AudioPreparationRequested",
         "SentenceAudioReady",
         "AudioPreparationFailed",
         "WordInspected",
+        "VoiceInstallationRequested",
+        "VoiceInstallationReady",
+        "VoiceInstallationFailed",
     ];
 
     if !ALLOWED_EVENTS.contains(&name) || id.len() > 128 || occurred_at.len() > 64 {
@@ -88,9 +91,24 @@ mod tests {
             })
             .expect("event count should read");
         assert_eq!(count, 1);
-        assert!(insert_renderer_event(
+        insert_renderer_event(
             &connection,
             "event-2",
+            "VoiceInstallationReady",
+            "2026-07-10T00:00:00.000Z",
+            &json!({ "voiceId": "en_US-amy-medium" }),
+        )
+        .expect("voice installation events should persist");
+
+        let count = connection
+            .query_row("SELECT COUNT(*) FROM domain_events", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .expect("event count should read");
+        assert_eq!(count, 2);
+        assert!(insert_renderer_event(
+            &connection,
+            "event-3",
             "ArbitraryRendererEvent",
             "2026-07-10T00:00:00.000Z",
             &json!({})

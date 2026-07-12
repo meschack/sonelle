@@ -14,6 +14,9 @@ export interface DomainEventPayloadMap {
   AudioPreparationRequested: SentenceRef & { voiceId: string };
   SentenceAudioReady: SentenceRef & { voiceId: string; source: "cache" | "prepared" };
   AudioPreparationFailed: SentenceRef & { voiceId: string; reason: string };
+  VoiceInstallationRequested: { voiceId: string };
+  VoiceInstallationReady: { voiceId: string };
+  VoiceInstallationFailed: { voiceId: string; reason: string };
   PlaybackPositionChanged: {
     bookId: EntityId;
     chapterId: EntityId;

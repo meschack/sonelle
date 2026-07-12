@@ -10,6 +10,7 @@ use crate::storage::{
     ReaderDocumentView, RecordDomainEventRequest, SaveBookmarkRequest, SaveReadingPositionRequest,
     SonelleStore,
 };
+use crate::voice_installation::{install_voice, voice_status, NarrationVoiceInstallationStatus};
 
 #[tauri::command]
 pub async fn import_epub(app: AppHandle, path: String) -> Result<ReaderDocumentView, String> {
@@ -56,6 +57,22 @@ pub async fn play_sentence_audio(
 #[tauri::command]
 pub fn stop_sentence_audio() -> Result<(), String> {
     stop_narration()
+}
+
+#[tauri::command]
+pub async fn get_narration_voice_status(
+    app: AppHandle,
+    voice_id: String,
+) -> Result<NarrationVoiceInstallationStatus, String> {
+    run_blocking(move || voice_status(&app, &voice_id)).await
+}
+
+#[tauri::command]
+pub async fn install_narration_voice(
+    app: AppHandle,
+    voice_id: String,
+) -> Result<NarrationVoiceInstallationStatus, String> {
+    run_blocking(move || install_voice(&app, &voice_id)).await
 }
 
 #[tauri::command]
