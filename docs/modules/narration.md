@@ -103,6 +103,10 @@ without publishing high-frequency media-clock updates. `VoiceInstallationRequest
 `VoiceInstallationReady`, and `VoiceInstallationFailed` describe the separately managed offline
 voice lifecycle.
 
+The reader projects manifest playback events through `projectNarrationEventToPlayback`, keeping
+highlight and transport state driven by domain facts rather than by engine/cache details in Solid
+components.
+
 ## Tests
 
 Package tests cover passage splitting, manifest validation, routing, catalog integrity, settings
@@ -115,6 +119,8 @@ selection, safe extraction, and verified voice files without making network requ
 Kokoro tests cover punctuation-heavy English alignment, missing-token rejection, paragraph manifest
 preparation, repeated cache hits, per-sentence fallback after invalid alignment, and non-English
 request rejection.
+Reader playback tests cover projection of manifest narration events into active sentence and
+transport state.
 Native pack tests cover reuse, corruption retry, interrupted-download cleanup, progress projection,
 and unsafe path rejection. Native V3 cache tests cover atomic writes, invalid manifests, empty
 audio, model-revision separation, tampered metadata, statistics, and clearing.

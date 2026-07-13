@@ -36,8 +36,10 @@ import {
   movePlayback,
   pausePlayback,
   playPlayback,
+  projectNarrationEventToPlayback,
   searchReaderSentences,
   selectPlaybackSentence,
+  type NarrationPlaybackProjectionEvent,
   type PlaybackStatus,
   type ReaderPlaybackState,
   type ReaderSearchResult
@@ -877,6 +879,29 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     await playSentenceNarration(request, runId, currentReader, activeSentenceIndex);
   };
 
+  const projectNarrationPlayback = (event: NarrationPlaybackProjectionEvent) => {
+    const currentReader = reader();
+    if (
+      currentReader.book.id !== event.payload.bookId ||
+      currentReader.chapter.id !== event.payload.chapterId
+    ) {
+      return;
+    }
+
+    nextPositionSaveIntent = event.name === "NarrationSentenceEntered" ? "playback" : "immediate";
+    setPlayback((current) =>
+      projectNarrationEventToPlayback(
+        current,
+        currentReader.sentences.map((sentence) => sentence.id),
+        event
+      )
+    );
+
+    if (event.name === "NarrationPlaybackFailed") {
+      setNarrationNotice(event.payload.reason);
+    }
+  };
+
   function stopActiveHtmlAudio() {
     htmlAudioPlayer.stop();
   }
@@ -1236,6 +1261,15 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       setNarrationNotice(event.payload.reason);
       setPlayback((current) => pausePlayback(current));
     }),
+    eventDispatcher.subscribe("PassageNarrationReady", (event) => eventSink.append(event)),
+    eventDispatcher.subscribe("NarrationSentenceEntered", (event) => eventSink.append(event)),
+    eventDispatcher.subscribe("NarrationSentenceEntered", projectNarrationPlayback),
+    eventDispatcher.subscribe("NarrationPlaybackPaused", (event) => eventSink.append(event)),
+    eventDispatcher.subscribe("NarrationPlaybackPaused", projectNarrationPlayback),
+    eventDispatcher.subscribe("NarrationPlaybackEnded", (event) => eventSink.append(event)),
+    eventDispatcher.subscribe("NarrationPlaybackEnded", projectNarrationPlayback),
+    eventDispatcher.subscribe("NarrationPlaybackFailed", (event) => eventSink.append(event)),
+    eventDispatcher.subscribe("NarrationPlaybackFailed", projectNarrationPlayback),
     eventDispatcher.subscribe("WordInspected", (event) => eventSink.append(event)),
     eventDispatcher.subscribe("WordInspected", lookupDictionaryWord),
     eventDispatcher.subscribe("BookImported", () =>

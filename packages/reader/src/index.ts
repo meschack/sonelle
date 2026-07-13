@@ -1,4 +1,4 @@
-import type { SentenceRef } from "@sonelle/domain";
+import type { DomainEvent, SentenceRef } from "@sonelle/domain";
 
 export type PlaybackStatus = "idle" | "playing" | "paused" | "ended";
 export type ReaderToolTab = "word" | "search" | "bookmarks" | "settings";
@@ -85,6 +85,12 @@ export interface ReadingPositionSchedulerOptions<TPosition> {
   save(position: TPosition): void | Promise<void>;
   onError?(error: unknown): void;
 }
+
+export type NarrationPlaybackProjectionEvent =
+  | DomainEvent<"NarrationSentenceEntered">
+  | DomainEvent<"NarrationPlaybackPaused">
+  | DomainEvent<"NarrationPlaybackEnded">
+  | DomainEvent<"NarrationPlaybackFailed">;
 
 export function highlightSentence(sentenceId: string | null): HighlightState {
   return { activeSentenceId: sentenceId };
@@ -209,6 +215,45 @@ export function finishSentencePlayback(
     ...advanced,
     status: "paused"
   };
+}
+
+export function projectNarrationEventToPlayback(
+  state: ReaderPlaybackState,
+  sentenceIds: readonly string[],
+  event: NarrationPlaybackProjectionEvent
+): ReaderPlaybackState {
+  switch (event.name) {
+    case "NarrationSentenceEntered": {
+      const sentenceIndex = sentenceIds.indexOf(event.payload.sentenceId);
+      if (sentenceIndex < 0) return state;
+      return {
+        activeSentenceIndex: sentenceIndex,
+        status: "playing"
+      };
+    }
+    case "NarrationPlaybackPaused": {
+      const sentenceIndex = sentenceIds.indexOf(event.payload.sentenceId);
+      return {
+        activeSentenceIndex:
+          sentenceIndex < 0
+            ? state.activeSentenceIndex
+            : clampSentenceIndex(sentenceIndex, sentenceIds.length),
+        status: "paused"
+      };
+    }
+    case "NarrationPlaybackEnded": {
+      const sentenceIndex = sentenceIds.indexOf(event.payload.lastSentenceId);
+      return {
+        activeSentenceIndex:
+          sentenceIndex < 0
+            ? state.activeSentenceIndex
+            : clampSentenceIndex(sentenceIndex, sentenceIds.length),
+        status: "ended"
+      };
+    }
+    case "NarrationPlaybackFailed":
+      return pausePlayback(state);
+  }
 }
 
 export function searchReaderSentences<TSentence extends SearchableSentence>(
