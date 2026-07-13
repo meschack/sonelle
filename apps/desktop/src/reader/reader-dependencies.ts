@@ -66,8 +66,10 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
   const eventDispatcher = createDomainEventDispatcher();
   const htmlAudioPlayer = createHtmlAudioPlayer();
   const narrationRepository = createPrefetchingNarrationGateway(createNarrationRepository());
-  const narrationSessionRoutingMode = developmentNarrationSessionRoutingMode();
-  const narrationPreparationAdapter = createNarrationPreparationAdapter(
+  const narrationSessionRoutingMode = resolveDevelopmentNarrationSessionRoutingMode(
+    import.meta.env.VITE_SONELLE_NARRATION_SESSION
+  );
+  const narrationPreparationAdapter = createNarrationPreparationAdapterForMode(
     narrationSessionRoutingMode,
     narrationRepository
   );
@@ -97,20 +99,27 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
   };
 }
 
-function developmentNarrationSessionRoutingMode(): NarrationRoutingMode | undefined {
-  const mode = import.meta.env.VITE_SONELLE_NARRATION_SESSION;
+export function resolveDevelopmentNarrationSessionRoutingMode(
+  mode: unknown
+): NarrationRoutingMode | undefined {
   return mode === "legacy-piper" || mode === "hybrid-v1" ? mode : undefined;
 }
 
-function createNarrationPreparationAdapter(
+export function createNarrationPreparationAdapterForMode(
   routingMode: NarrationRoutingMode | undefined,
-  narrationRepository: PrefetchingNarrationGateway
+  narrationRepository: PrefetchingNarrationGateway,
+  options: {
+    nativeRuntime?: boolean;
+    createNativeAdapter?: () => NarrationPreparationAdapter;
+    createBrowserFallbackAdapter?: () => NarrationPreparationAdapter;
+  } = {}
 ): NarrationPreparationAdapter | null {
   if (routingMode === "legacy-piper") return new PiperCompatibilityAdapter(narrationRepository);
   if (routingMode === "hybrid-v1") {
-    return isTauriRuntime()
-      ? createNativeManifestNarrationAdapter()
-      : new FakePassageNarrationAdapter();
+    const nativeRuntime = options.nativeRuntime ?? isTauriRuntime();
+    if (nativeRuntime)
+      return (options.createNativeAdapter ?? createNativeManifestNarrationAdapter)();
+    return (options.createBrowserFallbackAdapter ?? (() => new FakePassageNarrationAdapter()))();
   }
 
   return null;
