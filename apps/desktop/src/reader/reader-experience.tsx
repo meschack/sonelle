@@ -59,10 +59,7 @@ import {
   reportNarrationDevelopmentError,
   toFriendlyNarrationError
 } from "../audio/narration-repository";
-import {
-  failedVoiceInstallation,
-  type VoiceInstallationState
-} from "../audio/voice-installation-repository";
+import type { VoiceInstallationState } from "../audio/voice-installation-repository";
 import {
   resolveDroppedEpubPath,
   toFriendlyLibraryError,
@@ -100,6 +97,7 @@ import {
 import { createSentenceNarrationRequest } from "./reader-narration";
 import { lookupReaderWord } from "./reader-word-lookup";
 import { createReaderLibraryWorkflows } from "./reader-library-workflows";
+import { createReaderVoiceInstallationWorkflow } from "./reader-voice-installation-workflow";
 import {
   createReaderExperienceDependencies,
   type ReaderExperienceDependencies
@@ -207,10 +205,18 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   let narrationRun = 0;
   let chapterTransitionRun = 0;
   let librarySearchRun = 0;
-  let voiceStatusRun = 0;
   let nextPositionSaveIntent: PositionSaveIntent | null = null;
   let readerSearchInput: HTMLInputElement | undefined;
   const sentenceElements = new Map<string, HTMLElement>();
+  const voiceInstallationWorkflow = createReaderVoiceInstallationWorkflow({
+    eventDispatcher,
+    eventSink,
+    repository: voiceInstallationRepository,
+    selectedVoiceId: () => audioSettings().voiceId,
+    projectInstallation: setVoiceInstallation,
+    projectNotice: setNarrationNotice,
+    friendlyError: toFriendlyNarrationError
+  });
 
   const activeSentence = createMemo(() => reader().sentences[playback().activeSentenceIndex]);
   const highlight = createMemo(() => highlightSentence(activeSentence()?.id ?? null));
@@ -329,7 +335,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   onMount(() => {
     let disposed = false;
     let unlistenBookDrops: (() => void) | undefined;
-    let unlistenVoiceInstallation: (() => void) | undefined;
+    let stopVoiceInstallationWorkflow: (() => void) | undefined;
     void refreshLibrary();
     void refreshAllBookmarks();
     void refreshAudioCacheStats();
@@ -341,19 +347,13 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         unlistenBookDrops = unlisten;
       }
     });
-    void voiceInstallationRepository
-      .listen((installation) => {
-        if (installation.voiceId === audioSettings().voiceId) {
-          setVoiceInstallation(installation);
-        }
-      })
-      .then((unlisten) => {
-        if (disposed) {
-          unlisten();
-        } else {
-          unlistenVoiceInstallation = unlisten;
-        }
-      });
+    void voiceInstallationWorkflow.start().then((stop) => {
+      if (disposed) {
+        stop();
+      } else {
+        stopVoiceInstallationWorkflow = stop;
+      }
+    });
 
     window.addEventListener("keydown", handleShortcut);
     window.addEventListener("resize", clampSidebarWidthsToViewport);
@@ -362,7 +362,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       window.removeEventListener("keydown", handleShortcut);
       window.removeEventListener("resize", clampSidebarWidthsToViewport);
       unlistenBookDrops?.();
-      unlistenVoiceInstallation?.();
+      stopVoiceInstallationWorkflow?.();
     });
   });
   onCleanup(() => readingPositionScheduler.flush());
@@ -375,7 +375,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
 
   createEffect(() => {
     const voiceId = audioSettings().voiceId;
-    void refreshVoiceInstallation(voiceId);
+    void voiceInstallationWorkflow.refresh(voiceId);
   });
 
   createEffect(() => {
@@ -952,54 +952,8 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     }
   };
 
-  const refreshVoiceInstallation = async (voiceId: string) => {
-    const runId = ++voiceStatusRun;
-    try {
-      const installation = await voiceInstallationRepository.getStatus(voiceId);
-      if (runId === voiceStatusRun && voiceId === audioSettings().voiceId) {
-        setVoiceInstallation(installation);
-      }
-    } catch (error) {
-      if (runId === voiceStatusRun && voiceId === audioSettings().voiceId) {
-        setVoiceInstallation(failedVoiceInstallation(voiceId, toFriendlyNarrationError(error)));
-      }
-    }
-  };
-
   const requestVoiceInstallation = () => {
-    const voiceId = audioSettings().voiceId;
-    dispatchEvent(createDomainEvent("VoiceInstallationRequested", { voiceId }));
-  };
-
-  const prepareRequestedVoiceInstallation = async (
-    event: DomainEvent<"VoiceInstallationRequested">
-  ) => {
-    const { voiceId } = event.payload;
-    setVoiceInstallation((current) => ({
-      ...current,
-      voiceId,
-      status: "preparing",
-      downloadedBytes: 0,
-      progress: 0,
-      message: "Preparing this voice"
-    }));
-    setNarrationNotice(null);
-
-    try {
-      const installation = await voiceInstallationRepository.install(voiceId);
-      if (voiceId === audioSettings().voiceId) {
-        setVoiceInstallation(installation);
-      }
-      await eventDispatcher.dispatch(createDomainEvent("VoiceInstallationReady", { voiceId }));
-    } catch (error) {
-      const reason = toFriendlyNarrationError(error);
-      if (voiceId === audioSettings().voiceId) {
-        setVoiceInstallation(failedVoiceInstallation(voiceId, reason));
-      }
-      await eventDispatcher.dispatch(
-        createDomainEvent("VoiceInstallationFailed", { voiceId, reason })
-      );
-    }
+    voiceInstallationWorkflow.request(audioSettings().voiceId);
   };
 
   const clearAudioCache = async () => {
@@ -1275,16 +1229,6 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   };
 
   const subscriptions = [
-    eventDispatcher.subscribe("VoiceInstallationRequested", (event) => eventSink.append(event)),
-    eventDispatcher.subscribe("VoiceInstallationRequested", prepareRequestedVoiceInstallation),
-    eventDispatcher.subscribe("VoiceInstallationReady", (event) => eventSink.append(event)),
-    eventDispatcher.subscribe("VoiceInstallationReady", () => {
-      setNarrationNotice(null);
-    }),
-    eventDispatcher.subscribe("VoiceInstallationFailed", (event) => eventSink.append(event)),
-    eventDispatcher.subscribe("VoiceInstallationFailed", (event) => {
-      setNarrationNotice(event.payload.reason);
-    }),
     eventDispatcher.subscribe("AudioPreparationRequested", (event) => eventSink.append(event)),
     eventDispatcher.subscribe("AudioPreparationRequested", prepareRequestedNarration),
     eventDispatcher.subscribe("SentenceAudioReady", (event) => eventSink.append(event)),
