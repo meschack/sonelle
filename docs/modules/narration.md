@@ -58,8 +58,10 @@ audio bytes, and keeps model revisions separated through asset identity.
 The native `narration_manifest` command is the desktop boundary for future Kokoro and Supertonic
 preparation. It accepts engine-independent passage requests, builds deterministic asset identity
 from engine, voice, model revision, source text, and synthesis parameters, and stores prepared
-audio in the V3 cache. Until real model adapters land, it writes validated silent manifests so the
-IPC and cache contract can be exercised without shipping unfinished inference.
+audio in the V3 cache. The Tauri command refuses hybrid preparation until the requested engine pack
+is installed. Until real model adapters land, installed packs still produce validated silent
+manifests so the IPC and cache contract can be exercised without pretending missing models are
+usable narration.
 
 `KokoroNarrationAdapter` owns the engine-independent English passage contract. It accepts only
 confidently English requests, asks an injected engine for paragraph synthesis, maps timed Kokoro

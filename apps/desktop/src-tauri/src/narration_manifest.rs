@@ -7,6 +7,7 @@ use tauri::{AppHandle, Manager};
 use crate::narration_cache::{
     NarrationAssetCache, NarrationSentenceSpan, PreparedNarrationManifest,
 };
+use crate::narration_engine_pack::engine_is_ready;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -59,6 +60,10 @@ pub fn prepare_manifest_narration(
     app: &AppHandle,
     request: ManifestNarrationRequest,
 ) -> Result<PreparedManifestNarration, String> {
+    if !engine_is_ready(app, &request.engine_id)? {
+        return Err("Download narration files to listen offline.".to_string());
+    }
+
     let root = app
         .path()
         .app_data_dir()

@@ -106,6 +106,11 @@ pub fn engine_status(
     engine_status_at(&root, engine_id)
 }
 
+pub fn engine_is_ready(app: &AppHandle, engine_id: &str) -> Result<bool, String> {
+    let root = engine_pack_root(app)?;
+    engine_is_ready_at(&root, engine_id)
+}
+
 pub fn install_engine(
     app: &AppHandle,
     engine_id: &str,
@@ -134,8 +139,7 @@ pub fn engine_status_at(
     engine_id: &str,
 ) -> Result<NarrationEngineInstallationStatus, String> {
     let pack = engine_pack(engine_id)?;
-    let destination = pack_destination(root, &pack);
-    let ready = installed_pack_is_ready(&destination, &pack);
+    let ready = engine_pack_is_ready(root, &pack);
 
     Ok(NarrationEngineInstallationStatus {
         engine_id: engine_id.to_string(),
@@ -147,6 +151,11 @@ pub fn engine_status_at(
             "Download narration files to listen offline.".to_string()
         },
     })
+}
+
+fn engine_is_ready_at(root: &Path, engine_id: &str) -> Result<bool, String> {
+    let pack = engine_pack(engine_id)?;
+    Ok(engine_pack_is_ready(root, &pack))
 }
 
 fn install_engine_at(
@@ -208,6 +217,10 @@ fn pack_destination(root: &Path, pack: &NarrationPack) -> PathBuf {
     root.join(&pack.id).join(&pack.revision)
 }
 
+fn engine_pack_is_ready(root: &Path, pack: &NarrationPack) -> bool {
+    installed_pack_is_ready(&pack_destination(root, pack), pack)
+}
+
 fn pack_size_bytes(pack: &NarrationPack) -> u64 {
     pack.artifacts
         .iter()
@@ -240,7 +253,7 @@ fn emit_engine_progress(
 
 #[cfg(test)]
 mod tests {
-    use super::{engine_pack, engine_status_at};
+    use super::{engine_is_ready_at, engine_pack, engine_status_at};
     use std::{
         fs,
         path::PathBuf,
@@ -268,6 +281,7 @@ mod tests {
 
         assert_eq!(missing.status, "not-installed");
         assert!(missing.download_size_bytes > 300_000_000);
+        assert!(!engine_is_ready_at(&root, "kokoro").expect("readiness should load"));
     }
 
     #[test]
