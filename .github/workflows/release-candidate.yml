@@ -1,27 +1,22 @@
-name: Release
+name: Release Candidate
 
 on:
-  workflow_dispatch:
-  workflow_run:
-    workflows:
-      - CI
+  push:
     branches:
-      - main
-    types:
-      - completed
+      - dev
+  workflow_dispatch:
 
 concurrency:
-  group: release-${{ github.event.workflow_run.head_branch || github.ref }}
+  group: release-candidate-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build:
-    name: Build ${{ matrix.label }}
+  bundle:
+    name: Build ${{ matrix.label }} candidate
     runs-on: ${{ matrix.platform }}
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
 
     strategy:
       fail-fast: false
@@ -43,12 +38,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-
-      - name: Fetch release tags
-        run: git fetch --force --tags
 
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -87,29 +76,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Prepare release version
-        id: version
-        run: node scripts/prepare-release-version.mjs
-
       - name: Stage Windows voice runtime libraries
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: ./scripts/stage-windows-voice-runtime.ps1
 
-      - name: Build and upload bundles
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_SIGNING_IDENTITY: "-"
-        with:
-          projectPath: apps/desktop
-          tagName: ${{ steps.version.outputs.tag }}
-          releaseName: ${{ steps.version.outputs.release_name }}
-          releaseBody: |
-            Automated Sonelle desktop release from ${{ github.event.workflow_run.head_sha || github.sha }}.
+      - name: Build desktop candidate
+        run: pnpm --filter @sonelle/desktop tauri build ${{ matrix.args }}
 
-            Assets include platform bundles for Linux, macOS, and Windows.
-            macOS builds use ad-hoc signing until a Developer ID certificate is configured.
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
+      - name: Upload candidate bundles
+        uses: actions/upload-artifact@v7
+        with:
+          name: sonelle-candidate-${{ matrix.label }}-${{ github.sha }}
+          if-no-files-found: error
+          path: target/**/release/bundle/**/*

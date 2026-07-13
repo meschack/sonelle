@@ -4,6 +4,8 @@ target/
 src-tauri/target/
 .DS_Store
 *.log
+*.pyc
+__pycache__/
 .env
 .env.*
 !.env.example

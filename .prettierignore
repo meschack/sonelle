@@ -8,3 +8,4 @@ marketing/sonelle-promo-video/build/
 pnpm-lock.yaml
 Cargo.lock
 LICENSE
+scripts/stage-windows-voice-runtime.ps1

@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "language": "en",
+  "passages": [
+    {
+      "id": "plain-prose",
+      "category": "plain-prose",
+      "sentences": [
+        "The morning train crossed the river before the city had fully awakened.",
+        "From the window, Mara watched pale light gather on the roofs and chimneys.",
+        "She had made this journey many times, yet today each familiar street seemed newly arranged.",
+        "By the final station, the quiet uncertainty she carried had become a decision."
+      ]
+    },
+    {
+      "id": "dialogue-and-nested-quotations",
+      "category": "dialogue-and-quotations",
+      "sentences": [
+        "\"Did he really say, 'Leave before noon'?\" Elena asked.",
+        "Marcus shook his head and replied, \"No, he said we should be ready before noon.\"",
+        "\"That is not the same thing,\" she said, closing the notebook.",
+        "Nobody answered when she added, \"And you both know it.\""
+      ]
+    },
+    {
+      "id": "numbers-dates-and-abbreviations",
+      "category": "numbers-and-abbreviations",
+      "sentences": [
+        "Dr. Patel arrived at 7:45 a.m. on Tuesday, April 3, 2029.",
+        "The revised budget was $12,450.75, approximately 8.6 percent above the original estimate.",
+        "She reviewed sections 2.1, 2.2, and 3 before calling Prof. Ellis in Room 104B.",
+        "At 9:00 a.m., the committee approved version 1.0 without further amendments."
+      ]
+    },
+    {
+      "id": "complex-punctuation",
+      "category": "complex-punctuation",
+      "sentences": [
+        "The proposal had one obvious strength: it could be tested immediately.",
+        "Its weakness, however, was harder to name; every assumption depended on another assumption.",
+        "We could wait - perhaps for weeks - or begin with the evidence already available.",
+        "They chose the latter... and discovered that the supposedly simple question had three answers."
+      ]
+    },
+    {
+      "id": "initials-acronyms-and-possessives",
+      "category": "numbers-and-abbreviations",
+      "sentences": [
+        "J. R. Bell sent the report to NASA's research office in Washington, D.C.",
+        "The PDF contained an FAQ, two URLs, and a note about the U.S. team's schedule.",
+        "Neither the CEO nor the R&D director considered the result final.",
+        "By Friday, Bell's second email had clarified every abbreviation except one."
+      ]
+    },
+    {
+      "id": "parentheses-and-asides",
+      "category": "complex-punctuation",
+      "sentences": [
+        "The western route (which looked shorter on the map) climbed steadily for six miles.",
+        "Nadia preferred the valley road because it was shaded, level, and usually empty.",
+        "Her brother disagreed - politely, for once - but followed her anyway.",
+        "They reached the village before sunset (and before the rain)."
+      ]
+    },
+    {
+      "id": "short-paragraph",
+      "category": "headings-and-short-paragraphs",
+      "sentences": ["Begin again."]
+    },
+    {
+      "id": "heading-like-text",
+      "category": "headings-and-short-paragraphs",
+      "sentences": [
+        "Chapter Twelve: The Long Way Home",
+        "Nothing in the abandoned station suggested that a train had passed through it that morning."
+      ]
+    },
+    {
+      "id": "long-sentence",
+      "category": "long-sentences-and-limits",
+      "sentences": [
+        "Although the first experiment had failed because the instruments were calibrated for a colder room, and although the second had produced a result that nobody could reproduce, the team returned on Monday with revised measurements, a smaller set of assumptions, and enough patience to discover that the error had been hiding in the conversion between two otherwise reasonable units."
+      ]
+    },
+    {
+      "id": "unicode-punctuation",
+      "category": "complex-punctuation",
+      "sentences": [
+        "The sign read “Open 9:00-17:00,” but the door was already locked.",
+        "A handwritten note promised that someone would return soon… it did not say who.",
+        "Leah waited for ten minutes, checked the empty street, and tried the handle once more.",
+        "This time, the door opened."
+      ]
+    }
+  ]
+}

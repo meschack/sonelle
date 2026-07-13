@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "workspace": ".sonelle/narration-spike",
+  "engines": [
+    {
+      "id": "kokoro",
+      "source": {
+        "repository": "https://github.com/hexgrad/kokoro.git",
+        "revision": "dfb907a02bba8152ca444717ca5d78747ccb4bec"
+      },
+      "model": {
+        "repository": "hexgrad/Kokoro-82M",
+        "revision": "f3ff3571791e39611d31c381e3a41a3af07b4987",
+        "artifacts": [
+          {
+            "remotePath": "config.json",
+            "targetPath": "checkpoints/config.json",
+            "sizeBytes": 2351,
+            "sha256": "5abb01e2403b072bf03d04fde160443e209d7a0dad49a423be15196b9b43c17f"
+          },
+          {
+            "remotePath": "kokoro-v1_0.pth",
+            "targetPath": "checkpoints/kokoro-v1_0.pth",
+            "sizeBytes": 327212226,
+            "sha256": "496dba118d1a58f5f3db2efc88dbdc216e0483fc89fe6e47ee1f2c53f18ad1e4"
+          },
+          {
+            "remotePath": "voices/af_heart.pt",
+            "targetPath": "checkpoints/voices/af_heart.pt",
+            "sizeBytes": 523425,
+            "sha256": "0ab5709b8ffab19bfd849cd11d98f75b60af7733253ad0d67b12382a102cb4ff"
+          },
+          {
+            "remotePath": "voices/bf_emma.pt",
+            "targetPath": "checkpoints/voices/bf_emma.pt",
+            "sizeBytes": 523420,
+            "sha256": "d0a423deabf4a52b4f49318c51742c54e21bb89bbbe9a12141e7758ddb5da701"
+          }
+        ]
+      }
+    },
+    {
+      "id": "supertonic",
+      "source": {
+        "repository": "https://github.com/supertone-inc/supertonic.git",
+        "revision": "dff55dc00064c398736080c78195f577527832ae"
+      },
+      "model": {
+        "repository": "Supertone/supertonic-3",
+        "revision": "3cadd1ee6394adea1bd021217a0e650ede09a323",
+        "artifacts": [
+          {
+            "remotePath": "LICENSE",
+            "targetPath": "assets/LICENSE",
+            "sizeBytes": 15007,
+            "sha256": "0d944a9110fed9a9602d60e0423a272903e7bd21ab060490774efc77c2275e9f"
+          },
+          {
+            "remotePath": "config.json",
+            "targetPath": "assets/config.json",
+            "sizeBytes": 174,
+            "sha256": "4099082b107a9d4029849ac76b89eca65e03732660969c2babe5bf308c7357f2"
+          },
+          {
+            "remotePath": "onnx/duration_predictor.onnx",
+            "targetPath": "assets/onnx/duration_predictor.onnx",
+            "sizeBytes": 3700147,
+            "sha256": "c3eb91414d5ff8a7a239b7fe9e34e7e2bf8a8140d8375ffb14718b1c639325db"
+          },
+          {
+            "remotePath": "onnx/text_encoder.onnx",
+            "targetPath": "assets/onnx/text_encoder.onnx",
+            "sizeBytes": 36416150,
+            "sha256": "c7befd5ea8c3119769e8a6c1486c4edc6a3bc8365c67621c881bbb774b9902ff"
+          },
+          {
+            "remotePath": "onnx/tts.json",
+            "targetPath": "assets/onnx/tts.json",
+            "sizeBytes": 8253,
+            "sha256": "42078d3aef1cd43ab43021f3c54f47d2d75ceb4e75f627f118890128b06a0d09"
+          },
+          {
+            "remotePath": "onnx/unicode_indexer.json",
+            "targetPath": "assets/onnx/unicode_indexer.json",
+            "sizeBytes": 277676,
+            "sha256": "9bf7346e43883a81f8645c81224f786d43c5b57f3641f6e7671a7d6c493cb24f"
+          },
+          {
+            "remotePath": "onnx/vector_estimator.onnx",
+            "targetPath": "assets/onnx/vector_estimator.onnx",
+            "sizeBytes": 256534781,
+            "sha256": "883ac868ea0275ef0e991524dc64f16b3c0376efd7c320af6b53f5b780d7c61c"
+          },
+          {
+            "remotePath": "onnx/vocoder.onnx",
+            "targetPath": "assets/onnx/vocoder.onnx",
+            "sizeBytes": 101424195,
+            "sha256": "085de76dd8e8d5836d6ca66826601f615939218f90e519f70ee8a36ed2a4c4ba"
+          },
+          {
+            "remotePath": "voice_styles/F1.json",
+            "targetPath": "assets/voice_styles/F1.json",
+            "sizeBytes": 292046,
+            "sha256": "bbdec6ee00231c2c742ad05483df5334cab3b52fda3ba38e6a07059c4563dbc2"
+          },
+          {
+            "remotePath": "voice_styles/M1.json",
+            "targetPath": "assets/voice_styles/M1.json",
+            "sizeBytes": 291748,
+            "sha256": "e35604687f5d23694b8e91593a93eec0e4eca6c0b02bb8ed69139ab2ea6b0a5b"
+          }
+        ]
+      }
+    }
+  ]
+}
