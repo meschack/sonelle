@@ -37,3 +37,10 @@ The real-book QA pass should cover:
 - Change reader tool tab and library filter, reload, and confirm they persist.
 - Search a chapter with results and without results.
 - Check empty states for bookmarks and saved words.
+
+## Hybrid Narration QA
+
+Run the local Kokoro/Supertonic QA path before treating the hybrid narration route as ready for
+hands-on testing:
+
+- [Hybrid Narration Local QA - 2026-07-14](hybrid-narration-local-qa-2026-07-14.md)
