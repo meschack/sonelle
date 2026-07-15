@@ -8,6 +8,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::error_log::record_native_error;
 use crate::narration_pack::{
     adopt_compatible_installed_pack, install_narration_pack, NarrationPack, NarrationPackArtifact,
     NarrationPackDownloadClient, NarrationPackDownloadError,
@@ -318,19 +319,18 @@ fn engine_catalog_json() -> Result<String, String> {
     match std::env::var("SONELLE_NARRATION_ENGINE_CATALOG") {
         Ok(path) if !path.trim().is_empty() => {
             let path = resolve_catalog_path(Path::new(path.trim())).ok_or_else(|| {
-                #[cfg(debug_assertions)]
-                eprintln!(
-                    "[sonelle][native][narration-catalog:resolve] error=catalog-path-unavailable"
+                record_native_error(
+                    "narration-catalog.resolve",
+                    "catalog-path-unavailable",
                 );
                 "Offline narration catalog couldn't be opened. Check the local catalog path and retry."
                     .to_string()
             })?;
 
             fs::read_to_string(&path).map_err(|error| {
-                #[cfg(debug_assertions)]
-                eprintln!(
-                    "[sonelle][native][narration-catalog:read] error={}",
-                    error.to_string().replace(['\r', '\n'], " ")
+                record_native_error(
+                    "narration-catalog.read",
+                    &error.to_string().replace(['\r', '\n'], " "),
                 );
                 "Offline narration catalog couldn't be opened. Check the local catalog path and retry."
                     .to_string()

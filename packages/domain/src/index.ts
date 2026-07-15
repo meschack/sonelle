@@ -155,6 +155,19 @@ export interface DomainEventPayloadMap {
     bookmarkCount: number;
     fileName: string | null;
   };
+  ParagraphImageRequested: { bookId: EntityId; chapterId: EntityId; paragraphId: EntityId };
+  ParagraphImageCreated: {
+    bookId: EntityId;
+    chapterId: EntityId;
+    paragraphId: EntityId;
+    fileName: string;
+  };
+  ParagraphImageFailed: {
+    bookId: EntityId;
+    chapterId: EntityId;
+    paragraphId: EntityId;
+    reason: string;
+  };
 }
 
 export type DomainEventName = keyof DomainEventPayloadMap;

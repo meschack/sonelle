@@ -1,16 +1,19 @@
 import { Show } from "solid-js";
 import type { WordInsight } from "@sonelle/learning";
-import { CloseIcon, HeadphonesIcon } from "./reader-icons";
+import { CheckIcon, CloseIcon, HeadphonesIcon } from "./reader-icons";
 
-interface NarrationToastProps {
+interface ReaderToastProps {
   message: string;
-  tone?: "error" | "warning" | "pending";
+  title?: string;
+  tone?: "error" | "warning" | "pending" | "success";
   onDismiss?: () => void;
 }
 
-export function NarrationToast(props: NarrationToastProps) {
+export function ReaderToast(props: ReaderToastProps) {
   const tone = () => props.tone ?? "error";
   const title = () => {
+    if (props.title != null) return props.title;
+    if (tone() === "success") return "Ready";
     if (tone() === "pending") return "Preparing narration";
     if (tone() === "warning") return "Narration warning";
     return "Narration needs attention";
@@ -25,7 +28,14 @@ export function NarrationToast(props: NarrationToastProps) {
         aria-atomic="true"
       >
         <span class="reader-toast-icon" aria-hidden="true">
-          <Show when={tone() === "pending"} fallback={<HeadphonesIcon />}>
+          <Show
+            when={tone() === "pending"}
+            fallback={
+              <Show when={tone() === "success"} fallback={<HeadphonesIcon />}>
+                <CheckIcon />
+              </Show>
+            }
+          >
             <span class="reader-toast-spinner" />
           </Show>
         </span>

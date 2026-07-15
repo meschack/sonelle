@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager};
 
+use crate::error_log::record_native_error;
 use crate::kokoro_manifest::render_kokoro_manifest_with_options;
 use crate::narration_cache::{
     NarrationAssetCache, NarrationCacheStats, NarrationSentenceSpan, PreparedNarrationManifest,
@@ -126,10 +127,12 @@ pub fn prepare_manifest_narration(
     ensure_narration_not_cancelled(&request.request_id)?;
     let installed_model_revision = engine_model_revision(&request.engine_id)?;
     if request.model_revision != installed_model_revision {
-        #[cfg(debug_assertions)]
-        eprintln!(
-            "[sonelle][native][manifest:revision] engine={} requested={} installed={} error=model-revision-mismatch",
-            request.engine_id, request.model_revision, installed_model_revision
+        record_native_error(
+            "manifest.revision",
+            &format!(
+                "engine={} requested={} installed={} error=model-revision-mismatch",
+                request.engine_id, request.model_revision, installed_model_revision
+            ),
         );
         return Err("Narration files changed. Please try again.".to_string());
     }
@@ -430,15 +433,15 @@ fn hex_digest(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn log_manifest_request(stage: &str, request: &ManifestNarrationRequest) {
+fn log_manifest_request(_stage: &str, _request: &ManifestNarrationRequest) {
     #[cfg(debug_assertions)]
     eprintln!(
-        "[sonelle][native][manifest:{stage}] engine={} voice={} passage={} sentences={} chars={}",
-        request.engine_id,
-        request.voice_id,
-        request.passage.id,
-        request.passage.sentences.len(),
-        request
+        "[sonelle][native][manifest:{_stage}] engine={} voice={} passage={} sentences={} chars={}",
+        _request.engine_id,
+        _request.voice_id,
+        _request.passage.id,
+        _request.passage.sentences.len(),
+        _request
             .passage
             .sentences
             .iter()
@@ -448,10 +451,12 @@ fn log_manifest_request(stage: &str, request: &ManifestNarrationRequest) {
 }
 
 fn log_manifest_error(stage: &str, request: &ManifestNarrationRequest, error: &str) {
-    #[cfg(debug_assertions)]
-    eprintln!(
-        "[sonelle][native][manifest:{stage}] engine={} voice={} passage={} error={}",
-        request.engine_id, request.voice_id, request.passage.id, error
+    record_native_error(
+        &format!("manifest.{stage}"),
+        &format!(
+            "engine={} voice={} passage={} error={}",
+            request.engine_id, request.voice_id, request.passage.id, error
+        ),
     );
 }
 

@@ -33,9 +33,11 @@ export function createSampleExport(
 }
 
 export function downloadJson(fileName: string, data: unknown) {
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
-  );
+  downloadBlob(fileName, new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+}
+
+export function downloadBlob(fileName: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = fileName;

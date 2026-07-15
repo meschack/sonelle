@@ -5,6 +5,7 @@ import {
   type VoiceInstallationRepository,
   type VoiceInstallationState
 } from "../audio/voice-installation-repository";
+import { reportAppError } from "../platform/error-reporting";
 
 interface ReaderVoiceInstallationWorkflowDependencies {
   eventDispatcher: DomainEventDispatcher;
@@ -144,7 +145,5 @@ function preparingVoiceInstallation(voiceId: string): VoiceInstallationState {
 }
 
 function reportReactionFailure(error: unknown) {
-  if (import.meta.env.DEV) {
-    console.error("[sonelle][events] Voice installation reaction failed.", error);
-  }
+  void reportAppError("events.voice-installation-reaction", error);
 }

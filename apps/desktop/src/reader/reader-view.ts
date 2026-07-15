@@ -76,6 +76,28 @@ export function paragraphsInSentenceRange(
   return visible;
 }
 
+export function paragraphAtSentenceIndex(
+  paragraphs: ReaderParagraphView[],
+  sentenceIndex: number
+): ReaderParagraphView | null {
+  let low = 0;
+  let high = paragraphs.length - 1;
+
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const paragraph = paragraphs[middle];
+    if (sentenceIndex < paragraph.startSentenceIndex) {
+      high = middle - 1;
+    } else if (sentenceIndex >= paragraph.endSentenceIndex) {
+      low = middle + 1;
+    } else {
+      return paragraph;
+    }
+  }
+
+  return null;
+}
+
 export function buildFixtureReaderView(
   options: BuildReaderViewOptions = {},
   book: FixtureBook = fixtureBook

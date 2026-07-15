@@ -214,6 +214,39 @@ describe("ReaderExperience integration", () => {
     container.remove();
   });
 
+  it("exports the active paragraph from beside the local storage status", async () => {
+    const exportParagraphImage = vi.fn().mockResolvedValue("sonelle-passage.png");
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      exportParagraphImage
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    const action = container.querySelector<HTMLButtonElement>(
+      '.product-status-actions [aria-label="Save paragraph as image"]'
+    );
+    expect(action).not.toBeNull();
+    action?.click();
+
+    await vi.waitFor(() => expect(exportParagraphImage).toHaveBeenCalledOnce());
+    expect(exportParagraphImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bookTitle: "The Listening Margin",
+        chapterTitle: "Chapter 1"
+      })
+    );
+    await vi.waitFor(() => expect(container.textContent).toContain("Paragraph image ready"));
+
+    dispose();
+    container.remove();
+  });
+
   it("blocks playback until the routed narration engine is ready", async () => {
     const requestPlayback = vi.fn();
     const dependencies = createDependencies({
@@ -265,6 +298,12 @@ interface DependencySpies {
   engineStatus?: "ready" | "not-installed";
   offlineLibrary?: "individual-voice" | "language-pack";
   readerPreferences?: ReaderPreferences;
+  exportParagraphImage?: (content: {
+    paragraphText: string;
+    bookTitle: string;
+    author: string;
+    chapterTitle: string;
+  }) => Promise<string>;
 }
 
 function createDependencies(spies: DependencySpies): ReaderExperienceDependencies {
@@ -354,6 +393,9 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       voices: () => SUPPORTED_NARRATION_VOICES,
       observeEngineInstallation: vi.fn(),
       createWorkflow: () => narrationWorkflow
+    },
+    paragraphImageExporter: {
+      export: spies.exportParagraphImage ?? vi.fn().mockResolvedValue("paragraph.png")
     },
     readerPreferencesRepository: {
       load: () => spies.readerPreferences ?? createReaderPreferences(),

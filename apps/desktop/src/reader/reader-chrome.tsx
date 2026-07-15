@@ -8,11 +8,18 @@ import {
   PlayIcon,
   PreviousIcon,
   SearchIcon,
+  ShareIcon,
   SpeakerIcon,
   SettingsIcon
 } from "./reader-icons";
 
-export function ProductBar() {
+interface ProductBarProps {
+  showParagraphImageAction: boolean;
+  canSaveParagraphImage: boolean;
+  onSaveParagraphImage: () => void;
+}
+
+export function ProductBar(props: ProductBarProps) {
   return (
     <header class="product-bar">
       <div class="product-brand">
@@ -20,10 +27,24 @@ export function ProductBar() {
         <strong>Sonelle</strong>
       </div>
       <span class="product-tagline">Your private reading desk</span>
-      <span class="product-local-status">
-        <span aria-hidden="true" />
-        Stored locally
-      </span>
+      <div class="product-status-actions">
+        <span class="product-local-status">
+          <span aria-hidden="true" />
+          Stored locally
+        </span>
+        <Show when={props.showParagraphImageAction}>
+          <button
+            class="product-paragraph-image-action"
+            type="button"
+            aria-label="Save paragraph as image"
+            title="Save paragraph as image"
+            disabled={!props.canSaveParagraphImage}
+            onClick={props.onSaveParagraphImage}
+          >
+            <ShareIcon />
+          </button>
+        </Show>
+      </div>
     </header>
   );
 }

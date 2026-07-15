@@ -36,10 +36,8 @@ import {
   type SavedDictionaryEntry
 } from "@sonelle/learning";
 import type { ReaderTextToken } from "@sonelle/text";
-import {
-  reportNarrationDevelopmentError,
-  toFriendlyNarrationError
-} from "../audio/narration-repository";
+import { reportNarrationError, toFriendlyNarrationError } from "../audio/narration-repository";
+import { getErrorLogPath, reportAppError, revealErrorLog } from "../platform/error-reporting";
 import { toFriendlyLibraryError } from "../library/library-errors";
 import type { LibraryBookmarkDto, LibrarySearchResultDto } from "../library/library-contracts";
 import { ChapterNavigator, PlaybackRail, ProductBar, ReaderTopAppBar } from "./reader-chrome";
@@ -48,7 +46,7 @@ import {
   ReaderParagraph,
   type ReaderContentInteractions
 } from "./reader-content";
-import { NarrationToast } from "./reader-feedback";
+import { ReaderToast } from "./reader-feedback";
 import type { LibraryBookSummary } from "../library/library-models";
 import type { AppView, InspectorTab, SelectedWord } from "./reader-experience-types";
 import { cssFontFamilyStack, isTypingTarget } from "./reader-formatting";
@@ -67,6 +65,11 @@ import {
 } from "./library-rail-state";
 import { createReaderWordInsightWorkflow } from "./reader-word-insight-workflow";
 import { createReaderBookExportWorkflow } from "./reader-book-export-workflow";
+import { observeReaderErrors } from "./reader-error-reporting";
+import {
+  createReaderParagraphImageWorkflow,
+  type ParagraphImageNotice
+} from "./reader-paragraph-image-workflow";
 import { createReaderLibraryApplication } from "./reader-library-application";
 import { createReaderLibrarySearchWorkflow } from "./reader-library-search-workflow";
 import {
@@ -205,6 +208,10 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const [audioCacheStats, setAudioCacheStats] = createSignal<PreparedAudioView | null>(null);
   const [audioCacheNotice, setAudioCacheNotice] = createSignal<string | null>(null);
   const [exportNotice, setExportNotice] = createSignal<string | null>(null);
+  const [paragraphImageNotice, setParagraphImageNotice] = createSignal<ParagraphImageNotice | null>(
+    null
+  );
+  const [errorLogPath, setErrorLogPath] = createSignal<string | null>(null);
   const [savedDictionary, setSavedDictionary] = createSignal<SavedDictionary>(
     dictionaryRepository.loadSavedDictionary()
   );
@@ -241,7 +248,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     projectAudible: setNarrationAudible,
     projectNotice: setNarrationNotice,
     reportError(error, stage, sentenceId) {
-      reportNarrationDevelopmentError(error, {
+      reportNarrationError(error, {
         stage,
         sentenceId,
         voiceId: audioSettings().voiceId,
@@ -290,7 +297,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       preparesAcrossChapters: narrationService.capabilities.preparesAcrossChapters,
       reportEventError: reportEventReactionFailure,
       reportPlaybackError(event) {
-        reportNarrationDevelopmentError(event.payload.reason, {
+        reportNarrationError(event.payload.reason, {
           stage: "playback",
           sentenceId: event.payload.sentenceId,
           voiceId: audioSettings().voiceId,
@@ -423,6 +430,23 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       currentSentenceIndex: () => playback().activeSentenceIndex,
       currentBookmarks: currentBookBookmarks,
       projectNotice: setExportNotice
+    }
+  );
+  const paragraphImageWorkflow = createReaderParagraphImageWorkflow(
+    {
+      eventDispatcher,
+      eventSink,
+      exporter: dependencies.paragraphImageExporter,
+      onError(error) {
+        void reportAppError("paragraph-image.export", error, [
+          { bookId: reader().book.id, chapterId: reader().chapter.id }
+        ]);
+      }
+    },
+    {
+      currentReader: reader,
+      currentSentenceIndex: () => playback().activeSentenceIndex,
+      projectNotice: setParagraphImageNotice
     }
   );
   const libraryApplication = createReaderLibraryApplication(
@@ -586,6 +610,11 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       setInspectorRailWidth(width);
     });
   };
+  const showErrorLog = () => {
+    const path = errorLogPath();
+    if (path == null) return;
+    void revealErrorLog(path).catch((error) => reportAppError("diagnostics.reveal", error, [path]));
+  };
 
   onMount(() => {
     let disposed = false;
@@ -598,6 +627,13 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     const stopOpeningWorkflow = openingWorkflow.start();
     const stopWordInsightWorkflow = wordInsightWorkflow.start();
     const stopBookExportWorkflow = bookExportWorkflow.start();
+    const stopParagraphImageWorkflow = paragraphImageWorkflow.start();
+    const stopReaderErrorReporting = observeReaderErrors(
+      eventDispatcher,
+      (scope, error, details) => {
+        void reportAppError(scope, error, details);
+      }
+    );
     void libraryApplication.start().then((stop) => {
       if (disposed) stop();
       else stopLibraryApplication = stop;
@@ -614,6 +650,11 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         if (!disposed) setSystemFontFamilies(families);
       })
       .catch(reportEventReactionFailure);
+    void getErrorLogPath()
+      .then((path) => {
+        if (!disposed) setErrorLogPath(path);
+      })
+      .catch((error) => reportAppError("diagnostics.path", error));
     clampSidebarWidthsToViewport();
 
     window.addEventListener("keydown", handleShortcut);
@@ -631,6 +672,8 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       stopOpeningWorkflow();
       stopWordInsightWorkflow();
       stopBookExportWorkflow();
+      stopParagraphImageWorkflow();
+      stopReaderErrorReporting();
     });
   });
   onCleanup(() => {
@@ -997,6 +1040,9 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       get exportNotice() {
         return exportNotice();
       },
+      get errorLogPath() {
+        return errorLogPath();
+      },
       onAudioSettingsChange: updateAudioSettings,
       onInstallVoice: offlineNarrationApplication.requestSelectedVoice,
       onInstallNarrationProfile: offlineNarrationApplication.requestNarrationProfile,
@@ -1007,7 +1053,8 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       onResetAudioSettings: narrationSettingsWorkflow.reset,
       onRefreshCache: offlineNarrationApplication.refreshPreparedAudio,
       onClearCache: offlineNarrationApplication.clearPreparedAudio,
-      onExportBook: bookExportWorkflow.request
+      onExportBook: bookExportWorkflow.request,
+      onRevealErrorLog: showErrorLog
     }
   } satisfies ReaderInspectorModel;
 
@@ -1059,7 +1106,13 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         "--ui-font": cssFontFamilyStack(uiFontFamily(), defaultUiFontStack)
       }}
     >
-      <ProductBar />
+      <ProductBar
+        showParagraphImageAction={activeView() === "reader"}
+        canSaveParagraphImage={
+          reader().paragraphs.length > 0 && paragraphImageNotice()?.tone !== "pending"
+        }
+        onSaveParagraphImage={paragraphImageWorkflow.request}
+      />
       <LibraryRail model={libraryRailModel} />
       <SidebarResizeHandle
         sidebar="library"
@@ -1161,13 +1214,27 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         <Show
           when={narrationNotice()}
           fallback={
-            <Show when={showNarrationPreparation()}>
-              <NarrationToast tone="pending" message="Getting the next part ready to play." />
+            <Show
+              when={paragraphImageNotice()}
+              fallback={
+                <Show when={showNarrationPreparation()}>
+                  <ReaderToast tone="pending" message="Getting the next part ready to play." />
+                </Show>
+              }
+            >
+              {(notice) => (
+                <ReaderToast
+                  title={notice().title}
+                  tone={notice().tone}
+                  message={notice().message}
+                  onDismiss={() => setParagraphImageNotice(null)}
+                />
+              )}
             </Show>
           }
         >
           {(notice) => (
-            <NarrationToast message={notice()} onDismiss={() => setNarrationNotice(null)} />
+            <ReaderToast message={notice()} onDismiss={() => setNarrationNotice(null)} />
           )}
         </Show>
 
@@ -1194,7 +1261,5 @@ export function ReaderExperience(props: ReaderExperienceProps) {
 }
 
 function reportEventReactionFailure(error: unknown) {
-  if (import.meta.env.DEV) {
-    console.error("[sonelle][events] Event reaction failed.", error);
-  }
+  void reportAppError("events.reaction", error);
 }

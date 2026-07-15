@@ -2,6 +2,7 @@ mod audio;
 mod background_process;
 mod commands;
 mod epub_import;
+mod error_log;
 mod kokoro_manifest;
 pub mod kokoro_narration;
 pub mod kokoro_text;
@@ -38,15 +39,19 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            let store = SonelleStore::open(app.handle()).map_err(io::Error::other)?;
+            error_log::initialize(app.handle()).map_err(io::Error::other)?;
+            let store = SonelleStore::open(app.handle()).map_err(|error| {
+                error_log::record_native_error("storage.open", &error);
+                io::Error::other(error)
+            })?;
             let migration_store = store.clone();
             app.manage(store);
             tauri::async_runtime::spawn_blocking(move || {
                 if let Err(error) = migrate_legacy_library(&migration_store) {
-                    #[cfg(debug_assertions)]
-                    eprintln!("[sonelle][native][library:repair] stage=run error={error}");
-                    #[cfg(not(debug_assertions))]
-                    let _ = error;
+                    error_log::record_native_error(
+                        "library.repair",
+                        &format!("stage=run error={error}"),
+                    );
                 }
             });
             Ok(())
@@ -68,7 +73,8 @@ pub fn run() {
             commands::prepare_manifest_narration,
             commands::prepare_sentence_audio,
             commands::record_domain_event,
-            commands::report_development_error,
+            commands::get_error_log_path,
+            commands::report_app_error,
             commands::play_sentence_audio,
             commands::save_bookmark,
             commands::save_reading_position,

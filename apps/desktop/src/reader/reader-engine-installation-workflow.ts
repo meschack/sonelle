@@ -6,6 +6,7 @@ import {
   type EngineInstallationState,
   type NarrationEngineId
 } from "../audio/engine-installation-repository";
+import { reportAppError } from "../platform/error-reporting";
 
 interface ReaderEngineInstallationWorkflowDependencies {
   eventDispatcher: DomainEventDispatcher;
@@ -170,7 +171,5 @@ function preparingEngineInstallation(engineId: NarrationEngineId): EngineInstall
 }
 
 function reportReactionFailure(error: unknown) {
-  if (import.meta.env.DEV) {
-    console.error("[sonelle][events] Offline narration files reaction failed.", error);
-  }
+  void reportAppError("events.offline-narration-reaction", error);
 }

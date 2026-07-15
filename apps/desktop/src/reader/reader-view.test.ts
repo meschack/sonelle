@@ -3,6 +3,7 @@ import { tokenizeReaderText } from "@sonelle/text";
 import {
   buildFixtureReaderView,
   buildReaderViewFromDocument,
+  paragraphAtSentenceIndex,
   paragraphsInSentenceRange,
   type ReaderParagraphView
 } from "./reader-view";
@@ -30,6 +31,15 @@ describe("fixture reader view", () => {
 
     expect(reader.chapter.title).toBe("Chapter 2");
     expect(reader.sentences[0]?.id).toBe("fixture-book-mara:chapter-2:sentence-1");
+  });
+
+  it("resolves the paragraph containing a sentence", () => {
+    const reader = buildFixtureReaderView();
+
+    expect(paragraphAtSentenceIndex(reader.paragraphs, 0)?.id).toBe(reader.paragraphs[0]?.id);
+    expect(paragraphAtSentenceIndex(reader.paragraphs, 3)?.id).toBe(reader.paragraphs[1]?.id);
+    expect(paragraphAtSentenceIndex(reader.paragraphs, -1)).toBeNull();
+    expect(paragraphAtSentenceIndex(reader.paragraphs, reader.sentences.length)).toBeNull();
   });
 
   it("turns a persisted reader document into the active chapter view", () => {

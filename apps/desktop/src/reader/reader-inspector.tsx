@@ -314,6 +314,7 @@ export interface ReaderSettingsInspectorModel {
   audioCacheStats: PreparedAudioView | null;
   audioCacheNotice: string | null;
   exportNotice: string | null;
+  errorLogPath: string | null;
   onAudioSettingsChange: (settings: Partial<AudioSettings>) => void;
   onInstallVoice: () => void;
   onInstallNarrationProfile: (profileId: OfflineNarrationProfileId) => void;
@@ -325,6 +326,7 @@ export interface ReaderSettingsInspectorModel {
   onRefreshCache: () => void;
   onClearCache: () => void;
   onExportBook: () => void;
+  onRevealErrorLog: () => void;
 }
 
 function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) {
@@ -436,6 +438,19 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
         <Show when={props.exportNotice}>
           {(notice) => <p class="library-notice">{notice()}</p>}
         </Show>
+      </div>
+      <div class="tool-card diagnostics-card">
+        <span class="inspector-section-title">Diagnostics</span>
+        <p>App errors are recorded here in development and production.</p>
+        <code class="diagnostics-path">{props.errorLogPath ?? "Preparing error.json"}</code>
+        <button
+          class="primary-tool-button"
+          type="button"
+          disabled={props.errorLogPath == null}
+          onClick={props.onRevealErrorLog}
+        >
+          Show error log
+        </button>
       </div>
     </section>
   );

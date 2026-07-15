@@ -5,6 +5,7 @@ use std::{
     time::Instant,
 };
 
+use crate::error_log::record_native_error;
 use crate::narration_cache::NarrationSentenceSpan;
 use crate::narration_manifest::{
     ensure_narration_not_cancelled, ManifestNarrationRequest, ManifestNarrationSentence,
@@ -123,7 +124,7 @@ fn load_supertonic_runtime(
     engine_installation_path: &Path,
     onnx_dir: &Path,
 ) -> Result<SupertonicRuntime, String> {
-    let started = Instant::now();
+    let _started = Instant::now();
     let onnx_dir = onnx_dir
         .to_str()
         .ok_or_else(|| "Sonelle couldn't open offline narration files.".to_string())?;
@@ -143,7 +144,7 @@ fn load_supertonic_runtime(
     #[cfg(debug_assertions)]
     eprintln!(
         "[sonelle][native][supertonic:startup] elapsed_ms={}",
-        started.elapsed().as_millis()
+        _started.elapsed().as_millis()
     );
     Ok(runtime)
 }
@@ -160,11 +161,7 @@ fn load_supertonic_style(path: &Path) -> Result<supertonic_helper::Style, String
 }
 
 fn log_supertonic_issue(stage: &str, detail: &str) {
-    #[cfg(debug_assertions)]
-    eprintln!("[sonelle][native][supertonic:{stage}] error={detail}");
-
-    #[cfg(not(debug_assertions))]
-    let _ = (stage, detail);
+    record_native_error(&format!("supertonic.{stage}"), detail);
 }
 
 fn log_supertonic_performance(

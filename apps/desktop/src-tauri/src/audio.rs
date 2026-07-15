@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager};
 
 use crate::background_process::background_command;
+use crate::error_log::record_native_error;
 use crate::voice_installation::managed_piper_path;
 
 const NARRATION_VOICE_CONFIG: &str =
@@ -889,11 +890,7 @@ fn voice_state_dirs_from(start: &Path) -> Vec<PathBuf> {
 }
 
 fn log_audio_issue(stage: &str, detail: &str) {
-    #[cfg(debug_assertions)]
-    eprintln!("[sonelle][audio][{stage}] {detail}");
-
-    #[cfg(not(debug_assertions))]
-    let _ = (stage, detail);
+    record_native_error(&format!("audio.{stage}"), detail);
 }
 
 fn piper_model_exists(model: &Path) -> bool {

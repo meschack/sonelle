@@ -28,6 +28,7 @@ import {
 } from "../audio/audio-settings-repository";
 import { createHtmlAudioPlayer } from "../audio/html-audio-player";
 import { createHtmlManifestNarrationPlayer } from "../audio/html-manifest-narration-player";
+import { reportAppError } from "../platform/error-reporting";
 import {
   createEngineInstallationRepository,
   type EngineInstallationRepository,
@@ -63,6 +64,10 @@ import { createReadingPositionStore } from "../library/reading-position-store";
 import { isTauriRuntime } from "../platform/tauri-runtime";
 import { createDomainEventSink } from "../platform/domain-event-sink";
 import { createSystemFontCatalog, type SystemFontCatalog } from "../platform/system-font-catalog";
+import {
+  createParagraphImageExporter,
+  type ParagraphImageExporter
+} from "./reader-paragraph-image";
 import {
   createReaderPreferencesRepository,
   type ReaderPreferencesRepository
@@ -102,6 +107,7 @@ export interface ReaderExperienceDependencies {
   fontCatalog: SystemFontCatalog;
   librarySearch: LibrarySearch;
   narration: ReaderNarrationService;
+  paragraphImageExporter: ParagraphImageExporter;
   readerPreferencesRepository: ReaderPreferencesRepository;
   readingPositionStore: ReadingPositionStore;
   voiceInstallationRepository: VoiceInstallationRepository;
@@ -183,6 +189,7 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
         );
       }
     },
+    paragraphImageExporter: createParagraphImageExporter(),
     readerPreferencesRepository: createReaderPreferencesRepository(),
     readingPositionStore: createReadingPositionStore(),
     voiceInstallationRepository: createVoiceInstallationRepository()
@@ -228,5 +235,5 @@ const unavailableNarrationPreparationAdapter: NarrationPreparationAdapter = {
 };
 
 function reportEventFailure(error: unknown) {
-  if (import.meta.env.DEV) console.error("[sonelle][events] Narration reaction failed.", error);
+  void reportAppError("events.narration-reaction", error);
 }

@@ -1,4 +1,5 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { reportAppError } from "../platform/error-reporting";
 import { isTauriRuntime } from "../platform/tauri-runtime";
 import {
   type NarrationGateway,
@@ -63,30 +64,8 @@ export function toFriendlyNarrationError(error: unknown): string {
   return "Narration needs attention. Please try again.";
 }
 
-export function reportNarrationDevelopmentError(
-  error: unknown,
-  context: NarrationDevelopmentErrorContext
-) {
-  if (!import.meta.env.DEV) return;
-
-  const message = diagnosticErrorMessage(error);
-  const detail = [
-    `stage=${context.stage}`,
-    `sentenceId=${context.sentenceId}`,
-    `voiceId=${context.voiceId}`,
-    `playbackMode=${context.playbackMode ?? "unknown"}`,
-    `error=${message}`
-  ].join(" ");
-
-  console.error(`[sonelle][audio][${context.stage}] ${message}`, error, context);
-  if (!isTauriRuntime()) return;
-
-  void invoke("report_development_error", {
-    scope: `audio.${context.stage}`,
-    message: detail
-  }).catch((reportingError) => {
-    console.error("[sonelle][audio][reporting] Could not forward the error.", reportingError);
-  });
+export function reportNarrationError(error: unknown, context: NarrationDevelopmentErrorContext) {
+  void reportAppError(`audio.${context.stage}`, error, [context]);
 }
 
 function diagnosticErrorMessage(error: unknown): string {

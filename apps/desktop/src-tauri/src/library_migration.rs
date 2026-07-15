@@ -2,6 +2,7 @@ use std::path::Path;
 
 use crate::{
     epub_import::read_epub_language,
+    error_log::record_native_error,
     library_import::{prepare_legacy_paragraphs, PreparedParagraphImport},
     storage::{LegacyChapterText, LegacyLibraryRepairEvent, SonelleStore},
 };
@@ -103,12 +104,10 @@ fn record_repair_result(
         Ok(()) => progress.repaired_count += 1,
         Err(error) => {
             progress.failed_count += 1;
-            #[cfg(debug_assertions)]
-            eprintln!(
-                "[sonelle][native][library:repair] stage={stage} entity={entity_id} error={error}"
+            record_native_error(
+                "library.repair",
+                &format!("stage={stage} entity={entity_id} error={error}"),
             );
-            #[cfg(not(debug_assertions))]
-            let _ = (stage, entity_id, error);
         }
     }
 }

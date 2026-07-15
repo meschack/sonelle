@@ -1500,6 +1500,21 @@ svg {
   padding-top: 16px;
 }
 
+.diagnostics-card {
+  gap: 12px;
+}
+
+.diagnostics-path {
+  background: rgba(229, 226, 225, 0.72);
+  border-radius: 6px;
+  color: var(--ink);
+  font-family: var(--reader-font);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  padding: 9px;
+}
+
 .field-row span,
 .toggle-row span {
   color: var(--muted);
