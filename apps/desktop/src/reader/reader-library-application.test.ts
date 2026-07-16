@@ -41,6 +41,9 @@ describe("reader library application", () => {
     const importing: boolean[] = [];
     let projectedBookmarks: LibraryBookmarkDto[] = [];
     const stopDropListener = vi.fn();
+    const stopOpenRequestListener = vi.fn();
+    let handleOpenRequest: ((path: string) => Promise<void>) | undefined;
+    const importFromPath = vi.fn().mockResolvedValue(document);
     const application = createReaderLibraryApplication(
       {
         catalog: {
@@ -48,7 +51,13 @@ describe("reader library application", () => {
           open: async () => document
         },
         drops: { listen: async () => stopDropListener },
-        importer: { importFromDialog: async () => document, importFromPath: async () => document },
+        openRequests: {
+          async listen(listener) {
+            handleOpenRequest = listener;
+            return stopOpenRequestListener;
+          }
+        },
+        importer: { importFromDialog: async () => document, importFromPath },
         bookmarks: {
           list: async () => [],
           save: vi.fn(),
@@ -76,14 +85,16 @@ describe("reader library application", () => {
     );
     const stop = await application.start();
 
-    await application.importFromPath("/tmp/book.epub");
+    await handleOpenRequest?.("/tmp/book.epub");
     await vi.waitFor(() => expect(opened).toEqual(["book-1"]));
 
+    expect(importFromPath).toHaveBeenCalledWith("/tmp/book.epub");
     expect(events.map((event) => event.name)).toEqual(["BookImportRequested"]);
     expect(books).toEqual([["book-1"]]);
     expect(notices[notices.length - 1]).toBe(libraryImportNotice("reopened"));
     expect(importing).toEqual([true, false]);
     stop();
     expect(stopDropListener).toHaveBeenCalledOnce();
+    expect(stopOpenRequestListener).toHaveBeenCalledOnce();
   });
 });

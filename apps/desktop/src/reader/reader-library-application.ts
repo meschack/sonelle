@@ -6,6 +6,7 @@ import type {
   BookDropAdapter,
   BookDropEvent,
   BookImporter,
+  BookOpenRequestAdapter,
   BookmarkStore,
   LibraryBookmarkDto,
   SaveBookmarkInput
@@ -18,6 +19,7 @@ import { createReaderLibraryWorkflows } from "./reader-library-workflows";
 interface ReaderLibraryApplicationDependencies {
   catalog: BookCatalog;
   drops: BookDropAdapter;
+  openRequests: BookOpenRequestAdapter;
   importer: BookImporter;
   bookmarks: BookmarkStore;
   eventDispatcher: DomainEventDispatcher;
@@ -180,7 +182,9 @@ export function createReaderLibraryApplication(
       ];
       const stopCore = workflows.start();
       const stopDrops = await dependencies.drops.listen(handleDrop);
+      const stopOpenRequests = await dependencies.openRequests.listen(importBook);
       return () => {
+        stopOpenRequests();
         stopDrops();
         stopCore();
         subscriptions.forEach((unsubscribe) => unsubscribe());

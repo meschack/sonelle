@@ -339,6 +339,7 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       open: vi.fn().mockRejectedValue(new Error("No library book selected"))
     },
     bookDropAdapter: { listen: vi.fn().mockResolvedValue(spies.stopDrops) },
+    bookOpenRequestAdapter: { listen: vi.fn().mockResolvedValue(() => undefined) },
     bookExporter: {
       exportData: vi.fn().mockRejectedValue(new Error("No library book selected"))
     },

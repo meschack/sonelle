@@ -5,6 +5,7 @@
 - application workflows connecting domain events to reader-facing projections
 - library import reactions, reader opening and closing, navigation, playback, settings, offline
   narration, word insight, export, and search
+- serial delivery of desktop EPUB open requests into the library import workflow
 - lifecycle subscription and cleanup behind small application interfaces
 - typography selection, projection, persistence, and journaling
 
@@ -23,6 +24,10 @@ Offline narration exposes English and multilingual product profiles. Kokoro and 
 stays inside the offline-narration application. `ReaderOpeningWorkflow` correlates a loaded
 `ReaderView` with one `ReaderOpened` fact, then independent listeners activate playback, show the
 reader, update the library rail, clear notices, refresh bookmarks, and persist the event.
+
+`BookOpenRequestAdapter` drains native cold-start requests and listens for later requests. It only
+delivers file paths; `ReaderLibraryApplication` turns them into the same `BookImportRequested` flow
+used by dialogs and drag and drop.
 
 ## Domain Events
 

@@ -43,3 +43,6 @@ unicode-normalization = "=0.1.25"
 ureq = "3.3.0"
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 misaki-rs = { version = "=0.3.0", default-features = false }
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "2"

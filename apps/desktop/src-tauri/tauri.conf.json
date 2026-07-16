@@ -30,6 +30,23 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "fileAssociations": [
+      {
+        "ext": ["epub"],
+        "mimeType": "application/epub+zip",
+        "name": "EPUB book",
+        "role": "Viewer",
+        "rank": "Default"
+      }
+    ],
+    "linux": {
+      "deb": {
+        "desktopTemplate": "linux/Sonelle.desktop"
+      },
+      "rpm": {
+        "desktopTemplate": "linux/Sonelle.desktop"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

@@ -34,6 +34,10 @@ export interface BookDropAdapter {
   listen(onEvent: (event: BookDropEvent) => void): Promise<() => void>;
 }
 
+export interface BookOpenRequestAdapter {
+  listen(onPath: (path: string) => Promise<void>): Promise<() => void>;
+}
+
 export interface SaveReadingPositionInput {
   bookId: string;
   chapterId: string;

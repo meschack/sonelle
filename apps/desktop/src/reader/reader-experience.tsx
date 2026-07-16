@@ -453,6 +453,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     {
       catalog: bookCatalog,
       drops: dependencies.bookDropAdapter,
+      openRequests: dependencies.bookOpenRequestAdapter,
       importer: dependencies.bookImporter,
       bookmarks: bookmarkStore,
       eventDispatcher,

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Categories=Office;Viewer;
+Comment=Read and listen to EPUB books offline
+Exec={{exec}} %F
+StartupWMClass=sonelle
+Icon={{icon}}
+Name={{name}}
+Terminal=false
+Type=Application
+MimeType=application/epub+zip;
+StartupNotify=true

@@ -48,6 +48,7 @@ import {
 import {
   type BookCatalog,
   type BookDropAdapter,
+  type BookOpenRequestAdapter,
   type BookExporter,
   type BookImporter,
   type BookmarkStore,
@@ -56,6 +57,7 @@ import {
 } from "../library/library-contracts";
 import { createBookCatalog } from "../library/book-catalog";
 import { createBookDropAdapter } from "../library/book-drop-adapter";
+import { createBookOpenRequestAdapter } from "../library/book-open-request-adapter";
 import { createBookExporter } from "../library/book-exporter";
 import { createBookImporter } from "../library/book-importer";
 import { createBookmarkStore } from "../library/bookmark-store";
@@ -97,6 +99,7 @@ export interface ReaderExperienceDependencies {
   audioSettingsRepository: AudioSettingsRepository;
   bookCatalog: BookCatalog;
   bookDropAdapter: BookDropAdapter;
+  bookOpenRequestAdapter: BookOpenRequestAdapter;
   bookExporter: BookExporter;
   bookImporter: BookImporter;
   bookmarkStore: BookmarkStore;
@@ -134,6 +137,9 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
     audioSettingsRepository: createAudioSettingsRepository(),
     bookCatalog,
     bookDropAdapter: createBookDropAdapter(),
+    bookOpenRequestAdapter: createBookOpenRequestAdapter({
+      reportError: (error) => void reportAppError("book-open-request.delivery", error)
+    }),
     bookExporter: createBookExporter(),
     bookImporter: createBookImporter(),
     bookmarkStore: createBookmarkStore(),
