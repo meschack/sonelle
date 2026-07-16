@@ -9,12 +9,12 @@ Accepted
 ## Context
 
 The native Kokoro renderer needs a duration-preserving `kokoro.onnx`, `config.json`, and `.bin`
-voice-style files. The public spike catalog still points at Kokoro's PyTorch checkpoint and `.pt`
-voice files, which are useful for the Python reference but not directly runnable by Sonelle's
-native manifest path.
+voice-style files. The Python reference uses Kokoro's PyTorch checkpoint and `.pt` voice files,
+which are useful for reference generation but not directly runnable by Sonelle's native manifest
+path.
 
-Until the production Kokoro runtime pack is hosted and pinned, the desktop app still needs a way to
-exercise the real installer, cache, and renderer path against the exported local spike artifacts.
+The production catalog therefore needs a separate pinned ONNX model, configuration, and `.bin`
+voice-style artifacts for the native manifest path.
 
 ## Decision
 
@@ -24,22 +24,23 @@ artifact to provide an explicit `url`. The native downloader accepts `file://` a
 local catalog can install the exported Kokoro runtime pack through the same verified pack installer
 used by hosted artifacts.
 
-`pnpm spike:narration:kokoro-local-catalog` writes
-`.sonelle/narration-spike/local-engine-catalog.json` from the current local Kokoro spike files:
+`pnpm spike:narration:local-catalog` writes
+`.sonelle/narration-spike/local-engine-catalog.json` from the verified production artifacts downloaded by
+`pnpm spike:narration:models`:
 
-- `.sonelle/narration-spike/kokoro-onnx/kokoro.onnx`
-- `.sonelle/narration-spike/sources/kokoro/checkpoints/config.json`
-- `.sonelle/narration-spike/sources/kokoro/kokoro.js/voices/af_heart.bin`
-- `.sonelle/narration-spike/sources/kokoro/kokoro.js/voices/bf_emma.bin`
+- `.sonelle/narration-spike/sources/kokoro/assets/kokoro.onnx`
+- `.sonelle/narration-spike/sources/kokoro/assets/config.json`
+- `.sonelle/narration-spike/sources/kokoro/assets/voices/af_heart.bin`
+- `.sonelle/narration-spike/sources/kokoro/assets/voices/bf_emma.bin`
 
 Each artifact receives its local file URL, size, and SHA-256. The generated target paths match the
 native renderer's installed-pack layout under `assets/`.
 
 ## Consequences
 
-- Local desktop QA can install and render Kokoro through the real pack manager before production
-  hosting exists.
-- The default bundled catalog remains unchanged, so production builds do not silently depend on a
-  developer's filesystem.
-- The production-ready gate still requires a hosted, license-reviewed, pinned Kokoro runtime pack
-  with the same installed layout.
+- Local desktop QA and release-candidate verification install and render the exact pinned production
+  artifacts through the real pack manager.
+- The production catalog points to a pinned ONNX export, matching configuration, and pinned `.bin`
+  voice-style files, all installed under the layout expected by the native renderer.
+- Local development can still override the catalog with file URLs, keeping the same verified pack
+  installer path available for runtime QA.

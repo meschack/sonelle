@@ -94,7 +94,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           ref: ${{ github.sha }}
+
+      - name: Fetch release tags
+        run: git fetch --force --tags
 
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-24.04'
@@ -133,6 +137,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Prepare candidate version
+        id: version
+        run: node scripts/prepare-release-version.mjs
+
       - name: Stage Windows voice runtime libraries
         if: matrix.platform == 'windows-latest'
         shell: pwsh
@@ -144,6 +152,6 @@ jobs:
       - name: Upload candidate bundles
         uses: actions/upload-artifact@v7
         with:
-          name: sonelle-candidate-${{ matrix.label }}-${{ github.sha }}
+          name: sonelle-candidate-${{ matrix.label }}-${{ steps.version.outputs.tag }}-${{ github.sha }}
           if-no-files-found: error
           path: target/**/release/bundle/**/*

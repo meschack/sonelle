@@ -61,12 +61,30 @@ describe("Kokoro reference environment", () => {
               revision: "0".repeat(40)
             },
             model: {
-              repository: "hexgrad/Kokoro-82M",
+              repository: "robertknight/kokoro-onnx",
               revision: "1".repeat(40),
               artifacts: [
                 {
+                  remotePath: "kokoro.onnx",
+                  targetPath: "assets/kokoro.onnx",
+                  sizeBytes: 1,
+                  sha256: "2".repeat(64)
+                },
+                {
                   remotePath: "config.json",
-                  targetPath: "checkpoints/config.json",
+                  targetPath: "assets/config.json",
+                  sizeBytes: 1,
+                  sha256: "2".repeat(64)
+                },
+                {
+                  remotePath: "voices/af_heart.bin",
+                  targetPath: "assets/voices/af_heart.bin",
+                  sizeBytes: 1,
+                  sha256: "2".repeat(64)
+                },
+                {
+                  remotePath: "voices/bf_emma.bin",
+                  targetPath: "assets/voices/bf_emma.bin",
                   sizeBytes: 1,
                   sha256: "2".repeat(64)
                 }
@@ -96,22 +114,16 @@ describe("Kokoro reference environment", () => {
       }),
       "utf8"
     );
-    mkdirSync(join(workspace, "kokoro-onnx"), { recursive: true });
-    mkdirSync(join(workspace, "sources", "kokoro", "checkpoints"), { recursive: true });
-    mkdirSync(join(workspace, "sources", "kokoro", "kokoro.js", "voices"), { recursive: true });
-    writeFileSync(join(workspace, "kokoro-onnx", "kokoro.onnx"), "onnx", "utf8");
+    mkdirSync(join(workspace, "sources", "kokoro", "assets", "voices"), { recursive: true });
+    writeFileSync(join(workspace, "sources", "kokoro", "assets", "kokoro.onnx"), "onnx", "utf8");
+    writeFileSync(join(workspace, "sources", "kokoro", "assets", "config.json"), "config", "utf8");
     writeFileSync(
-      join(workspace, "sources", "kokoro", "checkpoints", "config.json"),
-      "config",
-      "utf8"
-    );
-    writeFileSync(
-      join(workspace, "sources", "kokoro", "kokoro.js", "voices", "af_heart.bin"),
+      join(workspace, "sources", "kokoro", "assets", "voices", "af_heart.bin"),
       "heart",
       "utf8"
     );
     writeFileSync(
-      join(workspace, "sources", "kokoro", "kokoro.js", "voices", "bf_emma.bin"),
+      join(workspace, "sources", "kokoro", "assets", "voices", "bf_emma.bin"),
       "emma",
       "utf8"
     );
@@ -141,7 +153,7 @@ describe("Kokoro reference environment", () => {
       "assets/voices/bf_emma.bin"
     ]);
     expect(catalog.engines[0].model.artifacts[0].url).toBe(
-      pathToFileURL(join(workspace, "kokoro-onnx", "kokoro.onnx")).href
+      pathToFileURL(join(workspace, "sources", "kokoro", "assets", "kokoro.onnx")).href
     );
     expect(catalog.engines[1].id).toBe("supertonic");
     expect(catalog.engines[1].model.repository).toBe("local/sonelle-supertonic-runtime");

@@ -131,12 +131,10 @@ jobs:
       - name: Build desktop bundle
         run: pnpm build:desktop
 
-      - name: Upload desktop bundle
-        uses: actions/upload-artifact@v7
-        with:
-          name: sonelle-linux-x64
-          if-no-files-found: error
-          path: |
-            target/release/bundle/**/*.AppImage
-            target/release/bundle/**/*.deb
-            target/release/bundle/**/*.rpm
+  release-candidate:
+    name: Release candidate
+    needs: bundle-linux
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-candidate.yml

@@ -14,6 +14,9 @@ describe("real narration provider smoke", () => {
         expect.stringContaining("installs_local_supertonic_catalog")
       ])
     );
+    expect(NARRATION_PROVIDER_SMOKE_TESTS).not.toEqual(
+      expect.arrayContaining([expect.stringContaining("local_fixture")])
+    );
   });
 
   it("forces bounded provider thread counts", () => {
@@ -21,5 +24,6 @@ describe("real narration provider smoke", () => {
 
     expect(environment.SONELLE_KOKORO_ONNX_THREADS).toBe("1");
     expect(environment.SONELLE_SUPERTONIC_ONNX_THREADS).toBe("1");
+    expect(environment.SONELLE_KOKORO_FIXTURE_ROOT).toMatch(/sources\/kokoro$/u);
   });
 });

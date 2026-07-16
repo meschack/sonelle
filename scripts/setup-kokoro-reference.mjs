@@ -150,35 +150,16 @@ export function writeLocalNarrationEngineCatalog(options = {}) {
   if (kokoro == null) throw new Error("The narration spike does not define Kokoro.");
   if (supertonic == null) throw new Error("The narration spike does not define Supertonic.");
 
-  const kokoroArtifacts = [
-    localArtifact(
-      "kokoro.onnx",
-      "assets/kokoro.onnx",
-      join(workspace, "kokoro-onnx", "kokoro.onnx")
-    ),
-    localArtifact(
-      "config.json",
-      "assets/config.json",
-      join(workspace, "sources", "kokoro", "checkpoints", "config.json")
-    ),
-    localArtifact(
-      "voices/af_heart.bin",
-      "assets/voices/af_heart.bin",
-      join(workspace, "sources", "kokoro", "kokoro.js", "voices", "af_heart.bin")
-    ),
-    localArtifact(
-      "voices/bf_emma.bin",
-      "assets/voices/bf_emma.bin",
-      join(workspace, "sources", "kokoro", "kokoro.js", "voices", "bf_emma.bin")
-    )
-  ];
-  const supertonicArtifacts = supertonic.model.artifacts.map((artifact) =>
-    localArtifact(
-      artifact.remotePath,
-      artifact.targetPath,
-      join(workspace, "sources", "supertonic", artifact.targetPath)
-    )
-  );
+  const runtimeArtifacts = (engine) =>
+    engine.model.artifacts.map((artifact) =>
+      localArtifact(
+        artifact.remotePath,
+        artifact.targetPath,
+        join(workspace, "sources", engine.id, artifact.targetPath)
+      )
+    );
+  const kokoroArtifacts = runtimeArtifacts(kokoro);
+  const supertonicArtifacts = runtimeArtifacts(supertonic);
   const kokoroRevision = localRevision(kokoroArtifacts);
   const supertonicRevision = localRevision(supertonicArtifacts);
   const outputPath = options.outputPath ?? join(workspace, "local-engine-catalog.json");

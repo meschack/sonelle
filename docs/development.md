@@ -140,7 +140,7 @@ To prepare the pinned real-provider fixtures used by native development and rele
 
 ```bash
 pnpm spike:narration:models
-node scripts/setup-kokoro-reference.mjs --export-onnx --native-fixture --local-engine-catalog
+pnpm spike:narration:local-catalog
 pnpm qa:narration-providers
 ```
 
@@ -152,20 +152,22 @@ by hosted files. Start the desktop app against it with:
 SONELLE_NARRATION_ENGINE_CATALOG=.sonelle/narration-spike/local-engine-catalog.json pnpm dev:desktop
 ```
 
-Provider smoke tests run sequentially with one ONNX thread per provider. They cover direct Kokoro
-rendering, Kokoro manifest alignment, direct Supertonic rendering, and install-then-render for both
-packs. Optional Piper setup remains available with `pnpm setup:piper` when explicitly testing the
-compatibility adapter.
+Provider smoke tests run sequentially with one ONNX thread per provider. They use the exact pinned
+production artifacts and cover direct manifest rendering plus install-then-render for both packs.
+The Python Kokoro export and corpus commands remain separate research tools. Optional Piper setup
+remains available with `pnpm setup:piper` when explicitly testing the compatibility adapter.
 
 ## CI and Releases
 
 GitHub Actions runs two workflows:
 
 - `CI`: verifies formatting, TypeScript, tests, frontend build, strict native linting/tests, and a Linux desktop bundle.
-- `Release Candidate`: runs after successful `dev` CI, executes real-provider smoke tests, and then builds platform candidates from that exact verified revision.
+- `Release Candidate`: is called by `dev` CI after standard verification and the Linux bundle succeed,
+  then executes real-provider smoke tests and builds platform candidates from that same commit. Candidate
+  bundles use the next release version derived from Git tags so they can safely replace the latest installed release.
 - `Release`: runs only after successful `main` CI and publishes GitHub Releases for Linux, macOS Apple Silicon, and Windows.
 
-The release workflow uses `scripts/prepare-release-version.mjs` to compute the next patch version from existing `v*` tags. The computed version is applied to the package, Tauri, and Cargo manifests inside the workflow workspace before `tauri-apps/tauri-action` builds release bundles.
+The release and candidate workflows use `scripts/prepare-release-version.mjs` to compute the next patch version from existing `v*` tags. The computed version is applied to the package, Tauri, and Cargo manifests inside the workflow workspace before the desktop bundles are built.
 
 Release versions are not committed back to `main`; the immutable GitHub tag and release represent the shipped build. To intentionally move to a new base version, update the manifest versions in source and let the next release start from that value.
 

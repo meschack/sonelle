@@ -4,6 +4,7 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
+use crate::error_log::record_native_error;
 use crate::kokoro_narration::{
     prepare_kokoro_input_from_phonemes, KokoroRuntime, KOKORO_SAMPLE_RATE,
 };
@@ -20,6 +21,12 @@ const KOKORO_TEXT_CHUNK_TARGET_CHARS: usize = 260;
 const KOKORO_TEXT_SPLIT_DEPTH_LIMIT: usize = 8;
 static KOKORO_RUNTIME: OnceLock<Mutex<Option<KokoroRuntime>>> = OnceLock::new();
 
+pub(crate) struct KokoroAssets {
+    config: PathBuf,
+    voice: PathBuf,
+    model: PathBuf,
+}
+
 #[cfg(test)]
 pub fn render_kokoro_manifest(
     engine_installation_path: &Path,
@@ -35,44 +42,18 @@ pub fn render_kokoro_manifest_with_options(
     request: &ManifestNarrationRequest,
     run_options: &RunOptions,
 ) -> Result<RenderedManifestAudio, String> {
+    let assets = resolve_kokoro_assets(engine_installation_path, &request.voice_id)?;
     let voice_file = kokoro_voice_file(&request.voice_id);
     let dialect = kokoro_dialect_for_voice_file(&voice_file);
-    let config_path = first_existing_path(
-        engine_installation_path,
-        &[
-            "assets/config.json",
-            "checkpoints/config.json",
-            "config.json",
-            "sources/kokoro/checkpoints/config.json",
-        ],
-    )?;
-    let voice_path = first_existing_path(
-        engine_installation_path,
-        &[
-            &format!("assets/voices/{voice_file}"),
-            &format!("voices/{voice_file}"),
-            &format!("checkpoints/voices/{voice_file}"),
-            &format!("sources/kokoro/kokoro.js/voices/{voice_file}"),
-        ],
-    )?;
-    let model_path = first_existing_path(
-        engine_installation_path,
-        &[
-            "assets/kokoro.onnx",
-            "kokoro.onnx",
-            "assets/onnx/kokoro.onnx",
-            "kokoro-onnx/kokoro.onnx",
-        ],
-    )?;
     let mut runtime_guard = KOKORO_RUNTIME
         .get_or_init(|| Mutex::new(None))
         .lock()
         .map_err(|_| "English narration is already busy. Please try again.".to_string())?;
     if runtime_guard
         .as_ref()
-        .is_none_or(|runtime| !runtime.matches(&model_path))
+        .is_none_or(|runtime| !runtime.matches(&assets.model))
     {
-        *runtime_guard = Some(KokoroRuntime::open(&model_path)?);
+        *runtime_guard = Some(KokoroRuntime::open(&assets.model)?);
     }
     let runtime = runtime_guard
         .as_mut()
@@ -86,8 +67,8 @@ pub fn render_kokoro_manifest_with_options(
         let sentence_text = sentence.text.trim();
         let sentence_audio = match phonemize_kokoro_sentence(&sentence.id, sentence_text, dialect) {
             Ok(phonemes) => render_kokoro_sentence_audio(
-                &config_path,
-                &voice_path,
+                &assets.config,
+                &assets.voice,
                 runtime,
                 dialect,
                 sentence_text,
@@ -118,6 +99,46 @@ pub fn render_kokoro_manifest_with_options(
         sample_count: start_sample,
         sentences: spans,
         wav: float_wav(KOKORO_SAMPLE_RATE, &audio)?,
+    })
+}
+
+pub(crate) fn resolve_kokoro_assets(
+    engine_installation_path: &Path,
+    voice_id: &str,
+) -> Result<KokoroAssets, String> {
+    let voice_file = kokoro_voice_file(voice_id);
+    let config = first_existing_path(
+        engine_installation_path,
+        &[
+            "assets/config.json",
+            "checkpoints/config.json",
+            "config.json",
+            "sources/kokoro/checkpoints/config.json",
+        ],
+    )?;
+    let voice = first_existing_path(
+        engine_installation_path,
+        &[
+            &format!("assets/voices/{voice_file}"),
+            &format!("voices/{voice_file}"),
+            &format!("checkpoints/voices/{voice_file}"),
+            &format!("sources/kokoro/kokoro.js/voices/{voice_file}"),
+        ],
+    )?;
+    let model = first_existing_path(
+        engine_installation_path,
+        &[
+            "assets/kokoro.onnx",
+            "kokoro.onnx",
+            "assets/onnx/kokoro.onnx",
+            "kokoro-onnx/kokoro.onnx",
+        ],
+    )?;
+
+    Ok(KokoroAssets {
+        config,
+        voice,
+        model,
     })
 }
 
@@ -298,11 +319,27 @@ fn phonemize_kokoro_sentence(
 }
 
 fn first_existing_path(root: &Path, relative_paths: &[&str]) -> Result<PathBuf, String> {
-    relative_paths
+    let candidates = relative_paths
         .iter()
         .map(|relative| root.join(relative))
-        .find(|path| path.is_file())
-        .ok_or_else(|| "Sonelle couldn't open English narration files.".to_string())
+        .collect::<Vec<_>>();
+    if let Some(path) = candidates.iter().find(|path| path.is_file()) {
+        return Ok(path.clone());
+    }
+
+    record_native_error(
+        "kokoro.assets",
+        &format!(
+            "root={} missing={}",
+            root.display(),
+            candidates
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+    );
+    Err("Sonelle couldn't open English narration files.".to_string())
 }
 
 fn kokoro_voice_file(voice_id: &str) -> String {

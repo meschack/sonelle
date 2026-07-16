@@ -53,6 +53,10 @@ Export the official Kokoro checkpoint to ONNX after preparing that environment:
 pnpm spike:narration:kokoro-export
 ```
 
+This research export is independent from the production runtime assets used by release-candidate
+smoke tests. Release candidates use the pinned ONNX model downloaded by
+`pnpm spike:narration:models`.
+
 Generate reference and ONNX audio plus sentence-span evidence for the checked-in corpus:
 
 ```bash

@@ -9,32 +9,35 @@
         "revision": "dfb907a02bba8152ca444717ca5d78747ccb4bec"
       },
       "model": {
-        "repository": "hexgrad/Kokoro-82M",
-        "revision": "f3ff3571791e39611d31c381e3a41a3af07b4987",
+        "repository": "robertknight/kokoro-onnx",
+        "revision": "09b93dc3dfafca047deddfe940c752178ac9fbd0",
         "artifacts": [
           {
+            "remotePath": "kokoro.onnx",
+            "targetPath": "assets/kokoro.onnx",
+            "sizeBytes": 340639505,
+            "sha256": "763aa65b6eb5b1d54890a778d269fd03791e95cafe52f02ff5b905e814d2f375"
+          },
+          {
             "remotePath": "config.json",
-            "targetPath": "checkpoints/config.json",
+            "targetPath": "assets/config.json",
             "sizeBytes": 2351,
-            "sha256": "5abb01e2403b072bf03d04fde160443e209d7a0dad49a423be15196b9b43c17f"
+            "sha256": "5abb01e2403b072bf03d04fde160443e209d7a0dad49a423be15196b9b43c17f",
+            "url": "https://huggingface.co/hexgrad/Kokoro-82M/resolve/f3ff3571791e39611d31c381e3a41a3af07b4987/config.json"
           },
           {
-            "remotePath": "kokoro-v1_0.pth",
-            "targetPath": "checkpoints/kokoro-v1_0.pth",
-            "sizeBytes": 327212226,
-            "sha256": "496dba118d1a58f5f3db2efc88dbdc216e0483fc89fe6e47ee1f2c53f18ad1e4"
+            "remotePath": "voices/af_heart.bin",
+            "targetPath": "assets/voices/af_heart.bin",
+            "sizeBytes": 522240,
+            "sha256": "d583ccff3cdca2f7fae535cb998ac07e9fcb90f09737b9a41fa2734ec44a8f0b",
+            "url": "https://raw.githubusercontent.com/hexgrad/kokoro/dfb907a02bba8152ca444717ca5d78747ccb4bec/kokoro.js/voices/af_heart.bin"
           },
           {
-            "remotePath": "voices/af_heart.pt",
-            "targetPath": "checkpoints/voices/af_heart.pt",
-            "sizeBytes": 523425,
-            "sha256": "0ab5709b8ffab19bfd849cd11d98f75b60af7733253ad0d67b12382a102cb4ff"
-          },
-          {
-            "remotePath": "voices/bf_emma.pt",
-            "targetPath": "checkpoints/voices/bf_emma.pt",
-            "sizeBytes": 523420,
-            "sha256": "d0a423deabf4a52b4f49318c51742c54e21bb89bbbe9a12141e7758ddb5da701"
+            "remotePath": "voices/bf_emma.bin",
+            "targetPath": "assets/voices/bf_emma.bin",
+            "sizeBytes": 522240,
+            "sha256": "669fe0647f9dd04fcab92f1439a40eeb4c8b4ab1f82e4996fe3d918ce4a63b73",
+            "url": "https://raw.githubusercontent.com/hexgrad/kokoro/dfb907a02bba8152ca444717ca5d78747ccb4bec/kokoro.js/voices/bf_emma.bin"
           }
         ]
       }
