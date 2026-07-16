@@ -13,9 +13,13 @@ describe("release candidate workflow", () => {
     expect(ci).toContain("uses: ./.github/workflows/release-candidate.yml");
     expect(ci).toContain("needs: bundle-linux");
     expect(ci).toContain("github.ref == 'refs/heads/dev'");
+    expect(ci).not.toContain("name: sonelle-linux-x64");
     expect(candidate).toContain("workflow_call:");
     expect(candidate).not.toContain("workflow_run:");
     expect(candidate).not.toContain("github.event.workflow_run");
+    expect(candidate).toContain("git fetch --force --tags");
+    expect(candidate).toContain("node scripts/prepare-release-version.mjs");
+    expect(candidate).toContain("steps.version.outputs.tag");
   });
 });
 

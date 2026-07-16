@@ -163,10 +163,11 @@ GitHub Actions runs two workflows:
 
 - `CI`: verifies formatting, TypeScript, tests, frontend build, strict native linting/tests, and a Linux desktop bundle.
 - `Release Candidate`: is called by `dev` CI after standard verification and the Linux bundle succeed,
-  then executes real-provider smoke tests and builds platform candidates from that same commit.
+  then executes real-provider smoke tests and builds platform candidates from that same commit. Candidate
+  bundles use the next release version derived from Git tags so they can safely replace the latest installed release.
 - `Release`: runs only after successful `main` CI and publishes GitHub Releases for Linux, macOS Apple Silicon, and Windows.
 
-The release workflow uses `scripts/prepare-release-version.mjs` to compute the next patch version from existing `v*` tags. The computed version is applied to the package, Tauri, and Cargo manifests inside the workflow workspace before `tauri-apps/tauri-action` builds release bundles.
+The release and candidate workflows use `scripts/prepare-release-version.mjs` to compute the next patch version from existing `v*` tags. The computed version is applied to the package, Tauri, and Cargo manifests inside the workflow workspace before the desktop bundles are built.
 
 Release versions are not committed back to `main`; the immutable GitHub tag and release represent the shipped build. To intentionally move to a new base version, update the manifest versions in source and let the next release start from that value.
 
