@@ -1,6 +1,6 @@
 import { createSentenceId, normalizeReaderSearchText } from "@sonelle/reader";
 import { segmentParagraphs, segmentSentences } from "@sonelle/text";
-import type { ReaderDocumentDto } from "../library/library-models";
+import type { ReaderDocumentDto, ReaderReferenceDto } from "../library/library-models";
 import { fixtureBook, type FixtureBook } from "./fixture-book";
 
 export interface ReaderSentenceView {
@@ -8,6 +8,7 @@ export interface ReaderSentenceView {
   index: number;
   text: string;
   searchText: string;
+  references?: ReaderReferenceDto[];
 }
 
 export interface ReaderParagraphView {
@@ -137,7 +138,8 @@ export function buildFixtureReaderView(
     id: createSentenceId(book.id, chapter.id, sentence.index),
     index: sentence.index,
     text: sentence.text,
-    searchText: normalizeReaderSearchText(sentence.text)
+    searchText: normalizeReaderSearchText(sentence.text),
+    references: []
   }));
 
   return {
@@ -199,7 +201,10 @@ export function buildReaderViewFromDocument(
     id: sentence.id,
     index: sentence.index,
     text: sentence.text,
-    searchText: normalizeReaderSearchText(sentence.text)
+    searchText: normalizeReaderSearchText(sentence.text),
+    references: (chapter.references ?? []).filter(
+      (reference) => reference.sentenceId === sentence.id
+    )
   }));
 
   return {

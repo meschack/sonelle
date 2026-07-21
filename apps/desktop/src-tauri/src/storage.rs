@@ -148,8 +148,10 @@ impl SonelleStore {
         {
             let mut insert_chapter = transaction
                 .prepare(
-                    "INSERT INTO chapters (id, book_id, title, position, body, sentence_count)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    "INSERT INTO chapters (
+                        id, book_id, title, position, body, sentence_count, references_json
+                     )
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 )
                 .map_err(|_| "We couldn't save a chapter from that book.".to_string())?;
             let mut insert_sentence = transaction
@@ -176,6 +178,8 @@ impl SonelleStore {
             for chapter in &book.chapters {
                 let normalized_body = chapter.body.clone();
                 let chapter_sentence_count = chapter.sentences.len() as i64;
+                let references_json = serde_json::to_string(&chapter.references)
+                    .map_err(|_| "We couldn't save references from that chapter.".to_string())?;
                 total_sentence_count += chapter_sentence_count;
 
                 insert_chapter
@@ -185,7 +189,8 @@ impl SonelleStore {
                         chapter.title,
                         chapter.index as i64,
                         normalized_body,
-                        chapter_sentence_count
+                        chapter_sentence_count,
+                        references_json
                     ])
                     .map_err(|_| "We couldn't save a chapter from that book.".to_string())?;
 
@@ -332,6 +337,7 @@ impl SonelleStore {
             if let Some(chapter) = chapters.iter_mut().find(|entry| entry.id == chapter_id) {
                 chapter.sentences = sentences;
                 chapter.paragraphs = paragraphs;
+                chapter.references = self.read_references_for_chapter(&connection, chapter_id)?;
             }
         }
 
@@ -720,7 +726,8 @@ impl SonelleStore {
                     title TEXT NOT NULL,
                     position INTEGER NOT NULL,
                     body TEXT NOT NULL,
-                    sentence_count INTEGER NOT NULL DEFAULT 0
+                    sentence_count INTEGER NOT NULL DEFAULT 0,
+                    references_json TEXT NOT NULL DEFAULT '[]'
                 );
 
                 CREATE TABLE IF NOT EXISTS sentences (
@@ -827,6 +834,12 @@ impl SonelleStore {
             "sentence_count",
             "INTEGER NOT NULL DEFAULT 0",
         )?;
+        ensure_column(
+            &connection,
+            "chapters",
+            "references_json",
+            "TEXT NOT NULL DEFAULT '[]'",
+        )?;
 
         if added_book_chapter_count || added_book_sentence_count {
             connection
@@ -926,6 +939,7 @@ impl SonelleStore {
                     sentence_count: row.get(3)?,
                     sentences: Vec::new(),
                     paragraphs: Vec::new(),
+                    references: Vec::new(),
                 })
             })
             .map_err(|_| "We couldn't read that book.".to_string())?
@@ -955,6 +969,7 @@ impl SonelleStore {
 
         for chapter in &mut chapters {
             chapter.paragraphs = self.read_paragraphs_for_chapter(connection, &chapter.id)?;
+            chapter.references = self.read_references_for_chapter(connection, &chapter.id)?;
         }
 
         Ok(chapters)
@@ -994,6 +1009,22 @@ impl SonelleStore {
         chapter_id: &str,
     ) -> Result<Vec<ReaderParagraphView>, String> {
         self.read_persisted_paragraphs_for_chapter(connection, chapter_id)
+    }
+
+    fn read_references_for_chapter(
+        &self,
+        connection: &Connection,
+        chapter_id: &str,
+    ) -> Result<Vec<ReaderReferenceView>, String> {
+        let references_json = connection
+            .query_row(
+                "SELECT references_json FROM chapters WHERE id = ?1",
+                params![chapter_id],
+                |row| row.get::<_, String>(0),
+            )
+            .map_err(|_| "We couldn't read references from that chapter.".to_string())?;
+        serde_json::from_str(&references_json)
+            .map_err(|_| "We couldn't read references from that chapter.".to_string())
     }
 
     fn read_persisted_paragraphs_for_chapter(
@@ -1377,7 +1408,9 @@ mod tests {
         BookExportView, LibrarySearchRequest, ReaderChapterView, ReaderDocumentView,
         SaveBookmarkRequest, SaveReadingPositionRequest, SonelleStore,
     };
-    use crate::epub_import::{import_epub_file, ImportedBook, ImportedChapter, ImportedCover};
+    use crate::epub_import::{
+        import_epub_file, ImportedBook, ImportedChapter, ImportedCover, ImportedReference,
+    };
     use rusqlite::{params, Connection};
 
     #[test]
@@ -1399,6 +1432,13 @@ mod tests {
                     title: "Chapter One".to_string(),
                     index: 0,
                     body: "First sentence. Second sentence.".to_string(),
+                    references: vec![ImportedReference {
+                        id: "book-test:chapter-1:reference-1".to_string(),
+                        offset: "First sentence.".len(),
+                        marker: "1".to_string(),
+                        kind: "footnote".to_string(),
+                        content: "A persisted note.".to_string(),
+                    }],
                 }],
             })
             .expect("book should save");
@@ -1427,6 +1467,11 @@ mod tests {
             1
         );
         assert_eq!(reopened.book.language.as_deref(), Some("fr-FR"));
+        assert_eq!(reopened.chapters[0].references.len(), 1);
+        assert_eq!(
+            reopened.chapters[0].references[0].content,
+            "A persisted note."
+        );
 
         fs::remove_dir_all(temp_dir).ok();
     }
@@ -1451,18 +1496,21 @@ mod tests {
                         title: "Chapter One".to_string(),
                         index: 0,
                         body: "First sentence. Second sentence.".to_string(),
+                        references: Vec::new(),
                     },
                     ImportedChapter {
                         id: "progress-book:chapter-2".to_string(),
                         title: "Chapter Two".to_string(),
                         index: 1,
                         body: "Third sentence. Fourth sentence. Fifth sentence.".to_string(),
+                        references: Vec::new(),
                     },
                     ImportedChapter {
                         id: "progress-book:chapter-3".to_string(),
                         title: "Chapter Three".to_string(),
                         index: 2,
                         body: "Sixth sentence. Seventh sentence.".to_string(),
+                        references: Vec::new(),
                     },
                 ],
             })
@@ -1520,6 +1568,7 @@ mod tests {
                     title: "Chapter One".to_string(),
                     index: 0,
                     body: "A covered sentence.".to_string(),
+                    references: Vec::new(),
                 }],
             })
             .expect("book should save after migration");
@@ -1599,12 +1648,14 @@ mod tests {
                         title: "Chapter One".to_string(),
                         index: 0,
                         body: "First sentence. Second sentence.".to_string(),
+                        references: Vec::new(),
                     },
                     ImportedChapter {
                         id: "book-counts:chapter-2".to_string(),
                         title: "Chapter Two".to_string(),
                         index: 1,
                         body: "Third sentence.".to_string(),
+                        references: Vec::new(),
                     },
                 ],
             })
@@ -1640,12 +1691,14 @@ mod tests {
                         title: "Chapter One".to_string(),
                         index: 0,
                         body: "First sentence. Second sentence.".to_string(),
+                        references: Vec::new(),
                     },
                     ImportedChapter {
                         id: "book-active:chapter-2".to_string(),
                         title: "Chapter Two".to_string(),
                         index: 1,
                         body: "Third sentence.".to_string(),
+                        references: Vec::new(),
                     },
                 ],
             })
@@ -1714,6 +1767,7 @@ mod tests {
                     title: "Chapter One".to_string(),
                     index: 0,
                     body: "First sentence. Second sentence.\n\nThird sentence.".to_string(),
+                    references: Vec::new(),
                 }],
             })
             .expect("book should save");
@@ -1759,6 +1813,7 @@ mod tests {
                     title: "Chapter One".to_string(),
                     index: 0,
                     body: "A quiet sentence. The bookmark target appears here.".to_string(),
+                    references: Vec::new(),
                 }],
             })
             .expect("book should save");
@@ -2105,6 +2160,7 @@ mod tests {
                         title: format!("Synthetic Chapter {}", chapter_index + 1),
                         index: chapter_index,
                         body: synthetic_chapter_body(chapter_index, sentence_count),
+                        references: Vec::new(),
                     }
                 })
                 .collect(),

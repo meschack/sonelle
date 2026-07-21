@@ -9,6 +9,8 @@ import {
 } from "@sonelle/audio";
 import {
   createNarrationSession as createManifestNarrationSession,
+  prepareNarrationBook,
+  type NarrationBookPreparationProgress,
   type NarrationRoutingMode,
   type NarrationPreparationAdapter
 } from "@sonelle/audio/narration";
@@ -58,6 +60,7 @@ import {
   type LibrarySearch,
   type ReadingPositionStore
 } from "../library/library-contracts";
+import type { ReaderDocumentDto } from "../library/library-models";
 import { createBookCatalog } from "../library/book-catalog";
 import { createBookDropAdapter } from "../library/book-drop-adapter";
 import { createBookOpenRequestAdapter } from "../library/book-open-request-adapter";
@@ -82,6 +85,13 @@ import {
   type ReaderNarrationWorkflowOptions
 } from "./reader-narration-workflow";
 import { createReaderNarrationPrefetchWorkflow } from "./reader-narration-prefetch-workflow";
+import { buildReaderViewFromDocument } from "./reader-view";
+import { createReaderNarrationSessionChapter } from "./reader-narration";
+
+export interface ReaderBookNarrationIdentity {
+  voiceId: string;
+  modelRevision: string;
+}
 
 export interface ReaderNarrationService {
   capabilities: {
@@ -94,6 +104,15 @@ export interface ReaderNarrationService {
   createWorkflow(
     options: Omit<ReaderNarrationWorkflowOptions, "engineInstallations">
   ): ReaderNarrationWorkflow;
+  bookIdentity(document: ReaderDocumentDto, voiceId: string): ReaderBookNarrationIdentity | null;
+  prepareBook(
+    document: ReaderDocumentDto,
+    voiceId: string,
+    options: {
+      signal?: AbortSignal;
+      onProgress(progress: NarrationBookPreparationProgress): void;
+    }
+  ): Promise<{ sentenceCount: number }>;
 }
 
 export interface ReaderExperienceDependencies {
@@ -192,6 +211,36 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
           },
           { ...options, engineInstallations: () => engineInstallations }
         );
+      },
+      bookIdentity(document, voiceId) {
+        const chapter = document.chapters[0];
+        if (chapter == null) return null;
+        const sessionChapter = createReaderNarrationSessionChapter(
+          buildReaderViewFromDocument(document, { chapterId: chapter.id }),
+          voiceId,
+          narrationSessionRoutingMode,
+          engineInstallations
+        );
+        return {
+          voiceId: sessionChapter.voiceId,
+          modelRevision: sessionChapter.modelRevision
+        };
+      },
+      async prepareBook(document, voiceId, options) {
+        const chapters = document.chapters.map((chapter) =>
+          createReaderNarrationSessionChapter(
+            buildReaderViewFromDocument(document, { chapterId: chapter.id }),
+            voiceId,
+            narrationSessionRoutingMode,
+            engineInstallations
+          )
+        );
+        const result = await prepareNarrationBook(
+          { adapter: narrationPreparationAdapter },
+          { bookId: document.book.id, chapters },
+          options
+        );
+        return { sentenceCount: result.sentenceCount };
       }
     },
     paragraphImageExporter: createParagraphImageExporter(),

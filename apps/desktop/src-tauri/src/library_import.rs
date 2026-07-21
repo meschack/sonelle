@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::{
-    epub_import::{import_epub_file, ImportError, ImportedBook, ImportedCover},
+    epub_import::{import_epub_file, ImportError, ImportedBook, ImportedCover, ImportedReference},
     text::segment_normalized_paragraphs,
 };
 
@@ -24,6 +24,7 @@ pub struct PreparedChapterImport {
     pub body: String,
     pub sentences: Vec<PreparedSentenceImport>,
     pub paragraphs: Vec<PreparedParagraphImport>,
+    pub references: Vec<PreparedReferenceImport>,
 }
 
 #[derive(Debug, Clone)]
@@ -39,6 +40,18 @@ pub struct PreparedParagraphImport {
     pub index: usize,
     pub start_sentence_index: usize,
     pub sentence_count: usize,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreparedReferenceImport {
+    pub id: String,
+    pub sentence_id: String,
+    pub sentence_index: usize,
+    pub offset: usize,
+    pub marker: String,
+    pub kind: String,
+    pub content: String,
 }
 
 pub fn prepare_epub_import(path: &Path) -> Result<PreparedBookImport, ImportError> {
@@ -58,6 +71,7 @@ pub fn prepare_imported_book(book: ImportedBook) -> PreparedBookImport {
             .into_iter()
             .map(|chapter| {
                 let (sentences, paragraphs) = prepare_chapter_text(&chapter.id, &chapter.body);
+                let references = prepare_references(&chapter.body, &chapter.references, &sentences);
 
                 PreparedChapterImport {
                     id: chapter.id,
@@ -66,10 +80,55 @@ pub fn prepare_imported_book(book: ImportedBook) -> PreparedBookImport {
                     body: chapter.body,
                     sentences,
                     paragraphs,
+                    references,
                 }
             })
             .collect(),
     }
+}
+
+fn prepare_references(
+    body: &str,
+    references: &[ImportedReference],
+    sentences: &[PreparedSentenceImport],
+) -> Vec<PreparedReferenceImport> {
+    let mut sentence_start = 0;
+    let sentence_ranges = sentences
+        .iter()
+        .filter_map(|sentence| {
+            let relative = body[sentence_start..].find(&sentence.text)?;
+            let start = sentence_start + relative;
+            let end = start + sentence.text.len();
+            sentence_start = end;
+            Some((sentence, start, end))
+        })
+        .collect::<Vec<_>>();
+
+    references
+        .iter()
+        .filter_map(|reference| {
+            let (sentence, start, end) = sentence_ranges
+                .iter()
+                .find(|(_, start, end)| reference.offset >= *start && reference.offset <= *end)
+                .or_else(|| {
+                    sentence_ranges
+                        .iter()
+                        .rev()
+                        .find(|(_, _, end)| *end <= reference.offset)
+                })?;
+            let reference_offset = reference.offset.clamp(*start, *end);
+            let offset = body[*start..reference_offset].encode_utf16().count();
+            Some(PreparedReferenceImport {
+                id: reference.id.clone(),
+                sentence_id: sentence.id.clone(),
+                sentence_index: sentence.index,
+                offset,
+                marker: reference.marker.clone(),
+                kind: reference.kind.clone(),
+                content: reference.content.clone(),
+            })
+        })
+        .collect()
 }
 
 pub fn prepare_legacy_paragraphs(chapter_id: &str, body: &str) -> Vec<PreparedParagraphImport> {
@@ -114,7 +173,7 @@ impl From<ImportedBook> for PreparedBookImport {
 
 #[cfg(test)]
 mod tests {
-    use crate::epub_import::{ImportedBook, ImportedChapter};
+    use crate::epub_import::{ImportedBook, ImportedChapter, ImportedReference};
 
     use super::prepare_imported_book;
 
@@ -132,11 +191,23 @@ mod tests {
                 title: "Chapter 1".to_string(),
                 index: 0,
                 body: "First sentence. Second sentence.\n\nThird sentence.".to_string(),
+                references: vec![ImportedReference {
+                    id: "chapter-1:reference-1".to_string(),
+                    offset: "First sentence.".len(),
+                    marker: "1".to_string(),
+                    kind: "footnote".to_string(),
+                    content: "A useful note.".to_string(),
+                }],
             }],
         });
 
         assert_eq!(prepared.chapters[0].sentences.len(), 3);
         assert_eq!(prepared.chapters[0].paragraphs.len(), 2);
         assert_eq!(prepared.chapters[0].paragraphs[1].start_sentence_index, 2);
+        assert_eq!(prepared.chapters[0].references[0].sentence_index, 0);
+        assert_eq!(
+            prepared.chapters[0].references[0].offset,
+            "First sentence.".len()
+        );
     }
 }

@@ -5,6 +5,7 @@
 - application workflows connecting domain events to reader-facing projections
 - library import reactions, reader opening and closing, navigation, playback, settings, offline
   narration, word insight, export, and search
+- whole-book narration readiness and duration, paragraph, or chapter session limits
 - serial delivery of desktop EPUB open requests into the library import workflow
 - lifecycle subscription and cleanup behind small application interfaces
 - typography and reading-color selection, projection, and preference persistence
@@ -32,6 +33,11 @@ used by dialogs and drag and drop.
 Closing a reader flushes and awaits the latest reading-position save before playback stops. An
 independent `ReaderClosed` listener then refreshes the library projection, so collection cards show
 the position that was just persisted rather than the position from when the book was opened.
+
+The whole-book preparation application hydrates chapter bodies only after an explicit request,
+projects native cache summaries, and cancels owned preparation on cleanup. Session controls react to
+playback boundary events and ask playback orchestration to stop; they never manipulate an audio
+element directly.
 
 ## Domain Events
 

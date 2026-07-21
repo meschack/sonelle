@@ -13,7 +13,8 @@ use tauri::{AppHandle, Manager};
 use crate::error_log::record_native_error;
 use crate::kokoro_manifest::render_kokoro_manifest_with_options;
 use crate::narration_cache::{
-    NarrationAssetCache, NarrationCacheStats, NarrationSentenceSpan, PreparedNarrationManifest,
+    NarrationAssetCache, NarrationCacheStats, NarrationChapterCacheStats, NarrationSentenceSpan,
+    PreparedNarrationManifest,
 };
 use crate::narration_engine_pack::{
     engine_installation_path, engine_is_ready, engine_model_revision,
@@ -281,6 +282,19 @@ pub fn manifest_cache_summary(
     book_id: &str,
 ) -> Result<NarrationCacheStats, String> {
     NarrationAssetCache::open(manifest_cache_root(app)?).book_stats(book_id)
+}
+
+pub fn manifest_chapter_cache_summary(
+    app: &AppHandle,
+    book_id: &str,
+    voice_id: &str,
+    model_revision: &str,
+) -> Result<Vec<NarrationChapterCacheStats>, String> {
+    NarrationAssetCache::open(manifest_cache_root(app)?).chapter_stats(
+        book_id,
+        voice_id,
+        model_revision,
+    )
 }
 
 pub fn clear_manifest_cache(app: &AppHandle, book_id: &str) -> Result<NarrationCacheStats, String> {

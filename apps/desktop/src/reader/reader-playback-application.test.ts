@@ -58,6 +58,18 @@ describe("reader playback application", () => {
     harness.application.dispose();
   });
 
+  it("does not hand off chapters when the active session limit blocks it", async () => {
+    vi.useFakeTimers();
+    const harness = createHarness({ allowsChapterTransition: () => false });
+    harness.setPlayback({ activeSentenceIndex: 0, status: "ended" });
+
+    harness.application.autoAdvanceChanged();
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(harness.advanceChapter).not.toHaveBeenCalled();
+    harness.application.dispose();
+  });
+
   it("resets old narration before continuing an automatic chapter handoff", async () => {
     vi.useFakeTimers();
     const harness = createHarness({ reactToReaderActivation: true });
@@ -133,6 +145,7 @@ function createHarness(
   options: {
     reactToReaderActivation?: boolean;
     savePosition?: (position: SaveReadingPositionInput) => Promise<void>;
+    allowsChapterTransition?: () => boolean;
   } = {}
 ) {
   let currentReader: ReaderView = { ...buildFixtureReaderView(), source: "library" };
@@ -169,6 +182,7 @@ function createHarness(
       currentSettings: () => currentSettings,
       narrationAudible: () => currentAudible,
       narrationReadinessMessage: () => null,
+      allowsChapterTransition: options.allowsChapterTransition ?? (() => true),
       projectPlayback: (update) => {
         currentPlayback = update(currentPlayback);
       },

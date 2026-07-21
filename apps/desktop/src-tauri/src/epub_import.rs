@@ -34,6 +34,16 @@ pub struct ImportedChapter {
     pub title: String,
     pub index: usize,
     pub body: String,
+    pub references: Vec<ImportedReference>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportedReference {
+    pub id: String,
+    pub offset: usize,
+    pub marker: String,
+    pub kind: String,
+    pub content: String,
 }
 
 #[derive(Debug)]
@@ -110,6 +120,14 @@ pub fn import_epub_file(path: &Path) -> Result<ImportedBook, ImportError> {
     let package = parse_package(&opf, &opf_path).ok_or(ImportError::MissingPackage)?;
     let navigation_titles = read_navigation_titles(&mut archive, &package);
     let cover_image = read_cover_image(&mut archive, &package);
+    let readable_documents = package
+        .manifest
+        .values()
+        .filter_map(|item| {
+            let path = normalize_epub_path(&package.base_dir, &item.href);
+            read_zip_text(&mut archive, &path).map(|xml| (path, xml))
+        })
+        .collect::<HashMap<_, _>>();
     let mut chapters = Vec::new();
 
     for (chapter_index, item) in package.spine.iter().enumerate() {
@@ -121,15 +139,20 @@ pub fn import_epub_file(path: &Path) -> Result<ImportedBook, ImportError> {
             continue;
         };
         let chapter_path = normalize_epub_path(&package.base_dir, &manifest_item.href);
-        let Some(chapter_xml) = read_zip_text(&mut archive, &chapter_path) else {
+        let Some(chapter_xml) = readable_documents.get(&chapter_path) else {
             continue;
         };
-        let Ok(chapter_document) = parse_epub_xml(&chapter_xml) else {
+        let Ok(chapter_document) = parse_epub_xml(chapter_xml) else {
             continue;
         };
-        let text = extract_chapter_text_from_document(&chapter_document);
+        let extracted = extract_chapter_content(
+            &chapter_document,
+            &chapter_path,
+            &readable_documents,
+            &format!("{book_id}:chapter-{}", chapter_index + 1),
+        );
 
-        if text.is_empty() {
+        if extracted.body.is_empty() {
             continue;
         }
 
@@ -142,7 +165,8 @@ pub fn import_epub_file(path: &Path) -> Result<ImportedBook, ImportError> {
                 .or_else(|| first_text(&chapter_document, "title"))
                 .unwrap_or_else(|| format!("Chapter {}", chapter_index + 1)),
             index: chapter_index,
-            body: text,
+            body: extracted.body,
+            references: extracted.references,
         });
     }
 
@@ -503,20 +527,260 @@ fn extract_chapter_text(xml: &str) -> String {
     extract_chapter_text_from_document(&document)
 }
 
+#[cfg(test)]
 fn extract_chapter_text_from_document(document: &roxmltree::Document<'_>) -> String {
+    extract_chapter_content(document, "chapter.xhtml", &HashMap::new(), "chapter").body
+}
+
+struct ExtractedChapterContent {
+    body: String,
+    references: Vec<ImportedReference>,
+}
+
+fn extract_chapter_content(
+    document: &roxmltree::Document<'_>,
+    chapter_path: &str,
+    readable_documents: &HashMap<String, String>,
+    chapter_id: &str,
+) -> ExtractedChapterContent {
     let body = document
         .descendants()
         .find(|node| node.tag_name().name() == "body")
         .unwrap_or_else(|| document.root_element());
-    let blocks = collect_reading_blocks(body);
+    let block_nodes = collect_reading_block_nodes(body);
 
-    if blocks.is_empty() {
+    if block_nodes.is_empty() {
         let mut text = String::new();
         collect_text(body, &mut text);
-        return normalize_reader_text(&text);
+        return ExtractedChapterContent {
+            body: normalize_reader_text(&text),
+            references: Vec::new(),
+        };
     }
 
-    normalize_reader_paragraphs(&blocks.join("\n\n"))
+    let mut blocks = Vec::new();
+    let mut references = Vec::new();
+    for block in block_nodes {
+        let extracted = extract_reading_block(block, chapter_path, readable_documents);
+        if extracted.text.is_empty() {
+            continue;
+        }
+        let block_offset = blocks.iter().map(String::len).sum::<usize>() + blocks.len() * 2;
+        for reference in extracted.references {
+            let index = references.len();
+            references.push(ImportedReference {
+                id: format!("{chapter_id}:reference-{}", index + 1),
+                offset: block_offset + reference.offset,
+                marker: reference.marker,
+                kind: reference.kind,
+                content: reference.content,
+            });
+        }
+        blocks.push(extracted.text);
+    }
+
+    ExtractedChapterContent {
+        body: normalize_reader_paragraphs(&blocks.join("\n\n")),
+        references,
+    }
+}
+
+struct ExtractedReadingBlock {
+    text: String,
+    references: Vec<ExtractedReference>,
+}
+
+struct ExtractedReference {
+    offset: usize,
+    marker: String,
+    kind: String,
+    content: String,
+}
+
+fn extract_reading_block(
+    block: roxmltree::Node<'_, '_>,
+    chapter_path: &str,
+    readable_documents: &HashMap<String, String>,
+) -> ExtractedReadingBlock {
+    let mut annotated = String::new();
+    let mut resolved = Vec::new();
+    collect_annotated_text(
+        block,
+        chapter_path,
+        readable_documents,
+        &mut annotated,
+        &mut resolved,
+    );
+    let normalized = normalize_reader_text(&annotated);
+    let mut text = String::new();
+    let mut references = Vec::new();
+    let mut remaining = normalized.as_str();
+
+    while let Some(start) = remaining.find('\u{e000}') {
+        text.push_str(&remaining[..start]);
+        let after_start = &remaining[start + '\u{e000}'.len_utf8()..];
+        let Some(end) = after_start.find('\u{e001}') else {
+            text.push_str(&remaining[start..]);
+            remaining = "";
+            break;
+        };
+        if let Ok(index) = after_start[..end].parse::<usize>() {
+            if let Some(reference) = resolved.get(index) {
+                references.push(ExtractedReference {
+                    offset: text.len(),
+                    marker: reference.marker.clone(),
+                    kind: reference.kind.clone(),
+                    content: reference.content.clone(),
+                });
+            }
+        }
+        remaining = &after_start[end + '\u{e001}'.len_utf8()..];
+    }
+    text.push_str(remaining);
+
+    ExtractedReadingBlock { text, references }
+}
+
+fn collect_annotated_text(
+    node: roxmltree::Node<'_, '_>,
+    chapter_path: &str,
+    readable_documents: &HashMap<String, String>,
+    text: &mut String,
+    references: &mut Vec<ResolvedReference>,
+) {
+    if should_skip_text_node(node) {
+        return;
+    }
+    if node.is_element() && node.tag_name().name() == "a" {
+        if let Some(reference) = resolve_reference(node, chapter_path, readable_documents) {
+            let index = references.len();
+            references.push(reference);
+            text.push_str(&format!("\u{e000}{index}\u{e001}"));
+            return;
+        }
+    }
+    if node.is_text() {
+        if let Some(value) = node.text() {
+            text.push(' ');
+            text.push_str(value);
+        }
+    }
+    for child in node.children() {
+        collect_annotated_text(child, chapter_path, readable_documents, text, references);
+    }
+}
+
+struct ResolvedReference {
+    marker: String,
+    kind: String,
+    content: String,
+}
+
+fn resolve_reference(
+    anchor: roxmltree::Node<'_, '_>,
+    chapter_path: &str,
+    readable_documents: &HashMap<String, String>,
+) -> Option<ResolvedReference> {
+    let href = anchor.attribute("href")?;
+    let (path, fragment) = href.split_once('#')?;
+    if fragment.is_empty() {
+        return None;
+    }
+    let target_path = if path.is_empty() {
+        chapter_path.to_string()
+    } else {
+        normalize_epub_path(&epub_parent(chapter_path), path)
+    };
+    let target_xml = readable_documents.get(&target_path)?;
+    let target_document = parse_epub_xml(target_xml).ok()?;
+    let target_id = percent_decode_path(fragment);
+    let target = target_document
+        .descendants()
+        .find(|node| node.attribute("id") == Some(target_id.as_str()))?;
+    let content = normalize_reader_text(&reference_target_text(target));
+    if content.is_empty() {
+        return None;
+    }
+    let marker = normalize_reader_text(&node_text(anchor));
+    let kind = reference_kind(anchor, target)
+        .or_else(|| infer_legacy_reference_kind(anchor, &marker, &target_path))?;
+
+    Some(ResolvedReference {
+        marker: if marker.is_empty() {
+            "Note".to_string()
+        } else {
+            marker
+        },
+        kind,
+        content,
+    })
+}
+
+fn infer_legacy_reference_kind(
+    anchor: roxmltree::Node<'_, '_>,
+    marker: &str,
+    target_path: &str,
+) -> Option<String> {
+    let path = target_path.to_ascii_lowercase();
+    if path.contains("biblio") || path.contains("citation") || path.contains("reference") {
+        return Some("citation".to_string());
+    }
+    if path.contains("endnote") {
+        return Some("endnote".to_string());
+    }
+    if path.contains("footnote") || path.contains("notes") {
+        return Some("footnote".to_string());
+    }
+
+    let compact_marker = marker.chars().count() <= 8
+        && marker
+            .chars()
+            .all(|character| character.is_ascii_digit() || "[]()*†‡".contains(character));
+    let superscript = anchor
+        .descendants()
+        .any(|node| matches!(node.tag_name().name(), "sup" | "sub"));
+    (compact_marker && superscript).then(|| "footnote".to_string())
+}
+
+fn reference_kind(
+    anchor: roxmltree::Node<'_, '_>,
+    target: roxmltree::Node<'_, '_>,
+) -> Option<String> {
+    for (token, kind) in [
+        ("footnote", "footnote"),
+        ("endnote", "endnote"),
+        ("rearnote", "endnote"),
+        ("citation", "citation"),
+        ("biblioref", "citation"),
+        ("noteref", "footnote"),
+        ("note", "note"),
+    ] {
+        if has_epub_type(&anchor, token) || has_epub_type(&target, token) {
+            return Some(kind.to_string());
+        }
+    }
+    (target.tag_name().name() == "aside").then(|| "note".to_string())
+}
+
+fn reference_target_text(target: roxmltree::Node<'_, '_>) -> String {
+    let mut text = String::new();
+    collect_reference_text(target, &mut text);
+    text
+}
+
+fn collect_reference_text(node: roxmltree::Node<'_, '_>, text: &mut String) {
+    if node.is_element() && node.tag_name().name() == "a" && has_epub_type(&node, "backlink") {
+        return;
+    }
+    if node.is_text() {
+        if let Some(value) = node.text() {
+            text.push(' ');
+            text.push_str(value);
+        }
+    }
+    for child in node.children() {
+        collect_reference_text(child, text);
+    }
 }
 
 fn first_heading(document: &roxmltree::Document<'_>) -> Option<String> {
@@ -561,15 +825,14 @@ fn collect_text(node: roxmltree::Node<'_, '_>, text: &mut String) {
     }
 }
 
-fn collect_reading_blocks(root: roxmltree::Node<'_, '_>) -> Vec<String> {
+fn collect_reading_block_nodes<'a, 'input>(
+    root: roxmltree::Node<'a, 'input>,
+) -> Vec<roxmltree::Node<'a, 'input>> {
     root.descendants()
         .filter(|node| node.is_element())
         .filter(|node| is_reading_block(*node))
         .filter(|node| !should_skip_text_node(*node))
         .filter(|node| !has_reading_block_ancestor(*node, root))
-        .map(node_text)
-        .map(|text| normalize_reader_text(&text))
-        .filter(|text| !text.is_empty())
         .collect()
 }
 
@@ -998,6 +1261,70 @@ mod tests {
         assert_eq!(book.chapters[0].body, "Hello reader.");
         assert_eq!(book.chapters[1].title, "Encoded Path");
         assert_eq!(book.chapters[1].body, "Second readable chapter.");
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn imports_cross_document_epub_footnotes_without_polluting_reading_text() {
+        let temp_dir = temp_epub_dir();
+        fs::create_dir_all(&temp_dir).expect("temp dir should be created");
+        let epub_path = temp_dir.join("References.epub");
+        write_epub(
+            &epub_path,
+            [
+                (
+                    "META-INF/container.xml",
+                    r#"<container><rootfiles><rootfile full-path="EPUB/content.opf" /></rootfiles></container>"#,
+                ),
+                (
+                    "EPUB/content.opf",
+                    r#"<package xmlns:dc="http://purl.org/dc/elements/1.1/">
+                      <metadata><dc:title>References</dc:title></metadata>
+                      <manifest>
+                        <item id="c1" href="text/chapter.xhtml" media-type="application/xhtml+xml" />
+                        <item id="notes" href="notes.xhtml" media-type="application/xhtml+xml" />
+                      </manifest>
+                      <spine><itemref idref="c1" /><itemref idref="notes" linear="no" /></spine>
+                    </package>"#,
+                ),
+                (
+                    "EPUB/text/chapter.xhtml",
+                    r#"<html xmlns:epub="http://www.idpf.org/2007/ops"><body>
+                      <p>A careful claim<a epub:type="noteref" href="../notes.xhtml#note-1">1</a> continues.</p>
+                      <p>A legacy claim<a href="../notes.xhtml#note-2"><sup>2</sup></a> remains readable.</p>
+                    </body></html>"#,
+                ),
+                (
+                    "EPUB/notes.xhtml",
+                    r#"<html xmlns:epub="http://www.idpf.org/2007/ops"><body>
+                      <aside id="note-1" epub:type="footnote"><p>The source explains the claim.</p></aside>
+                      <p id="note-2">An older EPUB note without semantic attributes.</p>
+                    </body></html>"#,
+                ),
+            ],
+        );
+
+        let book = import_epub_file(&epub_path).expect("epub should import");
+        let chapter = &book.chapters[0];
+
+        assert_eq!(
+            chapter.body,
+            "A careful claim continues.\n\nA legacy claim remains readable."
+        );
+        assert_eq!(chapter.references.len(), 2);
+        assert_eq!(chapter.references[0].marker, "1");
+        assert_eq!(chapter.references[0].kind, "footnote");
+        assert_eq!(
+            chapter.references[0].content,
+            "The source explains the claim."
+        );
+        assert_eq!(chapter.references[1].marker, "2");
+        assert_eq!(chapter.references[1].kind, "footnote");
+        assert_eq!(
+            chapter.references[1].content,
+            "An older EPUB note without semantic attributes."
+        );
 
         fs::remove_dir_all(temp_dir).ok();
     }

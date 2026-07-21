@@ -2,6 +2,7 @@ import {
   createContext,
   createEffect,
   createMemo,
+  createSignal,
   For,
   onCleanup,
   onMount,
@@ -15,16 +16,41 @@ import { tokenizeReaderText, type ReaderTextToken } from "@sonelle/text";
 import { DictionaryStatus } from "./reader-feedback";
 import type { SelectedWord } from "./reader-experience-types";
 import type { ReaderParagraphView, ReaderSentenceView } from "./reader-view";
+import type { ReaderReferenceDto } from "../library/library-models";
 
-const tokenCache = new WeakMap<ReaderSentenceView, ReaderTextToken[]>();
+type SentenceDisplayItem =
+  { kind: "token"; token: ReaderTextToken } | { kind: "reference"; reference: ReaderReferenceDto };
 
-function tokensForSentence(sentence: ReaderSentenceView): ReaderTextToken[] {
-  const existing = tokenCache.get(sentence);
+const displayItemCache = new WeakMap<ReaderSentenceView, SentenceDisplayItem[]>();
+
+function displayItemsForSentence(sentence: ReaderSentenceView): SentenceDisplayItem[] {
+  const existing = displayItemCache.get(sentence);
   if (existing != null) return existing;
 
-  const tokens = tokenizeReaderText(sentence.text);
-  tokenCache.set(sentence, tokens);
-  return tokens;
+  const references = [...(sentence.references ?? [])].sort(
+    (left, right) => left.offset - right.offset
+  );
+  const items: SentenceDisplayItem[] = [];
+  let textOffset = 0;
+  let tokenOffset = 0;
+  const appendText = (text: string) => {
+    const tokens = tokenizeReaderText(text).map((token) => ({
+      ...token,
+      index: token.index + tokenOffset
+    }));
+    items.push(...tokens.map((token): SentenceDisplayItem => ({ kind: "token", token })));
+    tokenOffset += tokens.length;
+  };
+
+  for (const reference of references) {
+    const offset = Math.max(textOffset, Math.min(sentence.text.length, reference.offset));
+    appendText(sentence.text.slice(textOffset, offset));
+    items.push({ kind: "reference", reference });
+    textOffset = offset;
+  }
+  appendText(sentence.text.slice(textOffset));
+  displayItemCache.set(sentence, items);
+  return items;
 }
 
 export interface ReaderContentInteractions {
@@ -102,20 +128,26 @@ export function ReaderParagraph(props: ReaderParagraphProps) {
               onClick={() => interactions.selectSentence(sentence.index)}
             >
               <span class="sentence-line">
-                <For each={tokensForSentence(sentence)}>
-                  {(token) => (
-                    <SentenceToken
-                      token={token}
-                      sentence={sentence}
-                      selected={isSelectedWord(sentence.id, token)}
-                      insight={
-                        isSelectedWord(sentence.id, token) ? interactions.activeWordInsight() : null
-                      }
-                      onSelect={interactions.selectWord}
-                      onClear={interactions.clearWord}
-                      onSave={interactions.saveWord}
-                    />
-                  )}
+                <For each={displayItemsForSentence(sentence)}>
+                  {(item) =>
+                    item.kind === "reference" ? (
+                      <ReferenceButton reference={item.reference} />
+                    ) : (
+                      <SentenceToken
+                        token={item.token}
+                        sentence={sentence}
+                        selected={isSelectedWord(sentence.id, item.token)}
+                        insight={
+                          isSelectedWord(sentence.id, item.token)
+                            ? interactions.activeWordInsight()
+                            : null
+                        }
+                        onSelect={interactions.selectWord}
+                        onClear={interactions.clearWord}
+                        onSave={interactions.saveWord}
+                      />
+                    )
+                  }
                 </For>
               </span>
             </span>
@@ -124,6 +156,115 @@ export function ReaderParagraph(props: ReaderParagraphProps) {
       </For>
     </p>
   );
+}
+
+function ReferenceButton(props: { reference: ReaderReferenceDto }) {
+  const [open, setOpen] = createSignal(false);
+  let anchorElement: HTMLButtonElement | undefined;
+  const label = referenceKindLabel(props.reference.kind);
+
+  return (
+    <>
+      <button
+        ref={(element) => {
+          anchorElement = element;
+        }}
+        class="reader-reference-button"
+        type="button"
+        aria-label={`Open ${label.toLowerCase()} ${props.reference.marker}`}
+        aria-expanded={open()}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen((current) => !current);
+        }}
+      >
+        <sup>{props.reference.marker}</sup>
+      </button>
+      <Show when={open()}>
+        <Portal>
+          <ReferencePopover
+            anchorElement={anchorElement}
+            reference={props.reference}
+            onClose={() => setOpen(false)}
+          />
+        </Portal>
+      </Show>
+    </>
+  );
+}
+
+function ReferencePopover(props: {
+  anchorElement: HTMLButtonElement | undefined;
+  reference: ReaderReferenceDto;
+  onClose(): void;
+}) {
+  let popoverElement: HTMLSpanElement | undefined;
+  const updatePosition = () => positionPopover(props.anchorElement, popoverElement);
+
+  onMount(() => {
+    const schedulePositionUpdate = () => queueMicrotask(updatePosition);
+    const closeFromOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        !(target instanceof Node) ||
+        popoverElement?.contains(target) ||
+        props.anchorElement?.contains(target)
+      ) {
+        return;
+      }
+      props.onClose();
+    };
+    const closeFromEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") props.onClose();
+    };
+
+    document.addEventListener("pointerdown", closeFromOutsidePointer, true);
+    document.addEventListener("keydown", closeFromEscape);
+    document.addEventListener("scroll", schedulePositionUpdate, true);
+    window.addEventListener("resize", schedulePositionUpdate);
+    schedulePositionUpdate();
+    onCleanup(() => {
+      document.removeEventListener("pointerdown", closeFromOutsidePointer, true);
+      document.removeEventListener("keydown", closeFromEscape);
+      document.removeEventListener("scroll", schedulePositionUpdate, true);
+      window.removeEventListener("resize", schedulePositionUpdate);
+    });
+  });
+
+  return (
+    <span
+      ref={(element) => {
+        popoverElement = element;
+      }}
+      class="reference-popover"
+      role="dialog"
+      aria-label={referenceKindLabel(props.reference.kind)}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <span class="reference-popover-heading">
+        <strong>{referenceKindLabel(props.reference.kind)}</strong>
+        <small>{props.reference.marker}</small>
+      </span>
+      <span>{props.reference.content}</span>
+      <button type="button" onClick={props.onClose}>
+        Close
+      </button>
+    </span>
+  );
+}
+
+function referenceKindLabel(kind: ReaderReferenceDto["kind"]): string {
+  switch (kind) {
+    case "footnote":
+      return "Footnote";
+    case "endnote":
+      return "Endnote";
+    case "citation":
+      return "Citation";
+    case "note":
+      return "Note";
+  }
 }
 
 interface SentenceTokenProps {
@@ -294,4 +435,25 @@ function WordPopover(props: WordPopoverProps) {
       </span>
     </span>
   );
+}
+
+function positionPopover(anchor: HTMLElement | undefined, popover: HTMLElement | undefined): void {
+  if (anchor == null || popover == null) return;
+
+  const anchorRect = anchor.getBoundingClientRect();
+  const popoverRect = popover.getBoundingClientRect();
+  const edgePadding = 16;
+  const gap = 12;
+  const maxLeft = Math.max(edgePadding, window.innerWidth - popoverRect.width - edgePadding);
+  const centeredLeft = anchorRect.left + (anchorRect.width - popoverRect.width) / 2;
+  const left = Math.min(maxLeft, Math.max(edgePadding, centeredLeft));
+  const belowTop = anchorRect.bottom + gap;
+  const aboveTop = anchorRect.top - popoverRect.height - gap;
+  const top =
+    belowTop + popoverRect.height <= window.innerHeight - edgePadding || aboveTop < edgePadding
+      ? Math.min(belowTop, window.innerHeight - popoverRect.height - edgePadding)
+      : aboveTop;
+
+  popover.style.left = `${left}px`;
+  popover.style.top = `${Math.max(edgePadding, top)}px`;
 }

@@ -533,7 +533,7 @@ describe("ReaderExperience integration", () => {
     clickInspectorTab(container, "Tools");
     expect(container.querySelector('[aria-label="Narration speed"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Book content font"]')).not.toBeNull();
-    expect(container.textContent).toContain("Prepared audio for this book");
+    expect(container.textContent).toContain("Offline readiness");
     expect(container.textContent).not.toContain("Diagnostics");
 
     dispose();
@@ -568,8 +568,58 @@ describe("ReaderExperience integration", () => {
     await vi.waitFor(() => expect(getAudioCacheStats).toHaveBeenCalledOnce());
     expect(getAudioCacheStats).toHaveBeenCalledWith(buildFixtureReaderView().book.id);
     expect(container.textContent).not.toContain("Narration needs attention");
+    expect(container.textContent).toContain("8sentences prepared");
+    expect(container.textContent).toContain("6.5 MBstored audio");
+    expect(container.textContent).not.toContain("8 of 0 sentences");
 
     dispose();
+    container.remove();
+  });
+
+  it("opens imported EPUB references in a reader popover", async () => {
+    const openBook = vi.fn(async () => {
+      const document = createReaderDocument("book-reference");
+      document.chapters[0].references = [
+        {
+          id: "reference-1",
+          sentenceId: "book-reference-sentence",
+          sentenceIndex: 0,
+          offset: 23,
+          marker: "1",
+          kind: "footnote",
+          content: "A compact explanation from the EPUB."
+        }
+      ];
+      return document;
+    });
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      libraryBooks: [createLibraryBook("book-reference", "Referenced Book", 0)],
+      openBook
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    const referenceButton = await vi.waitFor(() => {
+      const button = container.querySelector<HTMLButtonElement>(".reader-reference-button");
+      expect(button).not.toBeNull();
+      return button;
+    });
+    referenceButton?.click();
+
+    await vi.waitFor(() =>
+      expect(document.querySelector(".reference-popover")?.textContent).toContain(
+        "A compact explanation from the EPUB."
+      )
+    );
+
+    dispose();
+    document.querySelector(".reference-popover")?.remove();
     container.remove();
   });
 
@@ -697,6 +747,7 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
     audioCacheRepository: {
       getStats:
         spies.getAudioCacheStats ?? vi.fn().mockResolvedValue({ sentenceCount: 0, sizeBytes: 0 }),
+      getChapterStats: vi.fn().mockResolvedValue([]),
       clear: vi.fn().mockResolvedValue({ sentenceCount: 0, sizeBytes: 0 })
     },
     audioSettingsRepository: {
@@ -761,7 +812,9 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       activateSettings: (settings) => settings,
       voices: () => SUPPORTED_NARRATION_VOICES,
       observeEngineInstallation: vi.fn(),
-      createWorkflow: () => narrationWorkflow
+      createWorkflow: () => narrationWorkflow,
+      bookIdentity: () => ({ voiceId: "voice-1", modelRevision: "test-revision" }),
+      prepareBook: vi.fn().mockResolvedValue({ sentenceCount: 0 })
     },
     paragraphImageExporter: {
       export: spies.exportParagraphImage ?? vi.fn().mockResolvedValue("paragraph.png")

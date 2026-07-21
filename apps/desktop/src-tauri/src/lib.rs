@@ -77,6 +77,7 @@ pub fn run() {
             commands::delete_bookmark,
             commands::export_book_data,
             commands::get_audio_cache_stats,
+            commands::get_narration_chapter_cache_stats,
             commands::get_narration_engine_status,
             book_open_request::take_pending_book_open_requests,
             commands::import_epub,

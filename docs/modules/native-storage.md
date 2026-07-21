@@ -3,7 +3,7 @@
 ## Owns
 
 - SQLite schema, migrations, transactions, and durable library projections
-- local cover assets and reading-data queries
+- local cover assets, EPUB reference projections, and reading-data queries
 
 ## Refuses To Own
 
@@ -17,6 +17,9 @@
 
 The `.readex` application-data directory is retained as an intentional compatibility path for
 existing local libraries. New user-facing naming remains Sonelle.
+
+Chapter references are stored as a compact JSON projection beside chapter metadata. Normal reader
+queries load them only for the active chapter; export queries hydrate every chapter.
 
 ## Domain Events
 

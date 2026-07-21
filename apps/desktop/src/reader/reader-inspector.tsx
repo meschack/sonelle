@@ -13,6 +13,11 @@ import { formatBytes } from "./reader-formatting";
 import { DictionaryStatus, StateBlock } from "./reader-feedback";
 import type { InspectorTab } from "./reader-experience-types";
 import type { ReaderSentenceView } from "./reader-view";
+import type {
+  BookNarrationProgressView,
+  BookNarrationReadiness
+} from "./reader-book-narration-preparation";
+import type { ReaderSessionLimit } from "./reader-session-control-application";
 import {
   BookmarkIcon,
   CheckIcon,
@@ -308,6 +313,10 @@ export interface ReaderSettingsInspectorModel {
   systemFontFamilies: readonly string[];
   audioCacheStats: PreparedAudioView | null;
   audioCacheNotice: string | null;
+  bookNarrationReadiness: BookNarrationReadiness | null;
+  bookNarrationProgress: BookNarrationProgressView | null;
+  sessionLimit: ReaderSessionLimit;
+  canPrepareBook: boolean;
   exportNotice: string | null;
   onAudioSettingsChange: (settings: Partial<AudioSettings>) => void;
   onInstallVoice: () => void;
@@ -321,6 +330,9 @@ export interface ReaderSettingsInspectorModel {
   onResetAudioSettings: () => void;
   onRefreshCache: () => void;
   onClearCache: () => void;
+  onPrepareBook: () => void;
+  onCancelBookPreparation: () => void;
+  onSessionLimitChange: (limit: ReaderSessionLimit) => void;
   onExportBook: () => void;
 }
 
@@ -412,25 +424,18 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
           onRefresh={props.onRefreshEngines}
         />
       </Show>
-      <div class="tool-card">
-        <span class="inspector-section-title">Prepared audio for this book</span>
-        <p>
-          {props.audioCacheStats == null
-            ? "Checking prepared audio"
-            : `${props.audioCacheStats.sentenceCount} sentence${props.audioCacheStats.sentenceCount === 1 ? "" : "s"} · ${formatBytes(props.audioCacheStats.sizeBytes)}`}
-        </p>
-        <div class="dictionary-actions">
-          <button type="button" onClick={() => props.onRefreshCache()}>
-            Refresh
-          </button>
-          <button type="button" onClick={props.onClearCache}>
-            Clear
-          </button>
-        </div>
-        <Show when={props.audioCacheNotice}>
-          {(notice) => <p class="library-notice">{notice()}</p>}
-        </Show>
-      </div>
+      <SessionControls limit={props.sessionLimit} onChange={props.onSessionLimitChange} />
+      <BookReadinessPanel
+        readiness={props.bookNarrationReadiness}
+        progress={props.bookNarrationProgress}
+        canPrepare={props.canPrepareBook}
+        fallbackStats={props.audioCacheStats}
+        notice={props.audioCacheNotice}
+        onPrepare={props.onPrepareBook}
+        onCancel={props.onCancelBookPreparation}
+        onRefresh={props.onRefreshCache}
+        onClear={props.onClearCache}
+      />
       <div class="tool-card">
         <span class="inspector-section-title">Data management</span>
         <button class="primary-tool-button" type="button" onClick={props.onExportBook}>
@@ -441,6 +446,194 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
         </Show>
       </div>
     </section>
+  );
+}
+
+const sessionControlOptions: readonly EnhancedSelectOption[] = [
+  { id: "off", label: "Off", description: "Keep narrating", meta: "No limit" },
+  { id: "duration:15", label: "15 minutes", description: "Stop after 15 minutes", meta: "Timer" },
+  { id: "duration:30", label: "30 minutes", description: "Stop after 30 minutes", meta: "Timer" },
+  { id: "duration:45", label: "45 minutes", description: "Stop after 45 minutes", meta: "Timer" },
+  { id: "duration:60", label: "1 hour", description: "Stop after 60 minutes", meta: "Timer" },
+  {
+    id: "paragraph",
+    label: "End of paragraph",
+    description: "Finish the current paragraph",
+    meta: "Natural stop"
+  },
+  {
+    id: "chapter",
+    label: "End of chapter",
+    description: "Finish the current chapter",
+    meta: "Natural stop"
+  }
+];
+
+function SessionControls(props: {
+  limit: ReaderSessionLimit;
+  onChange(limit: ReaderSessionLimit): void;
+}) {
+  const value = () =>
+    props.limit.kind === "duration" ? `duration:${props.limit.durationMinutes}` : props.limit.kind;
+  return (
+    <EnhancedSelect
+      label="Sleep and session"
+      ariaLabel="Narration stop setting"
+      value={value()}
+      options={sessionControlOptions}
+      triggerMeta="Listening session"
+      icon={HeadphonesIcon}
+      onChange={(next) => props.onChange(parseSessionLimit(next))}
+    />
+  );
+}
+
+function parseSessionLimit(value: string): ReaderSessionLimit {
+  if (value === "paragraph" || value === "chapter" || value === "off") {
+    return { kind: value };
+  }
+  const durationMinutes = Number(value.split(":")[1]);
+  return {
+    kind: "duration",
+    durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : 30
+  };
+}
+
+function BookReadinessPanel(props: {
+  readiness: BookNarrationReadiness | null;
+  progress: BookNarrationProgressView | null;
+  canPrepare: boolean;
+  fallbackStats: PreparedAudioView | null;
+  notice: string | null;
+  onPrepare(): void;
+  onCancel(): void;
+  onRefresh(): void;
+  onClear(): void;
+}) {
+  const isPreparing = () => props.progress != null;
+  const preparedSentenceCount = () =>
+    props.readiness?.preparedSentenceCount ?? props.fallbackStats?.sentenceCount ?? 0;
+  const totalSentenceCount = () => props.readiness?.totalSentenceCount;
+  const storedSize = () => props.readiness?.sizeBytes ?? props.fallbackStats?.sizeBytes ?? 0;
+  const progressValue = () =>
+    (totalSentenceCount() ?? 0) > 0
+      ? Math.min(100, Math.round((preparedSentenceCount() / (totalSentenceCount() ?? 1)) * 100))
+      : 0;
+  const isReady = () =>
+    (totalSentenceCount() ?? 0) > 0 && preparedSentenceCount() >= (totalSentenceCount() ?? 0);
+  const status = () => {
+    if (isPreparing()) return { label: "Preparing", className: "preparing" };
+    if (!props.canPrepare) return { label: "Unavailable", className: "unavailable" };
+    if (props.readiness == null) return { label: "Checking", className: "checking" };
+    if (isReady()) return { label: "Ready", className: "ready" };
+    if (preparedSentenceCount() > 0) return { label: "Partly ready", className: "partial" };
+    return { label: "Not prepared", className: "unavailable" };
+  };
+  const prepareLabel = () => {
+    if (!props.canPrepare) return "Preparation unavailable";
+    return isReady() ? "Entire book ready" : "Prepare entire book";
+  };
+
+  return (
+    <div class="tool-card book-readiness-card">
+      <div class="book-readiness-heading">
+        <span class="inspector-section-title">Offline readiness</span>
+        <span class={`book-readiness-state ${status().className}`}>{status().label}</span>
+      </div>
+      <div class="book-readiness-summary">
+        <span class="book-readiness-metric">
+          <strong>
+            <Show
+              when={totalSentenceCount() != null}
+              fallback={preparedSentenceCount().toLocaleString()}
+            >
+              {preparedSentenceCount().toLocaleString()} /{" "}
+              {(totalSentenceCount() ?? 0).toLocaleString()}
+            </Show>
+          </strong>
+          <small>{totalSentenceCount() == null ? "sentences prepared" : "sentences ready"}</small>
+        </span>
+        <span class="book-readiness-metric">
+          <strong>{formatBytes(storedSize())}</strong>
+          <small>stored audio</small>
+        </span>
+      </div>
+      <Show
+        when={(totalSentenceCount() ?? 0) > 0}
+        fallback={
+          <Show when={props.canPrepare}>
+            <div class="book-readiness-progress checking" aria-live="polite">
+              <progress aria-label="Checking book narration readiness" />
+              <small>Checking chapter readiness...</small>
+            </div>
+          </Show>
+        }
+      >
+        <div class="book-readiness-progress">
+          <span>
+            <small>Book progress</small>
+            <strong>{progressValue()}%</strong>
+          </span>
+          <progress aria-label="Book narration readiness" max="100" value={progressValue()} />
+        </div>
+      </Show>
+      <Show when={(props.readiness?.estimatedSizeBytes ?? 0) > storedSize()}>
+        <small class="book-readiness-estimate">
+          Estimated full book: {formatBytes(props.readiness?.estimatedSizeBytes ?? 0)}
+        </small>
+      </Show>
+      <Show
+        when={isPreparing()}
+        fallback={
+          <button
+            class="primary-tool-button"
+            type="button"
+            disabled={!props.canPrepare || isReady()}
+            onClick={props.onPrepare}
+          >
+            {prepareLabel()}
+          </button>
+        }
+      >
+        <button class="secondary-tool-button" type="button" onClick={props.onCancel}>
+          Cancel preparation
+        </button>
+      </Show>
+      <Show when={(props.readiness?.chapters.length ?? 0) > 0}>
+        <div class="book-readiness-list" role="list" aria-label="Chapter narration readiness">
+          <For each={props.readiness?.chapters ?? []}>
+            {(chapter, index) => (
+              <div class="book-readiness-row" role="listitem">
+                <span>
+                  <strong>
+                    {index() + 1}. {chapter.title}
+                  </strong>
+                  <small>
+                    {chapter.preparedSentenceCount} of {chapter.totalSentenceCount} sentences
+                  </small>
+                </span>
+                <span class={`readiness-badge ${chapter.status}`}>
+                  {chapter.status === "ready"
+                    ? "Ready"
+                    : chapter.status === "preparing"
+                      ? "Preparing"
+                      : "Unavailable"}
+                </span>
+              </div>
+            )}
+          </For>
+        </div>
+      </Show>
+      <div class="book-readiness-actions" aria-label="Prepared audio maintenance">
+        <button class="secondary-tool-button" type="button" onClick={props.onRefresh}>
+          Refresh
+        </button>
+        <button class="secondary-tool-button mini-danger" type="button" onClick={props.onClear}>
+          Clear audio
+        </button>
+      </div>
+      <Show when={props.notice}>{(notice) => <p class="library-notice">{notice()}</p>}</Show>
+    </div>
   );
 }
 

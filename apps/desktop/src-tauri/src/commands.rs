@@ -8,13 +8,15 @@ use crate::audio::{
     SentenceAudioRequest,
 };
 use crate::library_import::prepare_epub_import;
+use crate::narration_cache::NarrationChapterCacheStats;
 use crate::narration_engine_pack::{
     engine_status, install_engine, NarrationEngineInstallationStatus,
 };
 use crate::narration_manifest::{
     cancel_manifest_narration as cancel_manifest_narration_request, clear_manifest_cache,
-    manifest_cache_summary, prepare_manifest_narration as prepare_manifest_narration_asset,
-    ManifestNarrationRequest, PreparedManifestNarration,
+    manifest_cache_summary, manifest_chapter_cache_summary,
+    prepare_manifest_narration as prepare_manifest_narration_asset, ManifestNarrationRequest,
+    PreparedManifestNarration,
 };
 
 #[tauri::command]
@@ -140,6 +142,19 @@ pub async fn get_audio_cache_stats(
 ) -> Result<AudioCacheStats, String> {
     run_blocking("audio-cache.summary", move || {
         book_audio_cache_summary(&app, &book_id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn get_narration_chapter_cache_stats(
+    app: AppHandle,
+    book_id: String,
+    voice_id: String,
+    model_revision: String,
+) -> Result<Vec<NarrationChapterCacheStats>, String> {
+    run_blocking("audio-cache.chapter-summary", move || {
+        manifest_chapter_cache_summary(&app, &book_id, &voice_id, &model_revision)
     })
     .await
 }

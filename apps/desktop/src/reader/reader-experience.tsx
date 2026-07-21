@@ -83,6 +83,15 @@ import {
 import { createReaderNavigationApplication } from "./reader-navigation-application";
 import { createReaderOpeningWorkflow } from "./reader-opening-workflow";
 import { createReaderPlaybackApplication } from "./reader-playback-application";
+import {
+  createReaderSessionControlApplication,
+  type ReaderSessionLimit
+} from "./reader-session-control-application";
+import {
+  createReaderBookNarrationPreparationApplication,
+  type BookNarrationProgressView,
+  type BookNarrationReadiness
+} from "./reader-book-narration-preparation";
 import { createReaderNarrationSettingsWorkflow } from "./reader-narration-settings-workflow";
 import { createReaderAppearanceWorkflow } from "./reader-appearance-workflow";
 import { createReaderTypographyWorkflow } from "./reader-typography-workflow";
@@ -231,6 +240,11 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   );
   const [audioCacheStats, setAudioCacheStats] = createSignal<PreparedAudioView | null>(null);
   const [audioCacheNotice, setAudioCacheNotice] = createSignal<string | null>(null);
+  const [bookNarrationReadiness, setBookNarrationReadiness] =
+    createSignal<BookNarrationReadiness | null>(null);
+  const [bookNarrationProgress, setBookNarrationProgress] =
+    createSignal<BookNarrationProgressView | null>(null);
+  const [sessionLimit, setSessionLimit] = createSignal<ReaderSessionLimit>({ kind: "off" });
   const [exportNotice, setExportNotice] = createSignal<string | null>(null);
   const [paragraphImageNotice, setParagraphImageNotice] = createSignal<ParagraphImageNotice | null>(
     null
@@ -325,6 +339,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       }
     }
   );
+  let allowsChapterTransition = () => true;
   const playbackApplication = createReaderPlaybackApplication(
     {
       narration: narrationWorkflow,
@@ -347,6 +362,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       currentPlayback: playback,
       currentSettings: audioSettings,
       narrationAudible,
+      allowsChapterTransition: () => allowsChapterTransition(),
       narrationReadinessMessage: () =>
         usesLanguagePacks
           ? offlineNarrationReadinessMessage(offlineNarrationProfiles(), reader().book.language)
@@ -381,6 +397,26 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       reportPositionError: () => setLibraryNotice("We couldn't save your place just now.")
     }
   );
+  const sessionControlApplication = createReaderSessionControlApplication(
+    {
+      eventDispatcher,
+      stopPlayback: () => playbackApplication.stop()
+    },
+    {
+      currentBookId: () => reader().book.id,
+      currentChapterId: () => reader().chapter.id,
+      paragraphEndSentenceIds: () =>
+        new Set(
+          reader().paragraphs.flatMap((paragraph) => {
+            const sentence = paragraph.sentences[paragraph.sentences.length - 1];
+            return sentence == null ? [] : [sentence.id];
+          })
+        ),
+      projectLimit: setSessionLimit,
+      projectNotice: setNarrationNotice
+    }
+  );
+  allowsChapterTransition = sessionControlApplication.allowsChapterTransition;
   const openingWorkflow = createReaderOpeningWorkflow(
     {
       eventDispatcher,
@@ -420,6 +456,23 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       },
       projectNarrationNotice: setNarrationNotice,
       projectVoiceInstallation: setVoiceInstallation
+    }
+  );
+  const bookNarrationPreparationApplication = createReaderBookNarrationPreparationApplication(
+    {
+      audioCache: dependencies.audioCacheRepository,
+      catalog: bookCatalog,
+      eventDispatcher,
+      narration: narrationService,
+      friendlyError: toFriendlyNarrationError
+    },
+    {
+      isAvailable: () => reader().source === "library",
+      currentBookId: () => reader().book.id,
+      currentVoiceId: () => audioSettings().voiceId,
+      projectReadiness: setBookNarrationReadiness,
+      projectProgress: setBookNarrationProgress,
+      projectNotice: setAudioCacheNotice
     }
   );
 
@@ -655,6 +708,8 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     const stopTypographyWorkflow = typographyWorkflow.start();
     const stopAppearanceWorkflow = appearanceWorkflow.start();
     const stopPlaybackApplication = playbackApplication.start();
+    const stopSessionControlApplication = sessionControlApplication.start();
+    const stopBookNarrationPreparationApplication = bookNarrationPreparationApplication.start();
     const stopOpeningWorkflow = openingWorkflow.start();
     const stopWordInsightWorkflow = wordInsightWorkflow.start();
     const stopBookExportWorkflow = bookExportWorkflow.start();
@@ -696,6 +751,8 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       stopTypographyWorkflow();
       stopAppearanceWorkflow();
       stopPlaybackApplication();
+      stopSessionControlApplication();
+      stopBookNarrationPreparationApplication();
       stopOpeningWorkflow();
       stopWordInsightWorkflow();
       stopBookExportWorkflow();
@@ -1218,10 +1275,32 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         return systemFontFamilies();
       },
       get audioCacheStats() {
-        return audioCacheStats();
+        const stats = audioCacheStats();
+        return stats?.bookId === reader().book.id ? stats : null;
       },
       get audioCacheNotice() {
         return audioCacheNotice();
+      },
+      get bookNarrationReadiness() {
+        const readiness = bookNarrationReadiness();
+        return readiness?.bookId === reader().book.id ? readiness : null;
+      },
+      get bookNarrationProgress() {
+        return bookNarrationProgress();
+      },
+      get sessionLimit() {
+        return sessionLimit();
+      },
+      get canPrepareBook() {
+        return (
+          reader().source === "library" &&
+          (usesLanguagePacks
+            ? offlineNarrationReadinessMessage(
+                offlineNarrationProfiles(),
+                reader().book.language
+              ) == null
+            : voiceInstallation().status === "ready")
+        );
       },
       get exportNotice() {
         return exportNotice();
@@ -1236,8 +1315,16 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       onNarrationHighlightColorChange: updateNarrationHighlightColor,
       onBookmarkHighlightColorChange: updateBookmarkHighlightColor,
       onResetAudioSettings: narrationSettingsWorkflow.reset,
-      onRefreshCache: offlineNarrationApplication.refreshPreparedAudio,
+      onRefreshCache: () => {
+        void Promise.all([
+          offlineNarrationApplication.refreshPreparedAudio(),
+          bookNarrationPreparationApplication.refresh()
+        ]);
+      },
       onClearCache: offlineNarrationApplication.clearPreparedAudio,
+      onPrepareBook: bookNarrationPreparationApplication.request,
+      onCancelBookPreparation: bookNarrationPreparationApplication.cancel,
+      onSessionLimitChange: sessionControlApplication.set,
       onExportBook: bookExportWorkflow.request
     }
   } satisfies ReaderInspectorModel;

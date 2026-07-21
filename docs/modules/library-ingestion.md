@@ -3,7 +3,8 @@
 ## Owns
 
 - desktop library ports and neutral library document models
-- EPUB selection, import, metadata recovery, extraction, segmentation, and transactional persistence
+- EPUB selection, import, metadata recovery, reference resolution, segmentation, and transactional
+  persistence
 - background repair of missing language and paragraph projections in legacy libraries
 - catalog, bookmark, search, export, cover-asset, and reading-position adapters
 
@@ -25,10 +26,14 @@ dispatcher. Native storage persists the resulting book, chapter, sentence, and p
 projections without maintaining a separate event history. Legacy repair logs failures to local
 diagnostics and updates missing projections directly.
 
+Readable manifest documents are available to spine extraction so relative footnote, endnote, and
+citation targets can resolve across files. Reference markers are removed from narration text and
+projected onto their owning sentence with an inline offset.
+
 ## Invariants
 
 - library ports never import reader-owned DTOs
-- imported projections commit atomically
+- imported text, paragraph, sentence, and reference projections commit atomically
 - repair never blocks Tauri setup and one unreadable book does not stop later repairs
 - batches remain bounded and resumable by stable identifiers
 

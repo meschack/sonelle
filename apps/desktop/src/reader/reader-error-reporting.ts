@@ -28,6 +28,9 @@ export function observeReaderErrors(
     eventDispatcher.subscribe("PreparedNarrationClearingFailed", (event) => {
       reportFailure("prepared-audio-clear.failed", event.payload.reason, event.payload);
     }),
+    eventDispatcher.subscribe("BookNarrationPreparationFailed", (event) => {
+      reportFailure("book-narration-preparation.failed", event.payload.reason, event.payload);
+    }),
     eventDispatcher.subscribe("BookExportFailed", (event) => {
       reportFailure("book-export.failed", event.payload.reason, event.payload);
     }),

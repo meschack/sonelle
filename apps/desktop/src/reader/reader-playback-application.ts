@@ -37,6 +37,7 @@ interface ReaderPlaybackApplicationOptions {
   currentSettings(): AudioSettings;
   narrationAudible(): boolean;
   narrationReadinessMessage(): string | null;
+  allowsChapterTransition(): boolean;
   projectPlayback(update: (current: ReaderPlaybackState) => ReaderPlaybackState): void;
   projectNotice(message: string | null): void;
   projectAudible(audible: boolean): void;
@@ -157,6 +158,7 @@ export function createReaderPlaybackApplication(
       if (
         playback.status !== "ended" ||
         !options.currentSettings().autoAdvance ||
+        !options.allowsChapterTransition() ||
         nextChapter == null
       ) {
         return;

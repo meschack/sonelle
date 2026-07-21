@@ -42,6 +42,19 @@ pub struct ReaderChapterView {
     pub sentence_count: i64,
     pub sentences: Vec<ReaderSentenceView>,
     pub paragraphs: Vec<ReaderParagraphView>,
+    pub references: Vec<ReaderReferenceView>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReaderReferenceView {
+    pub id: String,
+    pub sentence_id: String,
+    pub sentence_index: usize,
+    pub offset: usize,
+    pub marker: String,
+    pub kind: String,
+    pub content: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

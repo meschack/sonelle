@@ -1,4 +1,5 @@
 use std::{
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
@@ -44,6 +45,14 @@ pub struct PreparedNarrationAsset {
 pub struct NarrationCacheStats {
     pub asset_count: usize,
     pub covered_sentence_count: usize,
+    pub size_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NarrationChapterCacheStats {
+    pub chapter_id: String,
+    pub sentence_ids: Vec<String>,
     pub size_bytes: u64,
 }
 
@@ -159,6 +168,64 @@ impl NarrationAssetCache {
 
     pub fn book_stats(&self, book_id: &str) -> Result<NarrationCacheStats, String> {
         self.stats_for_book(Some(book_id))
+    }
+
+    pub fn chapter_stats(
+        &self,
+        book_id: &str,
+        voice_id: &str,
+        model_revision: &str,
+    ) -> Result<Vec<NarrationChapterCacheStats>, String> {
+        if !self.root.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut pending = vec![self.root.clone()];
+        let mut chapters: BTreeMap<String, (BTreeSet<String>, u64)> = BTreeMap::new();
+        while let Some(directory) = pending.pop() {
+            for entry in fs::read_dir(directory)
+                .map_err(|_| "We couldn't inspect prepared audio.".to_string())?
+                .flatten()
+            {
+                let path = entry.path();
+                if path.is_dir() {
+                    pending.push(path);
+                    continue;
+                }
+                if path.file_name().is_none_or(|name| name != "manifest.json") {
+                    continue;
+                }
+
+                let manifest = read_manifest(&path)?;
+                validate_manifest(&manifest)?;
+                if manifest.book_id != book_id
+                    || manifest.voice_id != voice_id
+                    || manifest.model_revision != model_revision
+                    || manifest.chapter_id.trim().is_empty()
+                {
+                    continue;
+                }
+
+                let chapter = chapters.entry(manifest.chapter_id).or_default();
+                chapter
+                    .0
+                    .extend(manifest.sentences.into_iter().map(|span| span.sentence_id));
+                chapter.1 += fs::metadata(path.with_file_name("audio.wav"))
+                    .map_err(|_| "We couldn't inspect prepared audio.".to_string())?
+                    .len();
+            }
+        }
+
+        Ok(chapters
+            .into_iter()
+            .map(
+                |(chapter_id, (sentence_ids, size_bytes))| NarrationChapterCacheStats {
+                    chapter_id,
+                    sentence_ids: sentence_ids.into_iter().collect(),
+                    size_bytes,
+                },
+            )
+            .collect())
     }
 
     fn stats_for_book(&self, book_id: Option<&str>) -> Result<NarrationCacheStats, String> {
@@ -438,6 +505,32 @@ mod tests {
         cache.clear_book("book-a").expect("book cache should clear");
         assert!(cache.get("asset-a").expect("cache should load").is_none());
         assert!(cache.get("asset-b").expect("cache should load").is_some());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn summarizes_chapter_readiness_for_the_active_voice_and_model() {
+        let root = test_root("chapter-readiness");
+        let cache = NarrationAssetCache::open(root.clone());
+        let first = manifest("asset-a", "model-a");
+        let mut second = manifest("asset-b", "model-a");
+        second.chapter_id = "chapter-b".to_string();
+        second.sentences[0].sentence_id = "s3".to_string();
+        second.sentences[1].sentence_id = "s4".to_string();
+        let stale = manifest("asset-c", "model-old");
+        cache.put(&first, &valid_audio()).expect("first asset");
+        cache.put(&second, &valid_audio()).expect("second asset");
+        cache.put(&stale, &valid_audio()).expect("stale asset");
+
+        let chapters = cache
+            .chapter_stats("book-a", "voice-a", "model-a")
+            .expect("chapter stats should load");
+
+        assert_eq!(chapters.len(), 2);
+        assert_eq!(chapters[0].chapter_id, "chapter-a");
+        assert_eq!(chapters[0].sentence_ids, vec!["s1", "s2"]);
+        assert_eq!(chapters[1].chapter_id, "chapter-b");
+        assert_eq!(chapters[1].sentence_ids, vec!["s3", "s4"]);
         let _ = fs::remove_dir_all(root);
     }
 

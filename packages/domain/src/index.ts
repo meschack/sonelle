@@ -46,6 +46,16 @@ export interface DomainEventPayloadMap {
     lastSentenceId: EntityId;
   };
   NarrationPlaybackFailed: SentenceRef & { passageId: EntityId | null; reason: string };
+  NarrationSessionLimitChanged: {
+    bookId: EntityId;
+    kind: "off" | "duration" | "paragraph" | "chapter";
+    durationMinutes: number | null;
+  };
+  NarrationSessionLimitReached: {
+    bookId: EntityId;
+    chapterId: EntityId;
+    kind: "duration" | "paragraph" | "chapter";
+  };
   NarrationResetRequested: { bookId: EntityId; chapterId: EntityId };
   NarrationSettingsChanged: {
     previousVoiceId: string;
@@ -97,6 +107,23 @@ export interface DomainEventPayloadMap {
   PreparedNarrationClearingRequested: { bookId: EntityId };
   PreparedNarrationCleared: { bookId: EntityId; sentenceCount: number; sizeBytes: number };
   PreparedNarrationClearingFailed: { bookId: EntityId; reason: string };
+  BookNarrationPreparationRequested: {
+    bookId: EntityId;
+    voiceId: string;
+  };
+  BookNarrationPreparationProgressed: {
+    bookId: EntityId;
+    activeChapterId: EntityId;
+    completedChapterIds: EntityId[];
+    preparedSentenceCount: number;
+    totalSentenceCount: number;
+  };
+  BookNarrationPreparationReady: {
+    bookId: EntityId;
+    sentenceCount: number;
+  };
+  BookNarrationPreparationCancelled: { bookId: EntityId };
+  BookNarrationPreparationFailed: { bookId: EntityId; reason: string };
   ReaderOpened: {
     bookId: EntityId;
     chapterId: EntityId;

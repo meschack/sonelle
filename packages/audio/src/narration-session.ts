@@ -195,6 +195,7 @@ export function createNarrationSession(options: NarrationSessionOptions): Narrat
         lastSentenceId
       })
     );
+    if (run !== generation) return;
     if (!output.autoAdvance) {
       await dispatchPaused(
         currentChapter,

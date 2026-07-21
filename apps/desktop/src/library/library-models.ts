@@ -30,6 +30,17 @@ export interface ReaderChapterDto {
   sentenceCount: number;
   sentences: ReaderSentenceDto[];
   paragraphs?: ReaderParagraphDto[];
+  references?: ReaderReferenceDto[];
+}
+
+export interface ReaderReferenceDto {
+  id: string;
+  sentenceId: string;
+  sentenceIndex: number;
+  offset: number;
+  marker: string;
+  kind: "footnote" | "endnote" | "citation" | "note";
+  content: string;
 }
 
 export interface ReaderParagraphDto {
