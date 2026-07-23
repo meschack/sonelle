@@ -27,13 +27,13 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock", "s
 flate2 = "1"
 fontdb = "=0.23.0"
 grapheme_to_phoneme = "=0.1.0"
-anyhow = "=1.0.103"
+anyhow = "=1.0.104"
 hound = "=3.5.1"
 ndarray = { version = "=0.17.2", features = ["rayon"] }
 ort = "=2.0.0-rc.12"
-rand = "=0.8.7"
-rand_distr = "=0.4.3"
-regex = "=1.13.0"
+rand = "=0.10.2"
+rand_distr = "=0.6.0"
+regex = "=1.13.1"
 roxmltree = "0.21.1"
 rusqlite = { version = "0.40.1", default-features = false, features = ["bundled"] }
 sha2 = "0.11.0"
