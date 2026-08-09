@@ -22,6 +22,7 @@ interface ReaderNavigationOptions {
 export interface ReaderNavigationApplication {
   openSample(): void;
   openChapter(chapterId: string): Promise<void>;
+  openLocation(chapterId: string, sentenceIndex: number): Promise<void>;
   toggleActiveBookmark(): Promise<void>;
   deleteBookmark(bookmarkId: string): Promise<void>;
   openBookmark(bookmark: LibraryBookmarkDto): Promise<void>;
@@ -44,22 +45,32 @@ export function createReaderNavigationApplication(
     await dependencies.library.deleteBookmark(bookmarkId, bookId);
   };
 
+  const openLocation = async (chapterId: string, sentenceIndex: number) => {
+    const reader = options.currentReader();
+    if (chapterId === reader.chapter.id) {
+      await dependencies.opening.open(reader, sentenceIndex, dependencies.playback.jumpStatus());
+      return;
+    }
+    if (reader.source === "sample") {
+      const next = buildFixtureReaderView({ chapterId, sentenceIndex });
+      await dependencies.opening.open(next, sentenceIndex, dependencies.playback.jumpStatus());
+      return;
+    }
+    await dependencies.library.open(reader.book.id, {
+      chapterId,
+      sentenceIndex,
+      playbackStatus: dependencies.playback.jumpStatus()
+    });
+  };
+
   return {
     openSample,
     async openChapter(chapterId) {
       const reader = options.currentReader();
       if (chapterId === reader.chapter.id) return;
-      if (reader.source === "sample") {
-        const next = buildFixtureReaderView({ chapterId, sentenceIndex: 0 });
-        await dependencies.opening.open(next, 0, dependencies.playback.jumpStatus());
-        return;
-      }
-      await dependencies.library.open(reader.book.id, {
-        chapterId,
-        sentenceIndex: 0,
-        playbackStatus: dependencies.playback.jumpStatus()
-      });
+      await openLocation(chapterId, 0);
     },
+    openLocation,
     async toggleActiveBookmark() {
       const existing = options.activeBookmark();
       if (existing != null) {
@@ -113,7 +124,11 @@ export function createReaderNavigationApplication(
       const reader = options.currentReader();
       if (result.kind === "sentence" && result.chapterId != null && result.sentenceIndex != null) {
         if (result.bookId === reader.book.id && result.chapterId === reader.chapter.id) {
-          dependencies.playback.select(result.sentenceIndex);
+          await dependencies.opening.open(
+            reader,
+            result.sentenceIndex,
+            dependencies.playback.jumpStatus()
+          );
           return;
         }
         await dependencies.library.open(result.bookId, {

@@ -17,10 +17,11 @@ export type ReaderKeyboardCommand =
   | "open-word"
   | "open-notes"
   | "open-tools"
-  | "save-paragraph-image"
+  | "save-quote-image"
   | "open-library"
   | "import-book"
   | "focus-library-search"
+  | "search-across-books"
   | "navigate-library-up"
   | "navigate-library-down"
   | "navigate-library-left"
@@ -32,6 +33,7 @@ export type ReaderKeyboardCommand =
   | "clear-library"
   | "toggle-library-sidebar"
   | "toggle-inspector-sidebar"
+  | "toggle-distraction-free"
   | "first-sentence"
   | "last-sentence"
   | "open-command-palette"
@@ -51,6 +53,7 @@ export interface ReaderKeyboardShortcutInput {
   typing?: boolean;
   shortcutReferenceOpen?: boolean;
   commandPaletteOpen?: boolean;
+  distractionFree?: boolean;
 }
 
 export interface ReaderKeyboardShortcutReferenceGroup {
@@ -82,8 +85,10 @@ export const readerKeyboardShortcutReference: readonly ReaderKeyboardShortcutRef
       { keys: ["W"], label: "Open Word" },
       { keys: ["N"], label: "Open Notes" },
       { keys: ["T", "Ctrl / Cmd + ,"], label: "Open Tools" },
-      { keys: ["Shift + S"], label: "Save paragraph image" },
-      { keys: ["Shift + L"], label: "Return to Library" }
+      { keys: ["Shift + S"], label: "Create quote image" },
+      { keys: ["Shift + L"], label: "Return to Library" },
+      { keys: ["Ctrl / Cmd + Shift + F"], label: "Search across all books" },
+      { keys: ["D"], label: "Toggle distraction-free reading" }
     ]
   },
   {
@@ -135,6 +140,7 @@ export function resolveReaderKeyboardShortcut(
   if (!primaryModifier && !input.typing && input.key === "?") return "open-shortcut-reference";
   if (primaryModifier && !input.shiftKey && key === "o") return "import-book";
   if (primaryModifier && !input.shiftKey && key === "k") return "open-command-palette";
+  if (primaryModifier && input.shiftKey && key === "f") return "search-across-books";
   if (primaryModifier && key === "b") {
     return input.shiftKey ? "toggle-inspector-sidebar" : "toggle-library-sidebar";
   }
@@ -163,7 +169,9 @@ export function resolveReaderKeyboardShortcut(
     if (!input.shiftKey && input.key === ",") return "open-tools";
     return null;
   }
-  if (input.key === "Escape") return "clear-transient";
+  if (input.key === "Escape") {
+    return input.distractionFree ? "toggle-distraction-free" : "clear-transient";
+  }
   if (input.typing) return null;
 
   if (input.key === "ArrowLeft") {
@@ -186,7 +194,8 @@ export function resolveReaderKeyboardShortcut(
   if (!input.shiftKey && key === "w") return "open-word";
   if (!input.shiftKey && key === "n") return "open-notes";
   if (!input.shiftKey && key === "t") return "open-tools";
-  if (input.shiftKey && key === "s") return "save-paragraph-image";
+  if (input.shiftKey && key === "s") return "save-quote-image";
   if (input.shiftKey && key === "l") return "open-library";
+  if (!input.shiftKey && key === "d") return "toggle-distraction-free";
   return null;
 }

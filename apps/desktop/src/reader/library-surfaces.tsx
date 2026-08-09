@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js";
+import { createMemo, For, Show } from "solid-js";
 import {
   hasLibrarySearchQuery,
   type LibraryBookFilter,
@@ -159,7 +159,7 @@ function NavigationRail(componentProps: { model: LibraryNavigationModel }) {
             <Show when={hasSearchQuery()}>
               <LibrarySearchState
                 searching={props.searching}
-                results={props.searchResults}
+                results={props.searchResults.slice(0, 5)}
                 onOpenSearchResult={props.onOpenSearchResult}
               />
             </Show>
@@ -321,6 +321,9 @@ function ActiveBookNavigation(props: ActiveBookNavigationProps) {
 export interface LibraryWorkspaceModel {
   collection: LibraryCollectionModel;
   dropActive: boolean;
+  searching: boolean;
+  searchResults: LibrarySearchResultDto[];
+  onOpenSearchResult: (result: LibrarySearchResultDto) => void;
   onDragEnter: () => void;
   onDragLeave: () => void;
   onDropFiles: (files: File[]) => void;
@@ -330,6 +333,7 @@ export function LibraryWorkspace(componentProps: { model: LibraryWorkspaceModel 
   const model = componentProps.model;
   const props = model.collection;
   const hasNoBooks = () => props.totalBookCount === 0 && props.bookListState !== "loading";
+  const hasSearchQuery = () => hasLibrarySearchQuery(props.query);
 
   return (
     <section
@@ -375,20 +379,22 @@ export function LibraryWorkspace(componentProps: { model: LibraryWorkspaceModel 
           </button>
         </div>
 
-        <button
-          class="library-drop-zone"
-          type="button"
-          disabled={props.importing}
-          aria-keyshortcuts="Control+O Meta+O"
-          title="Choose an EPUB (Ctrl/Cmd+O)"
-          onClick={props.onImport}
-        >
-          <span class="library-drop-icon" aria-hidden="true">
-            <PlusIcon />
-          </span>
-          <strong>{model.dropActive ? "Release to add your book" : "Drop an EPUB here"}</strong>
-          <small>Or choose a file. Your books stay private and local.</small>
-        </button>
+        <Show when={!hasSearchQuery()}>
+          <button
+            class="library-drop-zone"
+            type="button"
+            disabled={props.importing}
+            aria-keyshortcuts="Control+O Meta+O"
+            title="Choose an EPUB (Ctrl/Cmd+O)"
+            onClick={props.onImport}
+          >
+            <span class="library-drop-icon" aria-hidden="true">
+              <PlusIcon />
+            </span>
+            <strong>{model.dropActive ? "Release to add your book" : "Drop an EPUB here"}</strong>
+            <small>Or choose a file. Your books stay private and local.</small>
+          </button>
+        </Show>
 
         <Show
           when={!hasNoBooks()}
@@ -400,7 +406,7 @@ export function LibraryWorkspace(componentProps: { model: LibraryWorkspaceModel 
             />
           }
         >
-          <div class="library-tools">
+          <div classList={{ "library-tools": true, searching: hasSearchQuery() }}>
             <label class="library-search">
               <SearchIcon />
               <input
@@ -409,39 +415,41 @@ export function LibraryWorkspace(componentProps: { model: LibraryWorkspaceModel 
                 title="Search library (/ or Ctrl/Cmd+F)"
                 type="search"
                 value={props.query}
-                placeholder="Search library"
+                placeholder="Search titles, authors, and book text"
                 onInput={(event) => props.onQueryChange(event.currentTarget.value)}
               />
             </label>
-            <div class="library-filter-row" aria-label="Library filters">
-              <button
-                classList={{ active: props.filter === "all" }}
-                type="button"
-                aria-keyshortcuts="1"
-                title="All books (1)"
-                onClick={() => props.onFilterChange("all")}
-              >
-                All books
-              </button>
-              <button
-                classList={{ active: props.filter === "in-progress" }}
-                type="button"
-                aria-keyshortcuts="2"
-                title="In progress (2)"
-                onClick={() => props.onFilterChange("in-progress")}
-              >
-                In progress
-              </button>
-              <button
-                classList={{ active: props.filter === "bookmarked" }}
-                type="button"
-                aria-keyshortcuts="3"
-                title="Bookmarked (3)"
-                onClick={() => props.onFilterChange("bookmarked")}
-              >
-                Bookmarked
-              </button>
-            </div>
+            <Show when={!hasSearchQuery()}>
+              <div class="library-filter-row" aria-label="Library filters">
+                <button
+                  classList={{ active: props.filter === "all" }}
+                  type="button"
+                  aria-keyshortcuts="1"
+                  title="All books (1)"
+                  onClick={() => props.onFilterChange("all")}
+                >
+                  All books
+                </button>
+                <button
+                  classList={{ active: props.filter === "in-progress" }}
+                  type="button"
+                  aria-keyshortcuts="2"
+                  title="In progress (2)"
+                  onClick={() => props.onFilterChange("in-progress")}
+                >
+                  In progress
+                </button>
+                <button
+                  classList={{ active: props.filter === "bookmarked" }}
+                  type="button"
+                  aria-keyshortcuts="3"
+                  title="Bookmarked (3)"
+                  onClick={() => props.onFilterChange("bookmarked")}
+                >
+                  Bookmarked
+                </button>
+              </div>
+            </Show>
           </div>
 
           <Show when={props.notice}>
@@ -449,38 +457,50 @@ export function LibraryWorkspace(componentProps: { model: LibraryWorkspaceModel 
           </Show>
 
           <Show
-            when={props.bookListState !== "loading"}
+            when={hasSearchQuery()}
             fallback={
-              <StateBlock title="Opening library" body="Your saved books will appear here." />
+              <Show
+                when={props.bookListState !== "loading"}
+                fallback={
+                  <StateBlock title="Opening library" body="Your saved books will appear here." />
+                }
+              >
+                <div class="library-grid" role="list">
+                  <For each={props.books}>
+                    {(book) => (
+                      <button
+                        class="library-book-card"
+                        data-library-book-card={book.id}
+                        type="button"
+                        aria-keyshortcuts="Enter"
+                        onClick={() => props.onOpenBook(book.id)}
+                      >
+                        <BookCover
+                          className="library-book-cover"
+                          title={book.title}
+                          src={book.coverImageSrc}
+                        />
+                        <span class="library-book-copy">
+                          <strong>{book.title}</strong>
+                          <small>{book.author}</small>
+                          <span class="library-card-progress" aria-hidden="true">
+                            <span style={{ width: `${libraryProgressPercent(book)}%` }} />
+                          </span>
+                          <em>{libraryProgressPercent(book)}% read</em>
+                        </span>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </Show>
             }
           >
-            <div class="library-grid" role="list">
-              <For each={props.books}>
-                {(book) => (
-                  <button
-                    class="library-book-card"
-                    data-library-book-card={book.id}
-                    type="button"
-                    aria-keyshortcuts="Enter"
-                    onClick={() => props.onOpenBook(book.id)}
-                  >
-                    <BookCover
-                      className="library-book-cover"
-                      title={book.title}
-                      src={book.coverImageSrc}
-                    />
-                    <span class="library-book-copy">
-                      <strong>{book.title}</strong>
-                      <small>{book.author}</small>
-                      <span class="library-card-progress" aria-hidden="true">
-                        <span style={{ width: `${libraryProgressPercent(book)}%` }} />
-                      </span>
-                      <em>{libraryProgressPercent(book)}% read</em>
-                    </span>
-                  </button>
-                )}
-              </For>
-            </div>
+            <CrossBookSearchResults
+              query={props.query}
+              searching={model.searching}
+              results={model.searchResults}
+              onOpenSearchResult={model.onOpenSearchResult}
+            />
           </Show>
         </Show>
       </section>
@@ -550,6 +570,151 @@ function LibrarySearchState(props: LibrarySearchStateProps) {
       </Show>
     </div>
   );
+}
+
+interface CrossBookSearchResultsProps extends LibrarySearchStateProps {
+  query: string;
+}
+
+interface CrossBookSearchGroup {
+  bookId: string;
+  bookTitle: string;
+  author: string;
+  results: LibrarySearchResultDto[];
+}
+
+function CrossBookSearchResults(props: CrossBookSearchResultsProps) {
+  const groups = createMemo(() => groupLibrarySearchResults(props.results));
+
+  return (
+    <section
+      class="cross-book-search-results"
+      aria-label="Cross-book search results"
+      aria-busy={props.searching}
+    >
+      <header class="cross-book-search-heading">
+        <div>
+          <p>Across your library</p>
+          <h2>
+            {props.searching
+              ? "Searching every book"
+              : `${props.results.length} result${props.results.length === 1 ? "" : "s"}`}
+          </h2>
+        </div>
+        <Show when={!props.searching && groups().length > 0}>
+          <span>
+            {groups().length} book{groups().length === 1 ? "" : "s"}
+          </span>
+        </Show>
+      </header>
+
+      <Show
+        when={!props.searching}
+        fallback={<StateBlock title="Searching every book" body="Looking through saved text." />}
+      >
+        <Show
+          when={groups().length > 0}
+          fallback={
+            <StateBlock
+              title="No matches across your books"
+              body="Try another title, author, or phrase."
+            />
+          }
+        >
+          <For each={groups()}>
+            {(group) => (
+              <section class="cross-book-search-group" aria-label={group.bookTitle}>
+                <header>
+                  <div>
+                    <strong>{group.bookTitle}</strong>
+                    <span>{group.author}</span>
+                  </div>
+                  <small>
+                    {group.results.length} match{group.results.length === 1 ? "" : "es"}
+                  </small>
+                </header>
+                <div class="cross-book-search-group-results" role="list">
+                  <For each={group.results}>
+                    {(result) => (
+                      <button
+                        class="cross-book-search-result"
+                        type="button"
+                        onClick={() => props.onOpenSearchResult(result)}
+                      >
+                        <span class="cross-book-search-result-meta">
+                          <span>
+                            {result.kind === "book" ? "Book" : (result.chapterTitle ?? "Chapter")}
+                          </span>
+                          <small>
+                            {result.kind === "book"
+                              ? "Open book"
+                              : `Sentence ${(result.sentenceIndex ?? 0) + 1}`}
+                          </small>
+                        </span>
+                        <span class="cross-book-search-excerpt">
+                          <HighlightedSearchText text={result.excerpt} query={props.query} />
+                        </span>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </section>
+            )}
+          </For>
+        </Show>
+      </Show>
+    </section>
+  );
+}
+
+function groupLibrarySearchResults(results: LibrarySearchResultDto[]): CrossBookSearchGroup[] {
+  const groups = new Map<string, CrossBookSearchGroup>();
+  for (const result of results) {
+    const group = groups.get(result.bookId) ?? {
+      bookId: result.bookId,
+      bookTitle: result.bookTitle,
+      author: result.author,
+      results: []
+    };
+    group.results.push(result);
+    groups.set(result.bookId, group);
+  }
+  return [...groups.values()];
+}
+
+function HighlightedSearchText(props: { text: string; query: string }) {
+  const segments = createMemo(() => splitSearchText(props.text, props.query));
+
+  return (
+    <For each={segments()}>
+      {(segment) => (
+        <Show when={segment.matched} fallback={segment.text}>
+          <mark>{segment.text}</mark>
+        </Show>
+      )}
+    </For>
+  );
+}
+
+function splitSearchText(text: string, query: string): Array<{ text: string; matched: boolean }> {
+  const needle = query.trim().toLocaleLowerCase();
+  if (needle.length === 0) return [{ text, matched: false }];
+  const haystack = text.toLocaleLowerCase();
+  const segments: Array<{ text: string; matched: boolean }> = [];
+  let cursor = 0;
+  let matchIndex = haystack.indexOf(needle);
+
+  while (matchIndex >= 0) {
+    if (matchIndex > cursor) {
+      segments.push({ text: text.slice(cursor, matchIndex), matched: false });
+    }
+    segments.push({ text: text.slice(matchIndex, matchIndex + needle.length), matched: true });
+    cursor = matchIndex + needle.length;
+    matchIndex = haystack.indexOf(needle, cursor);
+  }
+
+  if (cursor < text.length) segments.push({ text: text.slice(cursor), matched: false });
+  return segments.length > 0 ? segments : [{ text, matched: false }];
 }
 
 interface BookListStateProps {

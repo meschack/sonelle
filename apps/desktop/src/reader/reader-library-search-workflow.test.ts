@@ -32,8 +32,8 @@ describe("reader library search workflow", () => {
     resolvers[1]?.([]);
     await Promise.resolve();
 
-    expect(search).toHaveBeenNthCalledWith(1, { query: "first", limit: 8 });
-    expect(search).toHaveBeenNthCalledWith(2, { query: "second", limit: 8 });
+    expect(search).toHaveBeenNthCalledWith(1, { query: "first", limit: 30 });
+    expect(search).toHaveBeenNthCalledWith(2, { query: "second", limit: 30 });
     expect(searching[searching.length - 1]).toBe(false);
     expect(results).toEqual([[]]);
     workflow.stop();

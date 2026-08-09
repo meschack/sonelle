@@ -1,4 +1,4 @@
-import { createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js";
 import { type AudioSettings, type NarrationVoice } from "@sonelle/audio";
 import { primaryDefinition, type SavedDictionaryEntry, type WordInsight } from "@sonelle/learning";
 import type { ReaderSearchResult } from "@sonelle/reader";
@@ -8,7 +8,11 @@ import type {
   OfflineVoiceView,
   PreparedAudioView
 } from "./reader-offline-narration-application";
-import type { LibraryBookmarkDto } from "../library/library-contracts";
+import type {
+  BookCoverSelection,
+  LibraryBookmarkDto,
+  UpdateBookMetadataInput
+} from "../library/library-contracts";
 import { formatBytes } from "./reader-formatting";
 import { DictionaryStatus, StateBlock } from "./reader-feedback";
 import type { InspectorTab } from "./reader-experience-types";
@@ -18,6 +22,7 @@ import type {
   BookNarrationReadiness
 } from "./reader-book-narration-preparation";
 import type { ReaderSessionLimit } from "./reader-session-control-application";
+import type { BookMetadataNotice } from "./reader-book-metadata-workflow";
 import {
   BookmarkIcon,
   CheckIcon,
@@ -300,6 +305,14 @@ function BookmarkPanel(componentProps: { model: ReaderBookmarkInspectorModel }) 
 }
 
 export interface ReaderSettingsInspectorModel {
+  book: {
+    id: string;
+    title: string;
+    author: string;
+    coverImageSrc: string | null;
+    editable: boolean;
+  };
+  bookMetadataNotice: BookMetadataNotice | null;
   audioSettings: AudioSettings;
   voiceInstallation: OfflineVoiceView;
   offlineLibrary: "individual-voice" | "language-pack";
@@ -334,19 +347,28 @@ export interface ReaderSettingsInspectorModel {
   onCancelBookPreparation: () => void;
   onSessionLimitChange: (limit: ReaderSessionLimit) => void;
   onExportBook: () => void;
+  onChooseBookCover: () => Promise<BookCoverSelection | null>;
+  onSaveBookMetadata: (input: UpdateBookMetadataInput) => void;
 }
 
 function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) {
   const props = componentProps.model;
   return (
     <section class="inspector-panel settings-panel" aria-label="Settings">
+      <div class="narration-profile-context">
+        <HeadphonesIcon />
+        <span>
+          <small>Book narration profile</small>
+          <strong title={props.book.title}>{props.book.title}</strong>
+        </span>
+      </div>
       <SpeedSelect
         value={props.audioSettings.playbackRate}
         onChange={(playbackRate) => props.onAudioSettingsChange({ playbackRate })}
       />
       <div class="settings-action-row">
         <button class="secondary-tool-button" type="button" onClick={props.onResetAudioSettings}>
-          Reset audio settings
+          Reset this book's audio settings
         </button>
       </div>
       <div class="setting-field">
@@ -411,6 +433,14 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
         }
         onChange={(voiceId) => props.onAudioSettingsChange({ voiceId })}
       />
+      <Show when={props.book.editable}>
+        <BookMetadataEditorPanel
+          book={props.book}
+          notice={props.bookMetadataNotice}
+          onChooseCover={props.onChooseBookCover}
+          onSave={props.onSaveBookMetadata}
+        />
+      </Show>
       <Show when={props.offlineLibrary === "individual-voice"}>
         <VoiceInstallationCard
           installation={props.voiceInstallation}
@@ -446,6 +476,120 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
         </Show>
       </div>
     </section>
+  );
+}
+
+function BookMetadataEditorPanel(props: {
+  book: ReaderSettingsInspectorModel["book"];
+  notice: BookMetadataNotice | null;
+  onChooseCover(): Promise<BookCoverSelection | null>;
+  onSave(input: UpdateBookMetadataInput): void;
+}) {
+  const [title, setTitle] = createSignal(props.book.title);
+  const [author, setAuthor] = createSignal(props.book.author);
+  const [coverPath, setCoverPath] = createSignal<string | null>(null);
+  const [coverPreview, setCoverPreview] = createSignal<string | null>(props.book.coverImageSrc);
+  const [removeCover, setRemoveCover] = createSignal(false);
+  let projectedBookSignature = "";
+
+  createEffect(() => {
+    const signature = [
+      props.book.id,
+      props.book.title,
+      props.book.author,
+      props.book.coverImageSrc ?? ""
+    ].join("\u0000");
+    if (projectedBookSignature === signature) return;
+    projectedBookSignature = signature;
+    setTitle(props.book.title);
+    setAuthor(props.book.author);
+    setCoverPath(null);
+    setCoverPreview(props.book.coverImageSrc);
+    setRemoveCover(false);
+  });
+
+  const chooseCover = async () => {
+    const selection = await props.onChooseCover();
+    if (selection == null) return;
+    setCoverPath(selection.path);
+    setCoverPreview(selection.previewSrc);
+    setRemoveCover(false);
+  };
+
+  return (
+    <form
+      class="tool-card book-metadata-editor"
+      aria-label="Book details"
+      onSubmit={(event) => {
+        event.preventDefault();
+        props.onSave({
+          bookId: props.book.id,
+          title: title(),
+          author: author(),
+          coverPath: coverPath(),
+          removeCover: removeCover()
+        });
+      }}
+    >
+      <span class="inspector-section-title">Book details</span>
+      <div class="book-metadata-cover-row">
+        <span class="book-metadata-cover" aria-hidden="true">
+          <Show when={coverPreview()} fallback={<span>{title().slice(0, 1).toUpperCase()}</span>}>
+            {(source) => <img src={source()} alt="" />}
+          </Show>
+        </span>
+        <div>
+          <button class="mini-tool-button" type="button" onClick={() => void chooseCover()}>
+            Choose cover
+          </button>
+          <Show when={coverPreview() != null}>
+            <button
+              class="book-cover-remove"
+              type="button"
+              onClick={() => {
+                setCoverPath(null);
+                setCoverPreview(null);
+                setRemoveCover(true);
+              }}
+            >
+              Remove cover
+            </button>
+          </Show>
+        </div>
+      </div>
+      <label class="book-metadata-field">
+        <span>Title</span>
+        <input
+          aria-label="Book title"
+          value={title()}
+          maxlength="500"
+          onInput={(event) => setTitle(event.currentTarget.value)}
+        />
+      </label>
+      <label class="book-metadata-field">
+        <span>Author</span>
+        <input
+          aria-label="Book author"
+          value={author()}
+          maxlength="500"
+          onInput={(event) => setAuthor(event.currentTarget.value)}
+        />
+      </label>
+      <button
+        class="primary-tool-button"
+        type="submit"
+        disabled={title().trim().length === 0 || props.notice?.tone === "pending"}
+      >
+        {props.notice?.tone === "pending" ? "Saving details" : "Save book details"}
+      </button>
+      <Show when={props.notice}>
+        {(notice) => (
+          <p classList={{ "book-metadata-notice": true, [notice().tone]: true }}>
+            {notice().message}
+          </p>
+        )}
+      </Show>
+    </form>
   );
 }
 
@@ -598,31 +742,6 @@ function BookReadinessPanel(props: {
         <button class="secondary-tool-button" type="button" onClick={props.onCancel}>
           Cancel preparation
         </button>
-      </Show>
-      <Show when={(props.readiness?.chapters.length ?? 0) > 0}>
-        <div class="book-readiness-list" role="list" aria-label="Chapter narration readiness">
-          <For each={props.readiness?.chapters ?? []}>
-            {(chapter, index) => (
-              <div class="book-readiness-row" role="listitem">
-                <span>
-                  <strong>
-                    {index() + 1}. {chapter.title}
-                  </strong>
-                  <small>
-                    {chapter.preparedSentenceCount} of {chapter.totalSentenceCount} sentences
-                  </small>
-                </span>
-                <span class={`readiness-badge ${chapter.status}`}>
-                  {chapter.status === "ready"
-                    ? "Ready"
-                    : chapter.status === "preparing"
-                      ? "Preparing"
-                      : "Unavailable"}
-                </span>
-              </div>
-            )}
-          </For>
-        </div>
       </Show>
       <div class="book-readiness-actions" aria-label="Prepared audio maintenance">
         <button class="secondary-tool-button" type="button" onClick={props.onRefresh}>

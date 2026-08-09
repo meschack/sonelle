@@ -31,6 +31,10 @@ import { createHtmlAudioPlayer } from "../audio/html-audio-player";
 import { createHtmlManifestNarrationPlayer } from "../audio/html-manifest-narration-player";
 import { reportAppError } from "../platform/error-reporting";
 import {
+  createExternalLinkOpener,
+  type ExternalLinkOpener
+} from "../platform/external-link-opener";
+import {
   createAppWindowController,
   type AppWindowController
 } from "../platform/app-window-controller";
@@ -56,6 +60,7 @@ import {
   type BookOpenRequestAdapter,
   type BookExporter,
   type BookImporter,
+  type BookMetadataEditor,
   type BookmarkStore,
   type LibrarySearch,
   type ReadingPositionStore
@@ -66,15 +71,13 @@ import { createBookDropAdapter } from "../library/book-drop-adapter";
 import { createBookOpenRequestAdapter } from "../library/book-open-request-adapter";
 import { createBookExporter } from "../library/book-exporter";
 import { createBookImporter } from "../library/book-importer";
+import { createBookMetadataEditor } from "../library/book-metadata-editor";
 import { createBookmarkStore } from "../library/bookmark-store";
 import { createLibrarySearch } from "../library/library-search";
 import { createReadingPositionStore } from "../library/reading-position-store";
 import { isTauriRuntime } from "../platform/tauri-runtime";
 import { createSystemFontCatalog, type SystemFontCatalog } from "../platform/system-font-catalog";
-import {
-  createParagraphImageExporter,
-  type ParagraphImageExporter
-} from "./reader-paragraph-image";
+import { createQuoteImageExporter, type QuoteImageExporter } from "./reader-quote-image";
 import {
   createReaderPreferencesRepository,
   type ReaderPreferencesRepository
@@ -124,14 +127,16 @@ export interface ReaderExperienceDependencies {
   bookOpenRequestAdapter: BookOpenRequestAdapter;
   bookExporter: BookExporter;
   bookImporter: BookImporter;
+  bookMetadataEditor: BookMetadataEditor;
   bookmarkStore: BookmarkStore;
   dictionaryRepository: DictionaryRepository;
   engineInstallationRepository: EngineInstallationRepository;
   eventDispatcher: DomainEventDispatcher;
+  externalLinkOpener: ExternalLinkOpener;
   fontCatalog: SystemFontCatalog;
   librarySearch: LibrarySearch;
   narration: ReaderNarrationService;
-  paragraphImageExporter: ParagraphImageExporter;
+  quoteImageExporter: QuoteImageExporter;
   readerPreferencesRepository: ReaderPreferencesRepository;
   readingPositionStore: ReadingPositionStore;
   voiceInstallationRepository: VoiceInstallationRepository;
@@ -163,10 +168,12 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
     }),
     bookExporter: createBookExporter(),
     bookImporter: createBookImporter(),
+    bookMetadataEditor: createBookMetadataEditor(),
     bookmarkStore: createBookmarkStore(),
     dictionaryRepository: createDictionaryRepository(),
     engineInstallationRepository: createEngineInstallationRepository(),
     eventDispatcher,
+    externalLinkOpener: createExternalLinkOpener(),
     fontCatalog: createSystemFontCatalog(),
     librarySearch: createLibrarySearch(),
     narration: {
@@ -243,7 +250,7 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
         return { sentenceCount: result.sentenceCount };
       }
     },
-    paragraphImageExporter: createParagraphImageExporter(),
+    quoteImageExporter: createQuoteImageExporter(),
     readerPreferencesRepository: createReaderPreferencesRepository(),
     readingPositionStore: createReadingPositionStore(),
     voiceInstallationRepository: createVoiceInstallationRepository()

@@ -203,7 +203,8 @@ describe("book narration readiness", () => {
         sentenceId: "book-2-sentence",
         sentenceIndex: 0,
         playbackStatus: "idle",
-        source: "library"
+        source: "library",
+        language: "en"
       })
     );
     await vi.waitFor(() => expect(catalog.open).toHaveBeenCalledWith("book-2"));

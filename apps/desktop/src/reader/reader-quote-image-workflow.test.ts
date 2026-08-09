@@ -1,22 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
 import { createDomainEventDispatcher, type AnyDomainEvent } from "@sonelle/domain";
 import { buildFixtureReaderView } from "./reader-view";
-import { createReaderParagraphImageWorkflow } from "./reader-paragraph-image-workflow";
+import { createReaderQuoteImageWorkflow } from "./reader-quote-image-workflow";
 
-describe("reader paragraph image workflow", () => {
-  it("exports the paragraph containing the active sentence through domain events", async () => {
+describe("reader quote image workflow", () => {
+  it("exports neighboring sentences through domain events", async () => {
     const dispatcher = createDomainEventDispatcher();
     const reader = buildFixtureReaderView();
     const exporter = { export: vi.fn().mockResolvedValue("passage.png") };
     const projectNotice = vi.fn();
     const events: AnyDomainEvent[] = [];
-    dispatcher.subscribe("ParagraphImageRequested", (event) => {
+    dispatcher.subscribe("QuoteImageRequested", (event) => {
       events.push(event);
     });
-    dispatcher.subscribe("ParagraphImageCreated", (event) => {
+    dispatcher.subscribe("QuoteImageCreated", (event) => {
       events.push(event);
     });
-    const workflow = createReaderParagraphImageWorkflow(
+    const workflow = createReaderQuoteImageWorkflow(
       { eventDispatcher: dispatcher, exporter },
       {
         currentReader: () => reader,
@@ -26,18 +26,18 @@ describe("reader paragraph image workflow", () => {
     );
     const stop = workflow.start();
 
-    workflow.request();
+    workflow.request(reader.sentences.slice(0, 2).map((sentence) => sentence.id));
 
     await vi.waitFor(() => expect(exporter.export).toHaveBeenCalledOnce());
     await vi.waitFor(() =>
       expect(events.map((event) => event.name)).toEqual([
-        "ParagraphImageRequested",
-        "ParagraphImageCreated"
+        "QuoteImageRequested",
+        "QuoteImageCreated"
       ])
     );
     expect(exporter.export).toHaveBeenCalledWith(
       expect.objectContaining({
-        paragraphText: reader.paragraphs[0]?.sentences.map((sentence) => sentence.text).join(" "),
+        sentenceTexts: reader.sentences.slice(0, 2).map((sentence) => sentence.text),
         bookTitle: reader.book.title,
         author: reader.book.author,
         chapterTitle: reader.chapter.title
@@ -54,7 +54,7 @@ describe("reader paragraph image workflow", () => {
     const error = new Error("Canvas refused to cooperate.");
     const onError = vi.fn();
     const projectNotice = vi.fn();
-    const workflow = createReaderParagraphImageWorkflow(
+    const workflow = createReaderQuoteImageWorkflow(
       {
         eventDispatcher: dispatcher,
         exporter: { export: vi.fn().mockRejectedValue(error) },
@@ -73,7 +73,7 @@ describe("reader paragraph image workflow", () => {
     await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(error));
     await vi.waitFor(() =>
       expect(projectNotice).toHaveBeenLastCalledWith({
-        title: "Paragraph image needs attention",
+        title: "Quote image needs attention",
         message: error.message,
         tone: "error"
       })

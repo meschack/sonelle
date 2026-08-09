@@ -90,6 +90,7 @@ describe("reader offline narration application", () => {
 
     await dispatcher.dispatch(
       createDomainEvent("NarrationSettingsChanged", {
+        bookId: "book-1",
         previousVoiceId: "voice-0",
         source: "user",
         settings
@@ -278,7 +279,8 @@ describe("reader offline narration application", () => {
         sentenceId: "sentence-1",
         sentenceIndex: 0,
         playbackStatus: "idle",
-        source: "library"
+        source: "library",
+        language: "en"
       })
     );
     await vi.waitFor(() => expect(getStats).toHaveBeenCalledWith("book-2"));

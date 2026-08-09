@@ -52,13 +52,14 @@ fn phonemize_sentence(
         return Err("English narration input is invalid.".to_string());
     }
 
-    let narration_text = join_intra_word_hyphens(&sentence.text);
+    let narration_text = normalize_intra_word_apostrophes(&sentence.text);
     let (_, mut tokens) = g2p
         .g2p(&narration_text)
         .map_err(|_| "Sonelle couldn't prepare English narration text.".to_string())?;
     for token in &mut tokens {
         improve_token_pronunciation(g2p, token)?;
     }
+    join_hyphenated_token_phonemes(&mut tokens);
     let phonemes = tokens
         .iter()
         .map(|token| token.phonemes.as_deref().unwrap_or("❓").to_string() + &token.whitespace)
@@ -76,6 +77,16 @@ fn phonemize_sentence(
 }
 
 fn improve_token_pronunciation(g2p: &G2P, token: &mut misaki_rs::MToken) -> Result<(), String> {
+    if let Some(stem) = possessive_stem(&token.text) {
+        let stem_phonemes = phonemes_for_word(g2p, stem)?
+            .ok_or_else(|| "English narration input is invalid.".to_string())?;
+        token.phonemes = Some(format!(
+            "{stem_phonemes}{}",
+            possessive_suffix(&stem_phonemes)
+        ));
+        return Ok(());
+    }
+
     let word = token
         .text
         .trim_matches(|character: char| !character.is_alphabetic());
@@ -92,6 +103,44 @@ fn improve_token_pronunciation(g2p: &G2P, token: &mut misaki_rs::MToken) -> Resu
         token.phonemes = Some(predicted_or_fallback(word, fallback));
     }
     Ok(())
+}
+
+fn phonemes_for_word(g2p: &G2P, word: &str) -> Result<Option<String>, String> {
+    let (_, mut tokens) = g2p
+        .g2p(word)
+        .map_err(|_| "Sonelle couldn't prepare an English pronunciation.".to_string())?;
+    let Some(token) = tokens
+        .iter_mut()
+        .find(|token| token.text.chars().any(char::is_alphabetic))
+    else {
+        return Ok(None);
+    };
+    improve_token_pronunciation(g2p, token)?;
+    Ok(token
+        .phonemes
+        .as_deref()
+        .map(str::trim)
+        .filter(|phonemes| !phonemes.is_empty())
+        .map(str::to_string))
+}
+
+fn possessive_stem(word: &str) -> Option<&str> {
+    let stem = ["'s", "'S", "’s", "’S", "ʼs", "ʼS"]
+        .into_iter()
+        .find_map(|suffix| word.strip_suffix(suffix))?;
+    (!stem.is_empty() && stem.chars().all(char::is_alphabetic)).then_some(stem)
+}
+
+fn possessive_suffix(stem_phonemes: &str) -> &'static str {
+    let final_sound = stem_phonemes
+        .chars()
+        .rev()
+        .find(|character| character.is_alphabetic());
+    match final_sound {
+        Some('s' | 'z' | 'ʃ' | 'ʒ' | 'ʧ' | 'ʤ') => "ɪz",
+        Some('p' | 't' | 'k' | 'f' | 'θ') => "s",
+        _ => "z",
+    }
 }
 
 fn should_predict_pronunciation(token: &misaki_rs::MToken) -> bool {
@@ -264,20 +313,41 @@ fn arpabet_to_kokoro(phoneme: &str) -> String {
     stress.map_or_else(|| sound.to_string(), |marker| format!("{marker}{sound}"))
 }
 
-fn join_intra_word_hyphens(text: &str) -> String {
-    let characters = text.chars().collect::<Vec<_>>();
-    let mut joined = String::with_capacity(text.len());
-    for (index, character) in characters.iter().enumerate() {
-        let between_letters = index > 0
-            && index + 1 < characters.len()
-            && characters[index - 1].is_alphabetic()
-            && characters[index + 1].is_alphabetic();
-        let is_hyphen = matches!(character, '-' | '‐' | '‑' | '‒' | '–' | '−');
-        if !(between_letters && is_hyphen) {
-            joined.push(*character);
+fn join_hyphenated_token_phonemes(tokens: &mut [misaki_rs::MToken]) {
+    for index in 1..tokens.len().saturating_sub(1) {
+        if !is_hyphen_token(&tokens[index].text)
+            || !tokens[index - 1].text.chars().any(char::is_alphabetic)
+            || !tokens[index + 1].text.chars().any(char::is_alphabetic)
+        {
+            continue;
         }
+        tokens[index - 1].whitespace.clear();
+        tokens[index].phonemes = Some(String::new());
+        tokens[index].whitespace.clear();
     }
-    joined
+}
+
+fn is_hyphen_token(text: &str) -> bool {
+    matches!(text, "-" | "‐" | "‑" | "‒" | "–" | "−")
+}
+
+fn normalize_intra_word_apostrophes(text: &str) -> String {
+    let characters = text.chars().collect::<Vec<_>>();
+    characters
+        .iter()
+        .enumerate()
+        .map(|(index, character)| {
+            let between_letters = index > 0
+                && index + 1 < characters.len()
+                && characters[index - 1].is_alphabetic()
+                && characters[index + 1].is_alphabetic();
+            if between_letters && matches!(character, '’' | '‘' | 'ʼ') {
+                '\''
+            } else {
+                *character
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -360,6 +430,32 @@ mod tests {
             "hyphenated compounds must not gain an internal pause: {phonemes}"
         );
         assert_eq!(phonemes, phonemes_for("trade‑offs"));
+    }
+
+    #[test]
+    fn pronounces_hyphenated_compounds_from_their_real_words() {
+        let expected = format!("{}{}", phonemes_for("all"), phonemes_for("loving"));
+
+        assert_eq!(phonemes_for("all-loving"), expected);
+        assert_eq!(phonemes_for("all‑loving"), expected);
+    }
+
+    #[test]
+    fn preserves_name_pronunciation_when_attaching_a_possessive_suffix() {
+        let expected = format!("{}z", phonemes_for("Swinburne"));
+
+        assert_eq!(phonemes_for("Swinburne's"), expected);
+        assert_eq!(phonemes_for("Swinburne’s"), expected);
+    }
+
+    #[test]
+    fn applies_english_possessive_sound_rules() {
+        assert_eq!(phonemes_for("cat's"), format!("{}s", phonemes_for("cat")));
+        assert_eq!(phonemes_for("dog's"), format!("{}z", phonemes_for("dog")));
+        assert_eq!(
+            phonemes_for("judge's"),
+            format!("{}ɪz", phonemes_for("judge"))
+        );
     }
 
     #[test]

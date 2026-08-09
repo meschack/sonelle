@@ -16,10 +16,16 @@ import { tokenizeReaderText, type ReaderTextToken } from "@sonelle/text";
 import { DictionaryStatus } from "./reader-feedback";
 import type { SelectedWord } from "./reader-experience-types";
 import type { ReaderParagraphView, ReaderSentenceView } from "./reader-view";
-import type { ReaderReferenceDto } from "../library/library-models";
+import type { ReaderLinkDto, ReaderReferenceDto } from "../library/library-models";
 
 type SentenceDisplayItem =
-  { kind: "token"; token: ReaderTextToken } | { kind: "reference"; reference: ReaderReferenceDto };
+  | { kind: "token"; token: ReaderTextToken }
+  | { kind: "reference"; reference: ReaderReferenceDto }
+  | { kind: "link"; link: ReaderLinkDto; text: string };
+
+type SentenceAnnotation =
+  | { kind: "reference"; offset: number; reference: ReaderReferenceDto }
+  | { kind: "link"; offset: number; link: ReaderLinkDto };
 
 const displayItemCache = new WeakMap<ReaderSentenceView, SentenceDisplayItem[]>();
 
@@ -27,8 +33,19 @@ function displayItemsForSentence(sentence: ReaderSentenceView): SentenceDisplayI
   const existing = displayItemCache.get(sentence);
   if (existing != null) return existing;
 
-  const references = [...(sentence.references ?? [])].sort(
-    (left, right) => left.offset - right.offset
+  const annotations: SentenceAnnotation[] = [
+    ...(sentence.references ?? []).map((reference): SentenceAnnotation => ({
+      kind: "reference",
+      offset: reference.offset,
+      reference
+    })),
+    ...(sentence.links ?? []).map((link): SentenceAnnotation => ({
+      kind: "link",
+      offset: link.offset,
+      link
+    }))
+  ].sort(
+    (left, right) => left.offset - right.offset || annotationOrder(left) - annotationOrder(right)
   );
   const items: SentenceDisplayItem[] = [];
   let textOffset = 0;
@@ -42,15 +59,30 @@ function displayItemsForSentence(sentence: ReaderSentenceView): SentenceDisplayI
     tokenOffset += tokens.length;
   };
 
-  for (const reference of references) {
-    const offset = Math.max(textOffset, Math.min(sentence.text.length, reference.offset));
+  for (const annotation of annotations) {
+    const offset = Math.max(textOffset, Math.min(sentence.text.length, annotation.offset));
     appendText(sentence.text.slice(textOffset, offset));
-    items.push({ kind: "reference", reference });
-    textOffset = offset;
+    if (annotation.kind === "reference") {
+      items.push({ kind: "reference", reference: annotation.reference });
+      textOffset = offset;
+      continue;
+    }
+
+    const end = Math.min(sentence.text.length, offset + annotation.link.length);
+    const linkText = sentence.text.slice(offset, end);
+    if (linkText.length > 0) {
+      items.push({ kind: "link", link: annotation.link, text: linkText });
+      tokenOffset += tokenizeReaderText(linkText).length;
+      textOffset = end;
+    }
   }
   appendText(sentence.text.slice(textOffset));
   displayItemCache.set(sentence, items);
   return items;
+}
+
+function annotationOrder(annotation: SentenceAnnotation): number {
+  return annotation.kind === "reference" ? 0 : 1;
 }
 
 export interface ReaderContentInteractions {
@@ -68,6 +100,7 @@ export interface ReaderContentInteractions {
   ) => void;
   clearWord: () => void;
   saveWord: (insight: WordInsight) => void;
+  openLink: (link: ReaderLinkDto) => void;
 }
 
 const ReaderContentContext = createContext<ReaderContentInteractions>();
@@ -111,7 +144,27 @@ export function ReaderParagraph(props: ReaderParagraphProps) {
     interactions.selectedWord()?.tokenIndex === token.index;
 
   return (
-    <p class="reader-paragraph">
+    <p
+      classList={{
+        "reader-paragraph": true,
+        "structured-entry": props.paragraph.presentation.kind !== "body",
+        emphasized: props.paragraph.presentation.emphasized,
+        [`indent-${Math.min(4, Math.max(0, props.paragraph.presentation.indentLevel))}`]: true
+      }}
+      data-structure={props.paragraph.presentation.kind}
+    >
+      <Show
+        when={
+          props.paragraph.presentation.kind === "ordered" ||
+          props.paragraph.presentation.kind === "unordered"
+        }
+      >
+        <span class="reader-list-marker" aria-hidden="true">
+          {props.paragraph.presentation.kind === "ordered"
+            ? `${props.paragraph.presentation.marker ?? ""}.`
+            : ""}
+        </span>
+      </Show>
       <For each={visibleSentences()}>
         {(sentence) => {
           onCleanup(() => interactions.unregisterSentence(sentence.id));
@@ -132,6 +185,12 @@ export function ReaderParagraph(props: ReaderParagraphProps) {
                   {(item) =>
                     item.kind === "reference" ? (
                       <ReferenceButton reference={item.reference} />
+                    ) : item.kind === "link" ? (
+                      <ReaderLink
+                        link={item.link}
+                        text={item.text}
+                        onOpen={interactions.openLink}
+                      />
                     ) : (
                       <SentenceToken
                         token={item.token}
@@ -155,6 +214,28 @@ export function ReaderParagraph(props: ReaderParagraphProps) {
         }}
       </For>
     </p>
+  );
+}
+
+function ReaderLink(props: {
+  link: ReaderLinkDto;
+  text: string;
+  onOpen: (link: ReaderLinkDto) => void;
+}) {
+  return (
+    <a
+      class="reader-link"
+      href={props.link.href ?? "#"}
+      target={props.link.href == null ? undefined : "_blank"}
+      rel={props.link.href == null ? undefined : "noopener noreferrer"}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        props.onOpen(props.link);
+      }}
+    >
+      {props.text}
+    </a>
   );
 }
 

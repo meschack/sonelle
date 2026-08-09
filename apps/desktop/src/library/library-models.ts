@@ -31,6 +31,8 @@ export interface ReaderChapterDto {
   sentences: ReaderSentenceDto[];
   paragraphs?: ReaderParagraphDto[];
   references?: ReaderReferenceDto[];
+  links?: ReaderLinkDto[];
+  presentations?: ReaderParagraphPresentationDto[];
 }
 
 export interface ReaderReferenceDto {
@@ -43,11 +45,30 @@ export interface ReaderReferenceDto {
   content: string;
 }
 
+export interface ReaderLinkDto {
+  id: string;
+  sentenceId: string;
+  sentenceIndex: number;
+  offset: number;
+  length: number;
+  href: string | null;
+  targetChapterId: string | null;
+  targetSentenceIndex: number | null;
+}
+
 export interface ReaderParagraphDto {
   id: string;
   index: number;
   startSentenceIndex: number;
   sentenceCount: number;
+}
+
+export interface ReaderParagraphPresentationDto {
+  index: number;
+  kind: "body" | "heading" | "quote" | "navigation" | "ordered" | "unordered";
+  indentLevel: number;
+  marker: string | null;
+  emphasized: boolean;
 }
 
 export interface ReaderSentenceDto {

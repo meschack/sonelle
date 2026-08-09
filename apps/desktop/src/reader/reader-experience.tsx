@@ -66,11 +66,15 @@ import {
 } from "./library-rail-state";
 import { createReaderWordInsightWorkflow } from "./reader-word-insight-workflow";
 import { createReaderBookExportWorkflow } from "./reader-book-export-workflow";
+import {
+  createReaderBookMetadataWorkflow,
+  type BookMetadataNotice
+} from "./reader-book-metadata-workflow";
 import { observeReaderErrors } from "./reader-error-reporting";
 import {
-  createReaderParagraphImageWorkflow,
-  type ParagraphImageNotice
-} from "./reader-paragraph-image-workflow";
+  createReaderQuoteImageWorkflow,
+  type QuoteImageNotice
+} from "./reader-quote-image-workflow";
 import { createReaderLibraryApplication } from "./reader-library-application";
 import { createReaderLibrarySearchWorkflow } from "./reader-library-search-workflow";
 import {
@@ -101,6 +105,8 @@ import {
 } from "./reader-keyboard-shortcuts";
 import { ReaderKeyboardShortcutReference } from "./reader-keyboard-shortcut-reference";
 import { ReaderCommandPalette } from "./reader-command-palette";
+import { ReaderQuoteImageDialog } from "./reader-quote-image-dialog";
+import { FocusIcon } from "./reader-icons";
 import {
   renderedLibraryGridColumnCount,
   resolveLibraryGridNavigationIndex,
@@ -201,8 +207,11 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     readerPreferences.inspectorRailWidth
   );
   const [activeView, setActiveView] = createSignal<AppView>("reader");
+  const [focusLibrarySearchPending, setFocusLibrarySearchPending] = createSignal(false);
   const [shortcutReferenceOpen, setShortcutReferenceOpen] = createSignal(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = createSignal(false);
+  const [distractionFree, setDistractionFree] = createSignal(false);
+  const [quoteImageDialogOpen, setQuoteImageDialogOpen] = createSignal(false);
   const [librarySidebarCollapsed, setLibrarySidebarCollapsed] = createSignal(false);
   const [inspectorSidebarCollapsed, setInspectorSidebarCollapsed] = createSignal(false);
   const [libraryRailMode, setLibraryRailMode] = createSignal(
@@ -220,7 +229,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const [narrationPreparing, setNarrationPreparing] = createSignal(false);
   const [showNarrationPreparation, setShowNarrationPreparation] = createSignal(false);
   const [narrationAudible, setNarrationAudible] = createSignal(false);
-  const persistedAudioSettings = audioSettingsRepository.load();
+  const persistedAudioSettings = audioSettingsRepository.load(sampleReader.book.id);
   const [audioSettings, setAudioSettings] = createSignal<AudioSettings>(
     narrationService.activateSettings(persistedAudioSettings, sampleReader.book.language)
   );
@@ -246,9 +255,8 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     createSignal<BookNarrationProgressView | null>(null);
   const [sessionLimit, setSessionLimit] = createSignal<ReaderSessionLimit>({ kind: "off" });
   const [exportNotice, setExportNotice] = createSignal<string | null>(null);
-  const [paragraphImageNotice, setParagraphImageNotice] = createSignal<ParagraphImageNotice | null>(
-    null
-  );
+  const [bookMetadataNotice, setBookMetadataNotice] = createSignal<BookMetadataNotice | null>(null);
+  const [quoteImageNotice, setQuoteImageNotice] = createSignal<QuoteImageNotice | null>(null);
   const [savedDictionary, setSavedDictionary] = createSignal<SavedDictionary>(
     dictionaryRepository.loadSavedDictionary()
   );
@@ -256,6 +264,19 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     Record<string, DictionaryLookupResult>
   >({});
   const [selectedWord, setSelectedWord] = createSignal<SelectedWord | null>(null);
+  const toggleDistractionFree = () => {
+    if (activeView() !== "reader") return;
+    const next = !distractionFree();
+    batch(() => {
+      setDistractionFree(next);
+      if (next) {
+        setSelectedWord(null);
+        setReaderSearchQuery("");
+        setShortcutReferenceOpen(false);
+        setCommandPaletteOpen(false);
+      }
+    });
+  };
   const wordInsightWorkflow = createReaderWordInsightWorkflow(
     {
       dictionary: dictionaryRepository,
@@ -303,6 +324,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     {
       currentSettings: audioSettings,
       currentLanguage: () => reader().book.language,
+      currentBookId: () => reader().book.id,
       projectSettings: setAudioSettings
     }
   );
@@ -343,7 +365,6 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const playbackApplication = createReaderPlaybackApplication(
     {
       narration: narrationWorkflow,
-      settings: narrationSettingsWorkflow,
       eventDispatcher,
       positions: dependencies.readingPositionStore,
       preparesAcrossChapters: narrationService.capabilities.preparesAcrossChapters,
@@ -522,12 +543,12 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       projectNotice: setExportNotice
     }
   );
-  const paragraphImageWorkflow = createReaderParagraphImageWorkflow(
+  const quoteImageWorkflow = createReaderQuoteImageWorkflow(
     {
       eventDispatcher,
-      exporter: dependencies.paragraphImageExporter,
+      exporter: dependencies.quoteImageExporter,
       onError(error) {
-        void reportAppError("paragraph-image.export", error, [
+        void reportAppError("quote-image.export", error, [
           { bookId: reader().book.id, chapterId: reader().chapter.id }
         ]);
       }
@@ -535,7 +556,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     {
       currentReader: reader,
       currentSentenceIndex: () => playback().activeSentenceIndex,
-      projectNotice: setParagraphImageNotice
+      projectNotice: setQuoteImageNotice
     }
   );
   const libraryApplication = createReaderLibraryApplication(
@@ -570,6 +591,33 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       openBookmarkInspector() {
         setInspectorTab("bookmarks");
       }
+    }
+  );
+  const bookMetadataWorkflow = createReaderBookMetadataWorkflow(
+    {
+      editor: dependencies.bookMetadataEditor,
+      eventDispatcher,
+      friendlyError: toFriendlyLibraryError,
+      onEventError: reportEventReactionFailure
+    },
+    {
+      projectMetadata(metadata) {
+        setReader((current) =>
+          current.book.id === metadata.bookId
+            ? {
+                ...current,
+                book: {
+                  ...current.book,
+                  title: metadata.title,
+                  author: metadata.author,
+                  coverImageSrc: metadata.coverImageSrc
+                }
+              }
+            : current
+        );
+      },
+      projectNotice: setBookMetadataNotice,
+      refreshLibrary: libraryApplication.refresh
     }
   );
   const librarySearchWorkflow = createReaderLibrarySearchWorkflow(
@@ -713,7 +761,8 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     const stopOpeningWorkflow = openingWorkflow.start();
     const stopWordInsightWorkflow = wordInsightWorkflow.start();
     const stopBookExportWorkflow = bookExportWorkflow.start();
-    const stopParagraphImageWorkflow = paragraphImageWorkflow.start();
+    const stopQuoteImageWorkflow = quoteImageWorkflow.start();
+    const stopBookMetadataWorkflow = bookMetadataWorkflow.start();
     const stopReaderErrorReporting = observeReaderErrors(
       eventDispatcher,
       (scope, error, details) => {
@@ -756,7 +805,8 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       stopOpeningWorkflow();
       stopWordInsightWorkflow();
       stopBookExportWorkflow();
-      stopParagraphImageWorkflow();
+      stopQuoteImageWorkflow();
+      stopBookMetadataWorkflow();
       stopReaderErrorReporting();
     });
   });
@@ -811,6 +861,16 @@ export function ReaderExperience(props: ReaderExperienceProps) {
 
   createEffect(() => {
     librarySearchWorkflow.queryChanged(libraryQuery());
+  });
+
+  createEffect(() => {
+    if (!focusLibrarySearchPending() || activeView() !== "library") return;
+    queueMicrotask(() => {
+      setFocusLibrarySearchPending(false);
+      document
+        .querySelector<HTMLInputElement>('.library-workspace [aria-label="Search library"]')
+        ?.focus();
+    });
   });
 
   createEffect(() => {
@@ -887,9 +947,17 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         });
         break;
       case "focus-chapter":
-        document.querySelector<HTMLSelectElement>('[aria-label="Current chapter"]')?.focus();
+        if (distractionFree()) {
+          setDistractionFree(false);
+          queueMicrotask(() =>
+            document.querySelector<HTMLSelectElement>('[aria-label="Current chapter"]')?.focus()
+          );
+        } else {
+          document.querySelector<HTMLSelectElement>('[aria-label="Current chapter"]')?.focus();
+        }
         break;
       case "search-chapter":
+        setDistractionFree(false);
         setInspectorSidebarCollapsed(false);
         setInspectorTab("search");
         queueMicrotask(() => readerSearchInput?.focus());
@@ -898,19 +966,22 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         void toggleActiveBookmark();
         break;
       case "open-word":
+        setDistractionFree(false);
         setInspectorSidebarCollapsed(false);
         setInspectorTab("word");
         break;
       case "open-notes":
+        setDistractionFree(false);
         setInspectorSidebarCollapsed(false);
         setInspectorTab("bookmarks");
         break;
       case "open-tools":
+        setDistractionFree(false);
         setInspectorSidebarCollapsed(false);
         setInspectorTab("settings");
         break;
-      case "save-paragraph-image":
-        if (paragraphImageNotice()?.tone !== "pending") paragraphImageWorkflow.request();
+      case "save-quote-image":
+        if (quoteImageNotice()?.tone !== "pending") setQuoteImageDialogOpen(true);
         break;
       case "open-library":
         openAppView("library");
@@ -922,6 +993,11 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         document
           .querySelector<HTMLInputElement>('.library-workspace [aria-label="Search library"]')
           ?.focus();
+        break;
+      case "search-across-books":
+        setDistractionFree(false);
+        setFocusLibrarySearchPending(true);
+        openAppView("library");
         break;
       case "navigate-library-up":
         focusLibraryBookCard("up");
@@ -954,10 +1030,15 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         else if (libraryFilter() !== "all") setLibraryFilter("all");
         break;
       case "toggle-library-sidebar":
+        setDistractionFree(false);
         setLibrarySidebarCollapsed((collapsed) => !collapsed);
         break;
       case "toggle-inspector-sidebar":
+        setDistractionFree(false);
         setInspectorSidebarCollapsed((collapsed) => !collapsed);
+        break;
+      case "toggle-distraction-free":
+        toggleDistractionFree();
         break;
       case "open-command-palette":
         setShortcutReferenceOpen(false);
@@ -979,9 +1060,10 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         setShortcutReferenceOpen(false);
         break;
       case "clear-transient":
-        if (selectedWord() != null) setSelectedWord(null);
+        if (quoteImageDialogOpen()) setQuoteImageDialogOpen(false);
+        else if (selectedWord() != null) setSelectedWord(null);
         else if (readerSearchQuery().length > 0) setReaderSearchQuery("");
-        else if (paragraphImageNotice() != null) setParagraphImageNotice(null);
+        else if (quoteImageNotice() != null) setQuoteImageNotice(null);
         else if (narrationNotice() != null) setNarrationNotice(null);
         break;
     }
@@ -999,7 +1081,8 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       altKey: event.altKey,
       typing: isTypingTarget(event.target),
       shortcutReferenceOpen: shortcutReferenceOpen(),
-      commandPaletteOpen: commandPaletteOpen()
+      commandPaletteOpen: commandPaletteOpen(),
+      distractionFree: distractionFree()
     });
     if (command == null) return;
     event.preventDefault();
@@ -1191,6 +1274,13 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     get dropActive() {
       return isLibraryDropTarget();
     },
+    get searching() {
+      return isLibrarySearching();
+    },
+    get searchResults() {
+      return librarySearchResults();
+    },
+    onOpenSearchResult: openLibrarySearchResult,
     onDragEnter: () => setIsLibraryDropTarget(true),
     onDragLeave: () => setIsLibraryDropTarget(false),
     onDropFiles: libraryApplication.handleBrowserDrop
@@ -1243,6 +1333,13 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       onDeleteBookmark: deleteBookmark
     },
     settings: {
+      get book() {
+        const book = reader().book;
+        return { ...book, editable: reader().source === "library" };
+      },
+      get bookMetadataNotice() {
+        return bookMetadataNotice();
+      },
       get audioSettings() {
         return audioSettings();
       },
@@ -1325,7 +1422,9 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       onPrepareBook: bookNarrationPreparationApplication.request,
       onCancelBookPreparation: bookNarrationPreparationApplication.cancel,
       onSessionLimitChange: sessionControlApplication.set,
-      onExportBook: bookExportWorkflow.request
+      onExportBook: bookExportWorkflow.request,
+      onChooseBookCover: bookMetadataWorkflow.chooseCover,
+      onSaveBookMetadata: bookMetadataWorkflow.request
     }
   } satisfies ReaderInspectorModel;
 
@@ -1351,6 +1450,20 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     },
     saveWord(insight) {
       void wordInsightWorkflow.save(insight);
+    },
+    openLink(link) {
+      if (link.href != null) {
+        void dependencies.externalLinkOpener
+          .open(link.href)
+          .catch((error) => reportAppError("reader.external-link", error, [link.href]));
+        return;
+      }
+      if (link.targetChapterId != null) {
+        void navigationApplication.openLocation(
+          link.targetChapterId,
+          link.targetSentenceIndex ?? 0
+        );
+      }
     }
   } satisfies ReaderContentInteractions;
 
@@ -1359,8 +1472,11 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       libraryApplication.refreshBookmarks(event.payload.bookId)
     ),
     eventDispatcher.subscribe("ReaderClosed", () => {
-      setActiveView("library");
-      sendLibraryRailEvent({ type: "library-opened" });
+      batch(() => {
+        setActiveView("library");
+        setDistractionFree(false);
+        sendLibraryRailEvent({ type: "library-opened" });
+      });
     }),
     eventDispatcher.subscribe("ReaderClosed", stopReaderPlayback)
   ];
@@ -1371,7 +1487,8 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       classList={{
         "sonelle-shell": true,
         "library-sidebar-collapsed": librarySidebarCollapsed(),
-        "inspector-sidebar-collapsed": inspectorSidebarCollapsed()
+        "inspector-sidebar-collapsed": inspectorSidebarCollapsed(),
+        "distraction-free": activeView() === "reader" && distractionFree()
       }}
       style={{
         "--library-rail-width": `${libraryRailWidth()}px`,
@@ -1385,13 +1502,23 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       }}
     >
       <ProductBar
-        showParagraphImageAction={activeView() === "reader"}
-        canSaveParagraphImage={
-          reader().paragraphs.length > 0 && paragraphImageNotice()?.tone !== "pending"
-        }
-        onSaveParagraphImage={paragraphImageWorkflow.request}
+        showQuoteImageAction={activeView() === "reader"}
+        canSaveQuoteImage={reader().sentences.length > 0 && quoteImageNotice()?.tone !== "pending"}
+        onSaveQuoteImage={() => setQuoteImageDialogOpen(true)}
         onOpenShortcutReference={() => setShortcutReferenceOpen(true)}
       />
+      <Show when={activeView() === "reader" && distractionFree()}>
+        <button
+          class="distraction-free-exit"
+          type="button"
+          aria-label="Exit distraction-free reading"
+          aria-keyshortcuts="D Escape"
+          title="Exit distraction-free reading (D or Esc)"
+          onClick={toggleDistractionFree}
+        >
+          <FocusIcon />
+        </button>
+      </Show>
       <Show when={shortcutReferenceOpen()}>
         <ReaderKeyboardShortcutReference onClose={() => setShortcutReferenceOpen(false)} />
       </Show>
@@ -1402,6 +1529,17 @@ export function ReaderExperience(props: ReaderExperienceProps) {
           onSelect={(command) => {
             setCommandPaletteOpen(false);
             queueMicrotask(() => executeKeyboardCommand(command));
+          }}
+        />
+      </Show>
+      <Show when={quoteImageDialogOpen() && activeSentence() != null}>
+        <ReaderQuoteImageDialog
+          sentences={reader().sentences}
+          activeSentenceId={activeSentence()?.id ?? ""}
+          onClose={() => setQuoteImageDialogOpen(false)}
+          onSave={(sentenceIds) => {
+            setQuoteImageDialogOpen(false);
+            quoteImageWorkflow.request(sentenceIds);
           }}
         />
       </Show>
@@ -1427,6 +1565,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
             sentenceCount={reader().sentences.length}
             onOpenSearch={() => setInspectorTab("search")}
             onOpenSettings={() => setInspectorTab("settings")}
+            onEnterDistractionFree={toggleDistractionFree}
           />
 
           <ChapterNavigator
@@ -1507,7 +1646,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
           when={narrationNotice()}
           fallback={
             <Show
-              when={paragraphImageNotice()}
+              when={quoteImageNotice()}
               fallback={
                 <Show when={showNarrationPreparation()}>
                   <ReaderToast tone="pending" message="Getting the next part ready to play." />
@@ -1519,7 +1658,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
                   title={notice().title}
                   tone={notice().tone}
                   message={notice().message}
-                  onDismiss={() => setParagraphImageNotice(null)}
+                  onDismiss={() => setQuoteImageNotice(null)}
                 />
               )}
             </Show>

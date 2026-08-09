@@ -11,6 +11,11 @@ import { createDomainEvent, createDomainEventDispatcher } from "@sonelle/domain"
 import { createSavedDictionary } from "@sonelle/learning";
 import { createReaderPreferences, type ReaderPreferences } from "@sonelle/reader";
 import type { ReaderExperienceDependencies } from "./reader-dependencies";
+import type {
+  BookMetadataEditor,
+  LibrarySearch,
+  LibrarySearchResultDto
+} from "../library/library-contracts";
 import type { LibraryBookSummary, ReaderDocumentDto } from "../library/library-models";
 import { ReaderExperience } from "./reader-experience";
 import type { ReaderNarrationWorkflow } from "./reader-narration-workflow";
@@ -45,21 +50,33 @@ describe("ReaderExperience integration", () => {
 
     dispatchShortcut("m");
     await vi.waitFor(() =>
-      expect(saveAudioSettings).toHaveBeenCalledWith(expect.objectContaining({ volume: 0 }))
+      expect(saveAudioSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ volume: 0 }),
+        "fixture-book-mara"
+      )
     );
 
     dispatchShortcut("ArrowUp", { shiftKey: true });
     await vi.waitFor(() =>
-      expect(saveAudioSettings).toHaveBeenCalledWith(expect.objectContaining({ volume: 0.05 }))
+      expect(saveAudioSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ volume: 0.05 }),
+        "fixture-book-mara"
+      )
     );
 
     dispatchShortcut("r");
     await vi.waitFor(() =>
-      expect(saveAudioSettings).toHaveBeenCalledWith(expect.objectContaining({ playbackRate: 1 }))
+      expect(saveAudioSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ playbackRate: 1 }),
+        "fixture-book-mara"
+      )
     );
     dispatchShortcut("R", { shiftKey: true });
     await vi.waitFor(() =>
-      expect(saveAudioSettings).toHaveBeenCalledWith(expect.objectContaining({ playbackRate: 0.9 }))
+      expect(saveAudioSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ playbackRate: 0.9 }),
+        "fixture-book-mara"
+      )
     );
 
     dispose();
@@ -97,9 +114,9 @@ describe("ReaderExperience integration", () => {
     container.remove();
   });
 
-  it("routes paragraph images, library closing, and imports through keyboard shortcuts", async () => {
+  it("routes quote images, library closing, and imports through keyboard shortcuts", async () => {
     const pause = vi.fn().mockResolvedValue(undefined);
-    const exportParagraphImage = vi.fn().mockResolvedValue("sonelle-passage.png");
+    const exportQuoteImage = vi.fn().mockResolvedValue("sonelle-passage.png");
     const importFromDialog = vi.fn().mockResolvedValue(null);
     const dependencies = createDependencies({
       dispatcher: createDomainEventDispatcher(),
@@ -107,7 +124,7 @@ describe("ReaderExperience integration", () => {
       stopNarration: vi.fn(),
       stopDrops: vi.fn(),
       stopVoiceEvents: vi.fn(),
-      exportParagraphImage,
+      exportQuoteImage,
       importFromDialog
     });
     const container = document.createElement("div");
@@ -116,7 +133,17 @@ describe("ReaderExperience integration", () => {
     await Promise.resolve();
 
     dispatchShortcut("S", { shiftKey: true });
-    await vi.waitFor(() => expect(exportParagraphImage).toHaveBeenCalledOnce());
+    const quoteDialog = await vi.waitFor(() => {
+      const element = document.querySelector('[aria-labelledby="quote-image-title"]');
+      expect(element).not.toBeNull();
+      return element;
+    });
+    const saveQuote = [...(quoteDialog?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+      (button) => button.textContent?.includes("Save image")
+    );
+    expect(saveQuote).not.toBeUndefined();
+    saveQuote?.click();
+    await vi.waitFor(() => expect(exportQuoteImage).toHaveBeenCalledOnce());
 
     dispatchShortcut("L", { shiftKey: true });
     await vi.waitFor(() => expect(container.querySelector(".library-workspace")).not.toBeNull());
@@ -150,7 +177,7 @@ describe("ReaderExperience integration", () => {
     });
     expect(dialog?.textContent).toContain("Keyboard shortcuts");
     expect(dialog?.textContent).toContain("Play or pause narration");
-    expect(dialog?.textContent).toContain("Save paragraph image");
+    expect(dialog?.textContent).toContain("Create quote image");
 
     dispatchShortcut("Escape");
     await vi.waitFor(() =>
@@ -223,6 +250,72 @@ describe("ReaderExperience integration", () => {
     container.remove();
   });
 
+  it("searches across imported books and opens a sentence result in context", async () => {
+    const openBook = vi.fn(async (bookId: string) => createReaderDocument(bookId));
+    const searchLibrary = vi.fn<LibrarySearch["search"]>().mockResolvedValue([
+      {
+        id: "sentence:book-two-sentence",
+        kind: "sentence",
+        bookId: "book-two",
+        bookTitle: "Second Book",
+        author: "Library Author",
+        chapterId: "book-two-chapter",
+        chapterTitle: "Chapter 1",
+        sentenceId: "book-two-sentence",
+        sentenceIndex: 0,
+        excerpt: "Every serious choice involves trade-offs."
+      }
+    ] satisfies LibrarySearchResultDto[]);
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      libraryBooks: [
+        createLibraryBook("book-one", "First Book", 0),
+        createLibraryBook("book-two", "Second Book", 0)
+      ],
+      openBook,
+      searchLibrary
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+    await vi.waitFor(() => expect(openBook).toHaveBeenCalledWith("book-one", undefined));
+    openBook.mockClear();
+
+    dispatchShortcut("f", { ctrlKey: true, shiftKey: true });
+    const search = await vi.waitFor(() => {
+      const input = container.querySelector<HTMLInputElement>(
+        '.library-workspace [aria-label="Search library"]'
+      );
+      expect(document.activeElement).toBe(input);
+      return input;
+    });
+    if (search == null) throw new Error("Cross-book search was not rendered");
+    search.value = "trade";
+    search.dispatchEvent(new InputEvent("input", { bubbles: true }));
+
+    await vi.waitFor(() =>
+      expect(searchLibrary).toHaveBeenCalledWith({ query: "trade", limit: 30 })
+    );
+    const results = await vi.waitFor(() => {
+      const view = container.querySelector(".cross-book-search-results");
+      expect(view?.textContent).toContain("Every serious choice involves trade-offs.");
+      return view;
+    });
+    expect(results?.querySelector("mark")?.textContent).toBe("trade");
+    const result = [...(results?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+      (button) => button.textContent?.includes("Every serious choice")
+    );
+    result?.click();
+
+    await vi.waitFor(() => expect(openBook).toHaveBeenCalledWith("book-two", "book-two-chapter"));
+    dispose();
+    container.remove();
+  });
+
   it("routes power-user layout, chapter-boundary, palette, and fullscreen commands", async () => {
     const toggleFullscreen = vi.fn().mockResolvedValue(undefined);
     const pause = vi.fn().mockResolvedValue(undefined);
@@ -276,6 +369,43 @@ describe("ReaderExperience integration", () => {
 
     dispatchShortcut("F11");
     await vi.waitFor(() => expect(toggleFullscreen).toHaveBeenCalledOnce());
+
+    dispose();
+    container.remove();
+  });
+
+  it("enters distraction-free reading without destroying the prior sidebar layout", async () => {
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn()
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+    const shell = container.querySelector(".sonelle-shell");
+
+    dispatchShortcut("b", { ctrlKey: true });
+    expect(shell?.classList).toContain("library-sidebar-collapsed");
+
+    container
+      .querySelector<HTMLButtonElement>('[aria-label="Enter distraction-free reading"]')
+      ?.click();
+    expect(shell?.classList).toContain("distraction-free");
+    expect(
+      container.querySelector<HTMLButtonElement>('[aria-label="Exit distraction-free reading"]')
+    ).not.toBeNull();
+
+    dispatchShortcut("Escape");
+    expect(shell?.classList).not.toContain("distraction-free");
+    expect(shell?.classList).toContain("library-sidebar-collapsed");
+
+    dispatchShortcut("d");
+    expect(shell?.classList).toContain("distraction-free");
+    dispatchShortcut("d");
+    expect(shell?.classList).not.toContain("distraction-free");
 
     dispose();
     container.remove();
@@ -534,6 +664,7 @@ describe("ReaderExperience integration", () => {
     expect(container.querySelector('[aria-label="Narration speed"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Book content font"]')).not.toBeNull();
     expect(container.textContent).toContain("Offline readiness");
+    expect(container.querySelector('[aria-label="Chapter narration readiness"]')).toBeNull();
     expect(container.textContent).not.toContain("Diagnostics");
 
     dispose();
@@ -623,34 +754,242 @@ describe("ReaderExperience integration", () => {
     container.remove();
   });
 
-  it("exports the active paragraph from beside the local storage status", async () => {
-    const exportParagraphImage = vi.fn().mockResolvedValue("sonelle-passage.png");
+  it("opens imported EPUB links with the platform adapter", async () => {
+    const openExternalLink = vi.fn().mockResolvedValue(undefined);
+    const openBook = vi.fn(async () => {
+      const document = createReaderDocument("book-link");
+      document.chapters[0].links = [
+        {
+          id: "link-1",
+          sentenceId: "book-link-sentence",
+          sentenceIndex: 0,
+          offset: 16,
+          length: 7,
+          href: "https://example.com/library",
+          targetChapterId: null,
+          targetSentenceIndex: null
+        }
+      ];
+      document.chapters[0].presentations = [
+        {
+          index: 0,
+          kind: "navigation",
+          indentLevel: 1,
+          marker: null,
+          emphasized: false
+        }
+      ];
+      document.chapters[0].paragraphs = [
+        {
+          id: "book-link-paragraph",
+          index: 0,
+          startSentenceIndex: 0,
+          sentenceCount: 1
+        }
+      ];
+      return document;
+    });
     const dependencies = createDependencies({
       dispatcher: createDomainEventDispatcher(),
       pause: vi.fn().mockResolvedValue(undefined),
       stopNarration: vi.fn(),
       stopDrops: vi.fn(),
       stopVoiceEvents: vi.fn(),
-      exportParagraphImage
+      libraryBooks: [createLibraryBook("book-link", "Linked Book", 0)],
+      openBook,
+      openExternalLink
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    const link = await vi.waitFor(() => {
+      const anchor = container.querySelector<HTMLAnchorElement>(".reader-link");
+      expect(anchor?.textContent).toBe("Library");
+      return anchor;
+    });
+    expect(link?.closest(".reader-paragraph")?.classList.contains("indent-1")).toBe(true);
+    link?.click();
+
+    expect(openExternalLink).toHaveBeenCalledWith("https://example.com/library");
+
+    dispose();
+    container.remove();
+  });
+
+  it("navigates imported EPUB links inside the book", async () => {
+    const openBook = vi.fn(async (_bookId: string, chapterId?: string) => {
+      const document = createReaderDocument("book-contents");
+      document.chapters.push({
+        id: "book-contents-target",
+        title: "Target chapter",
+        index: 1,
+        sentenceCount: 3,
+        sentences:
+          chapterId === "book-contents-target"
+            ? [
+                { id: "target-1", index: 0, text: "Opening." },
+                { id: "target-2", index: 1, text: "Part Two." },
+                { id: "target-3", index: 2, text: "Destination." }
+              ]
+            : []
+      });
+      document.chapters[0].links = [
+        {
+          id: "internal-link-1",
+          sentenceId: "book-contents-sentence",
+          sentenceIndex: 0,
+          offset: 16,
+          length: 7,
+          href: null,
+          targetChapterId: "book-contents-target",
+          targetSentenceIndex: 1
+        }
+      ];
+      if (chapterId != null) document.activeChapterId = chapterId;
+      return document;
+    });
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      libraryBooks: [createLibraryBook("book-contents", "Contents Book", 0)],
+      openBook
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    const link = await vi.waitFor(() => {
+      const anchor = container.querySelector<HTMLAnchorElement>(".reader-link");
+      expect(anchor?.textContent).toBe("Library");
+      return anchor;
+    });
+    link?.click();
+
+    await vi.waitFor(() =>
+      expect(openBook).toHaveBeenLastCalledWith("book-contents", "book-contents-target")
+    );
+    await vi.waitFor(() => expect(container.textContent).toContain("Part Two."));
+
+    dispose();
+    container.remove();
+  });
+
+  it("exports selected neighboring sentences from beside the local storage status", async () => {
+    const exportQuoteImage = vi.fn().mockResolvedValue("sonelle-passage.png");
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      exportQuoteImage
     });
     const container = document.createElement("div");
     document.body.append(container);
     const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
 
     const action = container.querySelector<HTMLButtonElement>(
-      '.product-status-actions [aria-label="Save paragraph as image"]'
+      '.product-status-actions [aria-label="Create quote image"]'
     );
     expect(action).not.toBeNull();
     action?.click();
 
-    await vi.waitFor(() => expect(exportParagraphImage).toHaveBeenCalledOnce());
-    expect(exportParagraphImage).toHaveBeenCalledWith(
+    const dialog = await vi.waitFor(() => {
+      const element = document.querySelector(
+        '[role="dialog"][aria-labelledby="quote-image-title"]'
+      );
+      expect(element).not.toBeNull();
+      return element;
+    });
+    const optionalSentence =
+      dialog?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[1];
+    optionalSentence?.click();
+    const save = [...(dialog?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((button) =>
+      button.textContent?.includes("Save image")
+    );
+    save?.click();
+
+    await vi.waitFor(() => expect(exportQuoteImage).toHaveBeenCalledOnce());
+    expect(exportQuoteImage).toHaveBeenCalledWith(
       expect.objectContaining({
         bookTitle: "The Listening Margin",
-        chapterTitle: "Chapter 1"
+        chapterTitle: "Chapter 1",
+        sentenceTexts: expect.arrayContaining([
+          expect.stringContaining("Rain softened the windows"),
+          expect.stringContaining("playback controls")
+        ])
       })
     );
-    await vi.waitFor(() => expect(container.textContent).toContain("Paragraph image ready"));
+    await vi.waitFor(() => expect(container.textContent).toContain("Quote image ready"));
+
+    dispose();
+    container.remove();
+  });
+
+  it("edits the active library book title, author, and cover", async () => {
+    const updateBookMetadata = vi.fn<BookMetadataEditor["update"]>().mockResolvedValue({
+      bookId: "book-edit",
+      title: "A Better Title",
+      author: "A Better Author",
+      coverImageSrc: "asset://edited-cover.png"
+    });
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      libraryBooks: [createLibraryBook("book-edit", "Original Title", 0)],
+      openBook: vi.fn(async () => createReaderDocument("book-edit")),
+      chooseBookCover: vi.fn().mockResolvedValue({
+        path: "/tmp/edited-cover.png",
+        previewSrc: "asset://edited-cover.png"
+      }),
+      updateBookMetadata
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+    await vi.waitFor(() => expect(container.textContent).toContain("Opened Book"));
+
+    clickInspectorTab(container, "Tools");
+    const title = await vi.waitFor(() => {
+      const input = container.querySelector<HTMLInputElement>('[aria-label="Book title"]');
+      expect(input).not.toBeNull();
+      return input;
+    });
+    if (title == null) throw new Error("Book title editor was not rendered");
+    title.value = "A Better Title";
+    title.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const author = container.querySelector<HTMLInputElement>('[aria-label="Book author"]');
+    if (author == null) throw new Error("Book author editor was not rendered");
+    author.value = "A Better Author";
+    author.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const chooseCover = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.includes("Choose cover")
+    );
+    chooseCover?.click();
+    await Promise.resolve();
+    const save = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
+      button.textContent?.includes("Save book details")
+    );
+    save?.click();
+
+    await vi.waitFor(() => expect(updateBookMetadata).toHaveBeenCalledOnce());
+    expect(updateBookMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bookId: "book-edit",
+        title: "A Better Title",
+        author: "A Better Author",
+        coverPath: "/tmp/edited-cover.png"
+      })
+    );
+    await vi.waitFor(() => expect(container.textContent).toContain("Book details saved."));
+    expect(container.textContent).toContain("A Better Title");
 
     dispose();
     container.remove();
@@ -708,8 +1047,8 @@ interface DependencySpies {
   engineStatus?: "ready" | "not-installed";
   offlineLibrary?: "individual-voice" | "language-pack";
   readerPreferences?: ReaderPreferences;
-  exportParagraphImage?: (content: {
-    paragraphText: string;
+  exportQuoteImage?: (content: {
+    sentenceTexts: string[];
     bookTitle: string;
     author: string;
     chapterTitle: string;
@@ -718,7 +1057,11 @@ interface DependencySpies {
   getAudioCacheStats?: (bookId: string) => Promise<{ sentenceCount: number; sizeBytes: number }>;
   toggleFullscreen?: () => Promise<void>;
   libraryBooks?: LibraryBookSummary[];
-  openBook?: (bookId: string) => Promise<ReaderDocumentDto>;
+  openBook?: (bookId: string, chapterId?: string) => Promise<ReaderDocumentDto>;
+  searchLibrary?: LibrarySearch["search"];
+  chooseBookCover?: BookMetadataEditor["chooseCover"];
+  updateBookMetadata?: BookMetadataEditor["update"];
+  openExternalLink?: (href: string) => Promise<void>;
 }
 
 function createDependencies(spies: DependencySpies): ReaderExperienceDependencies {
@@ -767,6 +1110,12 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       importFromDialog: spies.importFromDialog ?? vi.fn().mockResolvedValue(null),
       importFromPath: vi.fn().mockRejectedValue(new Error("No import requested"))
     },
+    bookMetadataEditor: {
+      chooseCover: spies.chooseBookCover ?? vi.fn().mockResolvedValue(null),
+      update:
+        spies.updateBookMetadata ??
+        vi.fn().mockRejectedValue(new Error("No metadata edit requested"))
+    },
     bookmarkStore: {
       list: vi.fn().mockResolvedValue([]),
       save: vi.fn().mockRejectedValue(new Error("No bookmark requested")),
@@ -802,8 +1151,11 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       listen: vi.fn().mockResolvedValue(() => undefined)
     },
     eventDispatcher: spies.dispatcher,
+    externalLinkOpener: {
+      open: spies.openExternalLink ?? vi.fn().mockResolvedValue(undefined)
+    },
     fontCatalog: { listFamilies: vi.fn().mockResolvedValue(["Inter", "Literata"]) },
-    librarySearch: { search: vi.fn().mockResolvedValue([]) },
+    librarySearch: { search: spies.searchLibrary ?? vi.fn().mockResolvedValue([]) },
     narration: {
       capabilities: {
         offlineLibrary: spies.offlineLibrary ?? "individual-voice",
@@ -816,8 +1168,8 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       bookIdentity: () => ({ voiceId: "voice-1", modelRevision: "test-revision" }),
       prepareBook: vi.fn().mockResolvedValue({ sentenceCount: 0 })
     },
-    paragraphImageExporter: {
-      export: spies.exportParagraphImage ?? vi.fn().mockResolvedValue("paragraph.png")
+    quoteImageExporter: {
+      export: spies.exportQuoteImage ?? vi.fn().mockResolvedValue("quote.png")
     },
     readerPreferencesRepository: {
       load: () => spies.readerPreferences ?? createReaderPreferences(),

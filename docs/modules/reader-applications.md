@@ -9,6 +9,7 @@
 - serial delivery of desktop EPUB open requests into the library import workflow
 - lifecycle subscription and cleanup behind small application interfaces
 - typography and reading-color selection, projection, and preference persistence
+- multi-paragraph quote export and editable local book metadata
 
 ## Refuses To Own
 

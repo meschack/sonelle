@@ -40,6 +40,40 @@ describe("reader playback application", () => {
     harness.application.dispose();
   });
 
+  it("resumes narration at the selected sentence after a jump while playing", async () => {
+    let finishReset: (() => void) | undefined;
+    const harness = createHarness({
+      reset: () =>
+        new Promise<void>((resolve) => {
+          finishReset = resolve;
+        })
+    });
+    harness.setPlayback({ activeSentenceIndex: 2, status: "playing" });
+
+    harness.application.move(-1);
+    harness.application.playbackChanged();
+
+    expect(harness.playback()).toEqual({ activeSentenceIndex: 1, status: "playing" });
+    expect(harness.requestPlayback).not.toHaveBeenCalled();
+
+    finishReset?.();
+    await vi.waitFor(() =>
+      expect(harness.requestPlayback).toHaveBeenCalledWith(harness.reader().sentences[1].id)
+    );
+    harness.application.dispose();
+  });
+
+  it("does not interrupt narration when a movement key cannot move any farther", () => {
+    const harness = createHarness();
+    harness.setPlayback({ activeSentenceIndex: 0, status: "playing" });
+
+    harness.application.move(-1);
+
+    expect(harness.reset).not.toHaveBeenCalled();
+    expect(harness.playback()).toEqual({ activeSentenceIndex: 0, status: "playing" });
+    harness.application.dispose();
+  });
+
   it("bounds automatic chapter handoff and cancels it when playback changes", async () => {
     vi.useFakeTimers();
     const harness = createHarness();
@@ -98,6 +132,7 @@ describe("reader playback application", () => {
 
     await harness.dispatcher.dispatch(
       createDomainEvent("NarrationSettingsChanged", {
+        bookId: "book-1",
         previousVoiceId: "kokoro:af-heart",
         source: "user",
         settings: { ...DEFAULT_AUDIO_SETTINGS, voiceId: "kokoro:bf-emma" }
@@ -108,6 +143,7 @@ describe("reader playback application", () => {
 
     await harness.dispatcher.dispatch(
       createDomainEvent("NarrationSettingsChanged", {
+        bookId: "book-1",
         previousVoiceId: "kokoro:bf-emma",
         source: "book",
         settings: { ...DEFAULT_AUDIO_SETTINGS, voiceId: "supertonic:F1" }
@@ -146,6 +182,7 @@ function createHarness(
     reactToReaderActivation?: boolean;
     savePosition?: (position: SaveReadingPositionInput) => Promise<void>;
     allowsChapterTransition?: () => boolean;
+    reset?: () => Promise<void>;
   } = {}
 ) {
   let currentReader: ReaderView = { ...buildFixtureReaderView(), source: "library" };
@@ -154,7 +191,10 @@ function createHarness(
   let currentAudible = false;
   const operations: string[] = [];
   const savePosition = vi.fn(options.savePosition ?? (() => Promise.resolve()));
-  const reset = vi.fn(async () => void operations.push("reset"));
+  const reset = vi.fn(async () => {
+    operations.push("reset");
+    await options.reset?.();
+  });
   const advanceChapter = vi.fn().mockResolvedValue(undefined);
   const dispatcher = createDomainEventDispatcher();
   const narration = {
@@ -169,7 +209,6 @@ function createHarness(
   application = createReaderPlaybackApplication(
     {
       narration,
-      settings: { activate: vi.fn() },
       eventDispatcher: dispatcher,
       positions: { save: savePosition },
       preparesAcrossChapters: true,

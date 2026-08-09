@@ -10,9 +10,8 @@ describe("reader navigation application", () => {
   it("routes current and external search results through the correct application boundary", async () => {
     const reader = buildFixtureReaderView();
     const open = vi.fn().mockResolvedValue(undefined);
-    const select = vi.fn();
     const library = fakeLibrary({ open });
-    const playback = fakePlayback({ select });
+    const playback = fakePlayback({ jumpStatus: vi.fn<() => PlaybackStatus>(() => "paused") });
     const opening = fakeOpening();
     const application = createReaderNavigationApplication(
       { library, opening, playback },
@@ -50,7 +49,7 @@ describe("reader navigation application", () => {
       excerpt: "Other"
     });
 
-    expect(select).toHaveBeenCalledWith(1);
+    expect(opening.open).toHaveBeenCalledWith(reader, 1, "paused");
     expect(open).toHaveBeenCalledWith("other-book");
   });
 
@@ -87,6 +86,16 @@ describe("reader navigation application", () => {
       sentenceIndex: 0,
       playbackStatus: "paused"
     });
+
+    await libraryApplication.openLocation(libraryReader.chapters[1].id, 3);
+    expect(library.open).toHaveBeenLastCalledWith(libraryReader.book.id, {
+      chapterId: libraryReader.chapters[1].id,
+      sentenceIndex: 3,
+      playbackStatus: "paused"
+    });
+
+    await libraryApplication.openLocation(libraryReader.chapter.id, 1);
+    expect(opening.open).toHaveBeenLastCalledWith(libraryReader, 1, "paused");
   });
 
   it("creates and deletes bookmarks through the library boundary", async () => {

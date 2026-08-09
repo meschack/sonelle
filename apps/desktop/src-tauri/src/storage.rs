@@ -149,9 +149,10 @@ impl SonelleStore {
             let mut insert_chapter = transaction
                 .prepare(
                     "INSERT INTO chapters (
-                        id, book_id, title, position, body, sentence_count, references_json
+                        id, book_id, title, position, body, sentence_count, references_json, links_json,
+                        presentations_json
                      )
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 )
                 .map_err(|_| "We couldn't save a chapter from that book.".to_string())?;
             let mut insert_sentence = transaction
@@ -180,6 +181,10 @@ impl SonelleStore {
                 let chapter_sentence_count = chapter.sentences.len() as i64;
                 let references_json = serde_json::to_string(&chapter.references)
                     .map_err(|_| "We couldn't save references from that chapter.".to_string())?;
+                let links_json = serde_json::to_string(&chapter.links)
+                    .map_err(|_| "We couldn't save links from that chapter.".to_string())?;
+                let presentations_json = serde_json::to_string(&chapter.presentations)
+                    .map_err(|_| "We couldn't save the chapter structure.".to_string())?;
                 total_sentence_count += chapter_sentence_count;
 
                 insert_chapter
@@ -190,7 +195,9 @@ impl SonelleStore {
                         chapter.index as i64,
                         normalized_body,
                         chapter_sentence_count,
-                        references_json
+                        references_json,
+                        links_json,
+                        presentations_json
                     ])
                     .map_err(|_| "We couldn't save a chapter from that book.".to_string())?;
 
@@ -316,6 +323,80 @@ impl SonelleStore {
         Ok(books)
     }
 
+    pub fn update_book_metadata(
+        &self,
+        request: UpdateBookMetadataRequest,
+    ) -> Result<BookMetadataView, String> {
+        let title = request.title.trim();
+        if title.is_empty() {
+            return Err("Add a title before saving this book.".to_string());
+        }
+        if title.chars().count() > 500 || request.author.chars().count() > 500 {
+            return Err("That book title or author is too long.".to_string());
+        }
+        let author = request.author.trim();
+        let author = if author.is_empty() {
+            "Unknown author"
+        } else {
+            author
+        };
+        let mut connection = self.connect()?;
+        let previous_cover_path = connection
+            .query_row(
+                "SELECT cover_image_src FROM books WHERE id = ?1",
+                params![request.book_id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()
+            .map_err(|_| "We couldn't inspect that book.".to_string())?
+            .ok_or_else(|| "We couldn't find that book in your library.".to_string())?;
+        let replacement_cover = request
+            .cover_path
+            .as_deref()
+            .map(read_cover_file)
+            .transpose()?;
+        let mut staged_cover = self.stage_cover(&request.book_id, replacement_cover.as_ref())?;
+        let cover_image_src = if request.remove_cover {
+            None
+        } else if let Some(cover) = staged_cover.as_ref() {
+            Some(cover.source_path())
+        } else {
+            previous_cover_path.clone()
+        };
+        let transaction = connection
+            .transaction()
+            .map_err(|_| "We couldn't prepare those book details.".to_string())?;
+        transaction
+            .execute(
+                "UPDATE books
+                 SET title = ?2, author = ?3, cover_image_src = ?4
+                 WHERE id = ?1",
+                params![request.book_id, title, author, cover_image_src],
+            )
+            .map_err(|_| "We couldn't save those book details.".to_string())?;
+        if let Some(cover) = &mut staged_cover {
+            cover.promote()?;
+        }
+        transaction
+            .commit()
+            .map_err(|_| "We couldn't finish saving those book details.".to_string())?;
+        if let Some(cover) = &mut staged_cover {
+            cover.mark_committed();
+        }
+        if previous_cover_path != cover_image_src {
+            if let Some(previous_cover_path) = previous_cover_path {
+                let _ = fs::remove_file(previous_cover_path);
+            }
+        }
+
+        Ok(BookMetadataView {
+            book_id: request.book_id,
+            title: title.to_string(),
+            author: author.to_string(),
+            cover_image_src,
+        })
+    }
+
     pub fn open_book(
         &self,
         book_id: &str,
@@ -338,6 +419,9 @@ impl SonelleStore {
                 chapter.sentences = sentences;
                 chapter.paragraphs = paragraphs;
                 chapter.references = self.read_references_for_chapter(&connection, chapter_id)?;
+                chapter.links = self.read_links_for_chapter(&connection, chapter_id)?;
+                chapter.presentations =
+                    self.read_presentations_for_chapter(&connection, chapter_id)?;
             }
         }
 
@@ -727,7 +811,9 @@ impl SonelleStore {
                     position INTEGER NOT NULL,
                     body TEXT NOT NULL,
                     sentence_count INTEGER NOT NULL DEFAULT 0,
-                    references_json TEXT NOT NULL DEFAULT '[]'
+                    references_json TEXT NOT NULL DEFAULT '[]',
+                    links_json TEXT NOT NULL DEFAULT '[]',
+                    presentations_json TEXT NOT NULL DEFAULT '[]'
                 );
 
                 CREATE TABLE IF NOT EXISTS sentences (
@@ -840,6 +926,18 @@ impl SonelleStore {
             "references_json",
             "TEXT NOT NULL DEFAULT '[]'",
         )?;
+        ensure_column(
+            &connection,
+            "chapters",
+            "links_json",
+            "TEXT NOT NULL DEFAULT '[]'",
+        )?;
+        ensure_column(
+            &connection,
+            "chapters",
+            "presentations_json",
+            "TEXT NOT NULL DEFAULT '[]'",
+        )?;
 
         if added_book_chapter_count || added_book_sentence_count {
             connection
@@ -940,6 +1038,8 @@ impl SonelleStore {
                     sentences: Vec::new(),
                     paragraphs: Vec::new(),
                     references: Vec::new(),
+                    links: Vec::new(),
+                    presentations: Vec::new(),
                 })
             })
             .map_err(|_| "We couldn't read that book.".to_string())?
@@ -970,6 +1070,8 @@ impl SonelleStore {
         for chapter in &mut chapters {
             chapter.paragraphs = self.read_paragraphs_for_chapter(connection, &chapter.id)?;
             chapter.references = self.read_references_for_chapter(connection, &chapter.id)?;
+            chapter.links = self.read_links_for_chapter(connection, &chapter.id)?;
+            chapter.presentations = self.read_presentations_for_chapter(connection, &chapter.id)?;
         }
 
         Ok(chapters)
@@ -1025,6 +1127,38 @@ impl SonelleStore {
             .map_err(|_| "We couldn't read references from that chapter.".to_string())?;
         serde_json::from_str(&references_json)
             .map_err(|_| "We couldn't read references from that chapter.".to_string())
+    }
+
+    fn read_links_for_chapter(
+        &self,
+        connection: &Connection,
+        chapter_id: &str,
+    ) -> Result<Vec<ReaderLinkView>, String> {
+        let links_json = connection
+            .query_row(
+                "SELECT links_json FROM chapters WHERE id = ?1",
+                params![chapter_id],
+                |row| row.get::<_, String>(0),
+            )
+            .map_err(|_| "We couldn't read links from that chapter.".to_string())?;
+        serde_json::from_str(&links_json)
+            .map_err(|_| "We couldn't read links from that chapter.".to_string())
+    }
+
+    fn read_presentations_for_chapter(
+        &self,
+        connection: &Connection,
+        chapter_id: &str,
+    ) -> Result<Vec<ReaderParagraphPresentationView>, String> {
+        let presentations_json = connection
+            .query_row(
+                "SELECT presentations_json FROM chapters WHERE id = ?1",
+                params![chapter_id],
+                |row| row.get::<_, String>(0),
+            )
+            .map_err(|_| "We couldn't read the chapter structure.".to_string())?;
+        serde_json::from_str(&presentations_json)
+            .map_err(|_| "We couldn't read the chapter structure.".to_string())
     }
 
     fn read_persisted_paragraphs_for_chapter(
@@ -1380,6 +1514,36 @@ fn cover_file_extension(media_type: &str) -> &'static str {
     }
 }
 
+fn read_cover_file(path: &str) -> Result<ImportedCover, String> {
+    let path = std::path::Path::new(path);
+    let media_type = match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => return Err("Choose a PNG, JPEG, WebP, or GIF cover image.".to_string()),
+    };
+    let metadata =
+        fs::metadata(path).map_err(|_| "We couldn't open that cover image.".to_string())?;
+    if metadata.len() > 20 * 1024 * 1024 {
+        return Err("Choose a cover image smaller than 20 MB.".to_string());
+    }
+    let bytes = fs::read(path).map_err(|_| "We couldn't open that cover image.".to_string())?;
+    if bytes.is_empty() {
+        return Err("That cover image is empty.".to_string());
+    }
+    Ok(ImportedCover {
+        media_type: media_type.to_string(),
+        bytes,
+    })
+}
+
 fn hex_prefix(bytes: &[u8], length: usize) -> String {
     bytes
         .iter()
@@ -1406,10 +1570,11 @@ mod tests {
 
     use super::{
         BookExportView, LibrarySearchRequest, ReaderChapterView, ReaderDocumentView,
-        SaveBookmarkRequest, SaveReadingPositionRequest, SonelleStore,
+        SaveBookmarkRequest, SaveReadingPositionRequest, SonelleStore, UpdateBookMetadataRequest,
     };
     use crate::epub_import::{
-        import_epub_file, ImportedBook, ImportedChapter, ImportedCover, ImportedReference,
+        import_epub_file, ImportedBook, ImportedChapter, ImportedCover, ImportedLink,
+        ImportedParagraphPresentation, ImportedReference,
     };
     use rusqlite::{params, Connection};
 
@@ -1438,6 +1603,21 @@ mod tests {
                         marker: "1".to_string(),
                         kind: "footnote".to_string(),
                         content: "A persisted note.".to_string(),
+                    }],
+                    links: vec![ImportedLink {
+                        id: "book-test:chapter-1:link-1".to_string(),
+                        offset: "First ".len(),
+                        length: "sentence".len(),
+                        href: Some("https://example.com/source".to_string()),
+                        target_chapter_id: None,
+                        target_text: None,
+                    }],
+                    presentations: vec![ImportedParagraphPresentation {
+                        index: 0,
+                        kind: "navigation".to_string(),
+                        indent_level: 1,
+                        marker: None,
+                        emphasized: false,
                     }],
                 }],
             })
@@ -1472,6 +1652,13 @@ mod tests {
             reopened.chapters[0].references[0].content,
             "A persisted note."
         );
+        assert_eq!(reopened.chapters[0].links.len(), 1);
+        assert_eq!(
+            reopened.chapters[0].links[0].href.as_deref(),
+            Some("https://example.com/source")
+        );
+        assert_eq!(reopened.chapters[0].presentations[0].kind, "navigation");
+        assert_eq!(reopened.chapters[0].presentations[0].indent_level, 1);
 
         fs::remove_dir_all(temp_dir).ok();
     }
@@ -1497,6 +1684,8 @@ mod tests {
                         index: 0,
                         body: "First sentence. Second sentence.".to_string(),
                         references: Vec::new(),
+                        links: Vec::new(),
+                        presentations: Vec::new(),
                     },
                     ImportedChapter {
                         id: "progress-book:chapter-2".to_string(),
@@ -1504,6 +1693,8 @@ mod tests {
                         index: 1,
                         body: "Third sentence. Fourth sentence. Fifth sentence.".to_string(),
                         references: Vec::new(),
+                        links: Vec::new(),
+                        presentations: Vec::new(),
                     },
                     ImportedChapter {
                         id: "progress-book:chapter-3".to_string(),
@@ -1511,6 +1702,8 @@ mod tests {
                         index: 2,
                         body: "Sixth sentence. Seventh sentence.".to_string(),
                         references: Vec::new(),
+                        links: Vec::new(),
+                        presentations: Vec::new(),
                     },
                 ],
             })
@@ -1569,6 +1762,8 @@ mod tests {
                     index: 0,
                     body: "A covered sentence.".to_string(),
                     references: Vec::new(),
+                    links: Vec::new(),
+                    presentations: Vec::new(),
                 }],
             })
             .expect("book should save after migration");
@@ -1588,6 +1783,60 @@ mod tests {
         );
         assert_eq!(books[0].cover_image_src.as_deref(), Some(cover_path));
         assert_eq!(reopened.book.cover_image_src.as_deref(), Some(cover_path));
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn edits_book_metadata_and_copies_a_replacement_cover() {
+        let temp_dir = temp_store_dir();
+        fs::create_dir_all(&temp_dir).expect("test store dir should be created");
+        let store = SonelleStore::open_at(temp_dir.join("sonelle.sqlite3"))
+            .expect("store should initialize");
+        store
+            .save_imported_book(ImportedBook {
+                id: "editable-book".to_string(),
+                title: "Original Title".to_string(),
+                author: "Original Author".to_string(),
+                language: Some("en".to_string()),
+                cover_image: None,
+                source_path: "/tmp/editable.epub".to_string(),
+                chapters: vec![ImportedChapter {
+                    id: "editable-book:chapter-1".to_string(),
+                    title: "Chapter One".to_string(),
+                    index: 0,
+                    body: "A sentence worth keeping.".to_string(),
+                    references: Vec::new(),
+                    links: Vec::new(),
+                    presentations: Vec::new(),
+                }],
+            })
+            .expect("book should save");
+        let selected_cover = temp_dir.join("selected-cover.png");
+        fs::write(&selected_cover, b"replacement cover").expect("cover fixture should write");
+
+        let updated = store
+            .update_book_metadata(UpdateBookMetadataRequest {
+                book_id: "editable-book".to_string(),
+                title: "Edited Title".to_string(),
+                author: "Edited Author".to_string(),
+                cover_path: Some(selected_cover.to_string_lossy().into_owned()),
+                remove_cover: false,
+            })
+            .expect("metadata should update");
+        fs::remove_file(&selected_cover).expect("selected cover should be removable");
+        let reopened = store
+            .open_book("editable-book", None)
+            .expect("book should reopen");
+
+        assert_eq!(updated.title, "Edited Title");
+        assert_eq!(reopened.book.title, "Edited Title");
+        assert_eq!(reopened.book.author, "Edited Author");
+        assert_eq!(
+            fs::read(updated.cover_image_src.expect("managed cover should exist"))
+                .expect("managed cover should read"),
+            b"replacement cover"
+        );
 
         fs::remove_dir_all(temp_dir).ok();
     }
@@ -1649,6 +1898,8 @@ mod tests {
                         index: 0,
                         body: "First sentence. Second sentence.".to_string(),
                         references: Vec::new(),
+                        links: Vec::new(),
+                        presentations: Vec::new(),
                     },
                     ImportedChapter {
                         id: "book-counts:chapter-2".to_string(),
@@ -1656,6 +1907,8 @@ mod tests {
                         index: 1,
                         body: "Third sentence.".to_string(),
                         references: Vec::new(),
+                        links: Vec::new(),
+                        presentations: Vec::new(),
                     },
                 ],
             })
@@ -1692,6 +1945,8 @@ mod tests {
                         index: 0,
                         body: "First sentence. Second sentence.".to_string(),
                         references: Vec::new(),
+                        links: Vec::new(),
+                        presentations: Vec::new(),
                     },
                     ImportedChapter {
                         id: "book-active:chapter-2".to_string(),
@@ -1699,6 +1954,8 @@ mod tests {
                         index: 1,
                         body: "Third sentence.".to_string(),
                         references: Vec::new(),
+                        links: Vec::new(),
+                        presentations: Vec::new(),
                     },
                 ],
             })
@@ -1768,6 +2025,8 @@ mod tests {
                     index: 0,
                     body: "First sentence. Second sentence.\n\nThird sentence.".to_string(),
                     references: Vec::new(),
+                    links: Vec::new(),
+                    presentations: Vec::new(),
                 }],
             })
             .expect("book should save");
@@ -1814,6 +2073,8 @@ mod tests {
                     index: 0,
                     body: "A quiet sentence. The bookmark target appears here.".to_string(),
                     references: Vec::new(),
+                    links: Vec::new(),
+                    presentations: Vec::new(),
                 }],
             })
             .expect("book should save");
@@ -2161,6 +2422,8 @@ mod tests {
                         index: chapter_index,
                         body: synthetic_chapter_body(chapter_index, sentence_count),
                         references: Vec::new(),
+                        links: Vec::new(),
+                        presentations: Vec::new(),
                     }
                 })
                 .collect(),

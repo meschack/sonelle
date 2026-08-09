@@ -298,6 +298,7 @@ export function createReaderBookNarrationPreparationApplication(
           );
         }),
         dependencies.eventDispatcher.subscribe("NarrationSettingsChanged", (event) => {
+          if (event.payload.source === "book") return;
           if (controller != null) {
             void publish(
               createDomainEvent("BookNarrationPreparationCancelled", {

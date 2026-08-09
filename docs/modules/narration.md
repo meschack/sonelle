@@ -59,6 +59,10 @@ Voice and narration-file installation use requested, progress, ready, and failed
 Whole-book preparation publishes requested, progressed, ready, cancelled, and failed facts. Session
 limits publish changed and reached facts.
 
+Narration settings are persisted by book. `ReaderOpened` carries the book language and activates
+that book's saved voice, speed, volume, and auto-advance profile before playback activation. The
+legacy global profile remains the fallback for books without an explicit profile.
+
 ## Invariants
 
 - highlighted sentence spans must come from the prepared manifest; timing is never guessed

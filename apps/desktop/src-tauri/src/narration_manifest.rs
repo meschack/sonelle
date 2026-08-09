@@ -42,7 +42,7 @@ struct SupertonicProvider;
 
 impl NarrationProvider for KokoroProvider {
     fn preparation_revision(&self) -> &'static str {
-        "kokoro-text-v2"
+        "kokoro-text-v3"
     }
 
     fn render(
@@ -513,8 +513,8 @@ mod tests {
         let request = request("kokoro");
 
         assert_ne!(
-            create_asset_id_for_revision(&request, "kokoro-text-v1"),
-            create_asset_id_for_revision(&request, "kokoro-text-v2")
+            create_asset_id_for_revision(&request, "kokoro-text-v2"),
+            create_asset_id_for_revision(&request, "kokoro-text-v3")
         );
     }
 

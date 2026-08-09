@@ -49,7 +49,7 @@ export function createReaderLibrarySearchWorkflow(
       timer = schedule(() => {
         timer = undefined;
         void dependencies.search
-          .search({ query, limit: 8 })
+          .search({ query, limit: 30 })
           .then((results) => {
             if (currentRun !== runId) return;
             options.projectResults(results);

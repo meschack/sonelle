@@ -24,8 +24,9 @@ pub fn cancel_manifest_narration(request_id: String) {
     cancel_manifest_narration_request(request_id);
 }
 use crate::storage::{
-    BookExportView, BookmarkView, LibraryBookView, LibrarySearchRequest, LibrarySearchResultView,
-    ReaderDocumentView, SaveBookmarkRequest, SaveReadingPositionRequest, SonelleStore,
+    BookExportView, BookMetadataView, BookmarkView, LibraryBookView, LibrarySearchRequest,
+    LibrarySearchResultView, ReaderDocumentView, SaveBookmarkRequest, SaveReadingPositionRequest,
+    SonelleStore, UpdateBookMetadataRequest,
 };
 use crate::system_fonts::list_system_font_families;
 use crate::voice_installation::{install_voice, voice_status, NarrationVoiceInstallationStatus};
@@ -55,6 +56,18 @@ pub async fn open_book(
     let store = managed_store(&app);
     run_blocking("library.open", move || {
         store.open_book(&book_id, chapter_id.as_deref())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn update_book_metadata(
+    app: AppHandle,
+    request: UpdateBookMetadataRequest,
+) -> Result<BookMetadataView, String> {
+    let store = managed_store(&app);
+    run_blocking("library.metadata.update", move || {
+        store.update_book_metadata(request)
     })
     .await
 }
