@@ -1046,7 +1046,7 @@ fn resolve_external_link(anchor: roxmltree::Node<'_, '_>) -> Option<ResolvedLink
         return None;
     }
     let label = normalize_reader_text(&node_text(anchor));
-    (!label.is_empty()).then(|| ResolvedLink {
+    (!label.is_empty()).then_some(ResolvedLink {
         label,
         href: Some(href.to_string()),
         target_chapter_id: None,
@@ -1087,7 +1087,7 @@ fn resolve_internal_link(
         (!text.is_empty()).then_some(text)
     };
     let label = normalize_reader_text(&node_text(anchor));
-    (!label.is_empty()).then(|| ResolvedLink {
+    (!label.is_empty()).then_some(ResolvedLink {
         label,
         href: None,
         target_chapter_id: Some(target_chapter_id),
