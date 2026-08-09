@@ -56,6 +56,7 @@ describe("reader offline narration application", () => {
       {
         audioCache: {
           getStats,
+          getChapterStats: vi.fn().mockResolvedValue([]),
           clear
         },
         engineInstallations: {
@@ -89,6 +90,7 @@ describe("reader offline narration application", () => {
 
     await dispatcher.dispatch(
       createDomainEvent("NarrationSettingsChanged", {
+        bookId: "book-1",
         previousVoiceId: "voice-0",
         source: "user",
         settings
@@ -152,6 +154,7 @@ describe("reader offline narration application", () => {
       {
         audioCache: {
           getStats: vi.fn().mockResolvedValue({ sentenceCount: 0, sizeBytes: 0 }),
+          getChapterStats: vi.fn().mockResolvedValue([]),
           clear: vi.fn().mockResolvedValue({ sentenceCount: 0, sizeBytes: 0 })
         },
         engineInstallations: {
@@ -196,6 +199,106 @@ describe("reader offline narration application", () => {
       expect.objectContaining({ id: "english", status: "ready" })
     );
 
+    stop();
+  });
+
+  it("clears prepared audio statistics before loading the next book", async () => {
+    let currentBookId = "book-1";
+    let resolveSecondStats!: (stats: { sentenceCount: number; sizeBytes: number }) => void;
+    const secondStatsLoad = new Promise<{ sentenceCount: number; sizeBytes: number }>((resolve) => {
+      resolveSecondStats = resolve;
+    });
+    const getStats = vi.fn((bookId: string) =>
+      bookId === "book-1"
+        ? Promise.resolve({ sentenceCount: 12, sizeBytes: 24_000 })
+        : secondStatsLoad
+    );
+    const projectAudioCache = vi.fn();
+    const dispatcher = createDomainEventDispatcher();
+    const narration = {
+      requestPlayback: vi.fn(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      setOutput: vi.fn(),
+      prefetchUpcoming: vi.fn(),
+      reset: vi.fn().mockResolvedValue(undefined),
+      start: vi.fn(() => () => undefined)
+    } satisfies ReaderNarrationWorkflow;
+    const application = createReaderOfflineNarrationApplication(
+      {
+        audioCache: {
+          getStats,
+          getChapterStats: vi.fn().mockResolvedValue([]),
+          clear: vi.fn().mockResolvedValue({ sentenceCount: 0, sizeBytes: 0 })
+        },
+        engineInstallations: {
+          getStatus: vi.fn(),
+          install: vi.fn(),
+          listen: vi.fn().mockResolvedValue(() => undefined)
+        },
+        eventDispatcher: dispatcher,
+        narration,
+        offlineLibrary: "individual-voice",
+        voiceInstallations: {
+          getStatus: vi.fn().mockResolvedValue({
+            voiceId: "voice-1",
+            status: "ready",
+            downloadSizeBytes: 10,
+            downloadedBytes: 10,
+            progress: 100,
+            message: "Ready"
+          }),
+          install: vi.fn(),
+          listen: vi.fn().mockResolvedValue(() => undefined)
+        },
+        friendlyError: () => "Narration needs attention."
+      },
+      {
+        currentBookId: () => currentBookId,
+        selectedVoiceId: () => "voice-1",
+        projectAudioCache,
+        projectAudioCacheNotice: vi.fn(),
+        projectEngineInstallation: vi.fn(),
+        projectNarrationProfile: vi.fn(),
+        projectNarrationNotice: vi.fn(),
+        projectVoiceInstallation: vi.fn()
+      }
+    );
+    const stop = await application.start();
+
+    expect(projectAudioCache).toHaveBeenLastCalledWith({
+      bookId: "book-1",
+      sentenceCount: 12,
+      sizeBytes: 24_000
+    });
+
+    currentBookId = "book-2";
+    await dispatcher.dispatch(
+      createDomainEvent("ReaderOpened", {
+        bookId: "book-2",
+        chapterId: "chapter-1",
+        sentenceId: "sentence-1",
+        sentenceIndex: 0,
+        playbackStatus: "idle",
+        source: "library",
+        language: "en"
+      })
+    );
+    await vi.waitFor(() => expect(getStats).toHaveBeenCalledWith("book-2"));
+
+    expect(projectAudioCache).toHaveBeenLastCalledWith({
+      bookId: "book-2",
+      sentenceCount: 0,
+      sizeBytes: 0
+    });
+
+    resolveSecondStats({ sentenceCount: 3, sizeBytes: 6_000 });
+    await vi.waitFor(() =>
+      expect(projectAudioCache).toHaveBeenLastCalledWith({
+        bookId: "book-2",
+        sentenceCount: 3,
+        sizeBytes: 6_000
+      })
+    );
     stop();
   });
 });

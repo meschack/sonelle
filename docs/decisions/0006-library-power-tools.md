@@ -21,7 +21,7 @@ Bookmarks, persisted search, and exports are backed by SQLite for imported books
 ## Consequences
 
 - The user can bookmark the current sentence, search the current chapter, search/filter the library, export book data, adjust playback speed, disable auto-advance, and clear prepared audio.
-- Keyboard shortcuts remain additive and discoverable through the `?` reference. Playback, sentence and chapter navigation, volume, narration speed, reader tools, paragraph images, returning to the Library, and EPUB import all have commands. The renderer resolves key combinations into semantic commands before application workflows perform any action.
+- Keyboard shortcuts remain additive and discoverable through the `?` reference. Playback, sentence and chapter navigation, volume, narration speed, reader tools, quote images, returning to the Library, and EPUB import all have commands. The renderer resolves key combinations into semantic commands before application workflows perform any action.
 - Library commands focus search, move through the rendered book grid, open the focused book, and switch filters without bypassing Library workflows. Power commands collapse either sidebar, jump to chapter boundaries, toggle fullscreen through a platform adapter, and expose the same semantic commands through a searchable palette.
 - The UI uses reader-facing states like "Prepared audio" and "Export ready" instead of leaking implementation details.
 - Future work can expand exports and settings without moving persistence logic into the renderer.

@@ -30,8 +30,10 @@ Sonelle adds a native `kokoro_text` module that owns English text preprocessing 
 - predicting genuine out-of-vocabulary English words with the embedded, pure-Rust
   `grapheme_to_phoneme` model and converting its ARPAbet result into Kokoro phonemes;
 - preserving short initialisms while treating unknown, pronounceable all-caps tokens as words;
-- removing artificial phoneme-space boundaries inside hyphenated compounds without changing the
-  reader's displayed text;
+- deriving possessive forms from the stem pronunciation and the English `/s/`, `/z/`, or `/ɪz/`
+  suffix rule, including typographic apostrophes;
+- phonemizing each real word inside a hyphenated compound, then removing only the artificial pause
+  between those phonemes without changing the reader's displayed text;
 - rejecting empty text or unknown phoneme output before model preparation;
 - returning `KokoroSentencePhonemes` for the native Kokoro inference boundary.
 
@@ -54,6 +56,7 @@ No provider-specific event is introduced. The module is preparation plumbing beh
 ## Testing
 
 Portable tests cover American and British English phonemization, sentence ID preservation,
-hyphenated compounds, emphasized words, unknown names, short initialisms, empty sentence rejection,
-and unknown phoneme rejection. Dependency checks confirm `espeak-rs` is not part of the native
-dependency tree. Cache tests prove that a provider preparation revision changes asset identity.
+hyphenated compounds, straight and typographic possessives, possessive suffix voicing, emphasized
+words, unknown names, short initialisms, empty sentence rejection, and unknown phoneme rejection.
+Dependency checks confirm `espeak-rs` is not part of the native dependency tree. Cache tests prove
+that a provider preparation revision changes asset identity.

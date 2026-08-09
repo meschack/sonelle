@@ -1,6 +1,6 @@
 import { createDomainEvent, type DomainEvent, type DomainEventDispatcher } from "@sonelle/domain";
 import { routeNarrationEngine } from "@sonelle/audio/narration";
-import type { AudioCacheRepository, AudioCacheStatsDto } from "../audio/audio-cache-repository";
+import type { AudioCacheRepository } from "../audio/audio-cache-repository";
 import type {
   EngineInstallationRepository,
   EngineInstallationState,
@@ -41,6 +41,7 @@ export interface OfflineVoiceView {
 }
 
 export interface PreparedAudioView {
+  bookId: string;
   sentenceCount: number;
   sizeBytes: number;
 }
@@ -77,7 +78,7 @@ interface ReaderOfflineNarrationDependencies {
 interface ReaderOfflineNarrationOptions {
   currentBookId(): string;
   selectedVoiceId(): string;
-  projectAudioCache(stats: AudioCacheStatsDto): void;
+  projectAudioCache(stats: PreparedAudioView): void;
   projectAudioCacheNotice(message: string | null): void;
   projectEngineInstallation(state: EngineInstallationState): void;
   projectNarrationProfile(profile: OfflineNarrationProfileView): void;
@@ -98,6 +99,7 @@ export function createReaderOfflineNarrationApplication(
   dependencies: ReaderOfflineNarrationDependencies,
   options: ReaderOfflineNarrationOptions
 ): ReaderOfflineNarrationApplication {
+  let projectedAudioBookId: string | null = null;
   const voiceWorkflow = createReaderVoiceInstallationWorkflow({
     eventDispatcher: dependencies.eventDispatcher,
     repository: dependencies.voiceInstallations,
@@ -121,7 +123,8 @@ export function createReaderOfflineNarrationApplication(
     try {
       const stats = await dependencies.audioCache.getStats(bookId);
       if (bookId === options.currentBookId()) {
-        options.projectAudioCache(stats);
+        projectedAudioBookId = bookId;
+        options.projectAudioCache({ bookId, ...stats });
         options.projectAudioCacheNotice(null);
       }
     } catch (error) {
@@ -169,7 +172,12 @@ export function createReaderOfflineNarrationApplication(
         ),
         dependencies.eventDispatcher.subscribe("PreparedNarrationCleared", (event) => {
           if (event.payload.bookId === options.currentBookId()) {
-            options.projectAudioCache(event.payload);
+            projectedAudioBookId = event.payload.bookId;
+            options.projectAudioCache({
+              bookId: event.payload.bookId,
+              sentenceCount: event.payload.sentenceCount,
+              sizeBytes: event.payload.sizeBytes
+            });
             options.projectAudioCacheNotice("Prepared audio cleared for this book.");
           }
         }),
@@ -179,6 +187,15 @@ export function createReaderOfflineNarrationApplication(
           }
         }),
         dependencies.eventDispatcher.subscribe("ReaderOpened", (event) => {
+          if (projectedAudioBookId !== event.payload.bookId) {
+            projectedAudioBookId = event.payload.bookId;
+            options.projectAudioCache({
+              bookId: event.payload.bookId,
+              sentenceCount: 0,
+              sizeBytes: 0
+            });
+            options.projectAudioCacheNotice(null);
+          }
           void refreshPreparedAudioForBook(event.payload.bookId);
         })
       ];

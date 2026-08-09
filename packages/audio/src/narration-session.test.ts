@@ -188,6 +188,35 @@ describe("narration session", () => {
     expect(adapter.prepareCountForPassage("chapter-1:p2:passage-1")).toBe(1);
   });
 
+  it("does not enter the next passage when an event listener stops the session", async () => {
+    const events: AnyDomainEvent[] = [];
+    const player = new FakeManifestNarrationPlayer();
+    let session: ReturnType<typeof createNarrationSession>;
+    session = createNarrationSession({
+      adapter: new FakePassageNarrationAdapter(),
+      player,
+      eventDispatcher: {
+        async dispatch(event) {
+          events.push(event as AnyDomainEvent);
+          if (event.name === "PassageNarrationPlaybackEnded") await session.pause();
+        }
+      },
+      createRequestId: createIncrementingIds()
+    });
+    session.open({
+      outline: createOutline(),
+      engineId: "kokoro",
+      modelRevision: "fake-kokoro",
+      voiceId: "kokoro-en"
+    });
+    session.setOutput({ playbackRate: 1, volume: 1, autoAdvance: true });
+
+    await session.play("s1");
+
+    expect(player.played).toHaveLength(1);
+    expect(events.filter((event) => event.name === "NarrationPreparationStarted")).toHaveLength(1);
+  });
+
   it("keeps two bounded Supertonic passages ready without unbounded CPU work", async () => {
     const adapter = new ObservedNarrationAdapter(new FakeSentenceBatchNarrationAdapter());
     const player = new ControlledManifestNarrationPlayer();

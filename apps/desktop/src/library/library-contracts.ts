@@ -12,6 +12,31 @@ export interface BookCatalog {
   open(bookId: string, chapterId?: string): Promise<ReaderDocumentDto>;
 }
 
+export interface BookMetadataEditor {
+  chooseCover(): Promise<BookCoverSelection | null>;
+  update(input: UpdateBookMetadataInput): Promise<BookMetadataDto>;
+}
+
+export interface BookCoverSelection {
+  path: string;
+  previewSrc: string;
+}
+
+export interface UpdateBookMetadataInput {
+  bookId: string;
+  title: string;
+  author: string;
+  coverPath: string | null;
+  removeCover: boolean;
+}
+
+export interface BookMetadataDto {
+  bookId: string;
+  title: string;
+  author: string;
+  coverImageSrc: string | null;
+}
+
 export interface ReadingPositionStore {
   save(input: SaveReadingPositionInput): Promise<void>;
 }

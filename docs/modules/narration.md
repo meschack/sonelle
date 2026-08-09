@@ -6,6 +6,7 @@
 - versioned passage requests, manifests, sentence spans, cache identity, and playback sessions
 - bounded native ONNX runtime construction, cancellation, and installed narration-file packs
 - compatibility projection for legacy Piper sentence audio while that rollback path remains available
+- resumable whole-book preparation and per-chapter cache summaries
 
 ## Refuses To Own
 
@@ -31,6 +32,8 @@ The session keeps three contextual Kokoro passages prepared. Supertonic groups a
 sentences per passage and keeps two passages prepared, while one reusable runtime and one ONNX thread
 bound CPU pressure. Long internally split sentences retain the provider's single-sentence path.
 Upcoming-chapter preparation uses the same limits and is cancelled when reader context changes.
+Whole-book preparation uses deterministic passage identities through the same adapter, runs
+sequentially, and resumes from completed cached passages after cancellation or failure.
 
 Language-pack voices are projected only after their provider files report ready. Installation
 updates refresh the current book's voice field immediately; the UI does not poll provider state.
@@ -53,6 +56,12 @@ misrepresenting library-wide data as belonging to the open book.
 
 Voice and narration-file installation use requested, progress, ready, and failed facts.
 `NarrationSettingsChanged` coordinates settings reactions through the same in-process dispatcher.
+Whole-book preparation publishes requested, progressed, ready, cancelled, and failed facts. Session
+limits publish changed and reached facts.
+
+Narration settings are persisted by book. `ReaderOpened` carries the book language and activates
+that book's saved voice, speed, volume, and auto-advance profile before playback activation. The
+legacy global profile remains the fallback for books without an explicit profile.
 
 ## Invariants
 

@@ -6,8 +6,19 @@ export interface AudioCacheStatsDto {
   sizeBytes: number;
 }
 
+export interface ChapterAudioCacheStatsDto {
+  chapterId: string;
+  sentenceIds: string[];
+  sizeBytes: number;
+}
+
 export interface AudioCacheRepository {
   getStats(bookId: string): Promise<AudioCacheStatsDto>;
+  getChapterStats(
+    bookId: string,
+    voiceId: string,
+    modelRevision: string
+  ): Promise<ChapterAudioCacheStatsDto[]>;
   clear(bookId: string): Promise<AudioCacheStatsDto>;
 }
 
@@ -25,6 +36,14 @@ const nativeAudioCacheRepository: AudioCacheRepository = {
     return invoke<AudioCacheStatsDto>("get_audio_cache_stats", { bookId });
   },
 
+  getChapterStats(bookId, voiceId, modelRevision) {
+    return invoke<ChapterAudioCacheStatsDto[]>("get_narration_chapter_cache_stats", {
+      bookId,
+      voiceId,
+      modelRevision
+    });
+  },
+
   clear(bookId) {
     return invoke<AudioCacheStatsDto>("clear_prepared_audio_cache", { bookId });
   }
@@ -33,6 +52,10 @@ const nativeAudioCacheRepository: AudioCacheRepository = {
 const browserAudioCacheRepository: AudioCacheRepository = {
   async getStats(_bookId) {
     return emptyStats;
+  },
+
+  async getChapterStats(_bookId, _voiceId, _modelRevision) {
+    return [];
   },
 
   async clear(_bookId) {

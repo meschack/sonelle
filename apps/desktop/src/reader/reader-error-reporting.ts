@@ -13,6 +13,9 @@ export function observeReaderErrors(
     eventDispatcher.subscribe("BookImportFailed", (event) => {
       reportFailure("book-import.failed", event.payload.reason, { path: event.payload.path });
     }),
+    eventDispatcher.subscribe("BookMetadataUpdateFailed", (event) => {
+      reportFailure("book-metadata.failed", event.payload.reason, event.payload);
+    }),
     eventDispatcher.subscribe("NarrationPlaybackFailed", (event) => {
       reportFailure("narration.failed", event.payload.reason, event.payload);
     }),
@@ -28,11 +31,14 @@ export function observeReaderErrors(
     eventDispatcher.subscribe("PreparedNarrationClearingFailed", (event) => {
       reportFailure("prepared-audio-clear.failed", event.payload.reason, event.payload);
     }),
+    eventDispatcher.subscribe("BookNarrationPreparationFailed", (event) => {
+      reportFailure("book-narration-preparation.failed", event.payload.reason, event.payload);
+    }),
     eventDispatcher.subscribe("BookExportFailed", (event) => {
       reportFailure("book-export.failed", event.payload.reason, event.payload);
     }),
-    eventDispatcher.subscribe("ParagraphImageFailed", (event) => {
-      reportFailure("paragraph-image.failed", event.payload.reason, event.payload);
+    eventDispatcher.subscribe("QuoteImageFailed", (event) => {
+      reportFailure("quote-image.failed", event.payload.reason, event.payload);
     }),
     eventDispatcher.subscribe("WordLookupCompleted", (event) => {
       if (event.payload.status !== "error") return;

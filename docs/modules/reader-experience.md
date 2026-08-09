@@ -35,6 +35,16 @@ The window key listener delegates interpretation to `resolveReaderKeyboardShortc
 composition root only routes semantic commands into existing workflows; it does not duplicate
 playback, navigation, import, or export logic for keyboard input.
 
+Cross-book search is projected as a full Library workspace rather than a sidebar-only result list.
+The composition root owns only the debounced query and result projections; native storage owns
+full-text matching, while the navigation application opens a result at its book, chapter, and
+sentence context.
+
+Distraction-free reading is transient presentation state. It hides application chrome without
+mutating either sidebar preference, so leaving the mode restores the reader layout exactly as the
+user left it. Narration and sentence-level keyboard controls remain active while the chrome is
+hidden.
+
 ## Domain Events
 
 Library workflows complete their core operation and dispatch the resulting event. `ReaderOpened`

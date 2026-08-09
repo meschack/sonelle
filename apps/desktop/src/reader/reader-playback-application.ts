@@ -14,14 +14,12 @@ import {
 import type { ReadingPositionStore, SaveReadingPositionInput } from "../library/library-contracts";
 import { nextReaderChapter } from "./reader-chapter-flow";
 import type { ReaderNarrationWorkflow } from "./reader-narration-workflow";
-import type { ReaderNarrationSettingsWorkflow } from "./reader-narration-settings-workflow";
 import type { ReaderView } from "./reader-view";
 
 type PositionSaveIntent = "immediate" | "playback";
 
 interface ReaderPlaybackApplicationDependencies {
   narration: ReaderNarrationWorkflow;
-  settings: Pick<ReaderNarrationSettingsWorkflow, "activate">;
   eventDispatcher: DomainEventDispatcher;
   positions: ReadingPositionStore;
   preparesAcrossChapters: boolean;
@@ -37,6 +35,7 @@ interface ReaderPlaybackApplicationOptions {
   currentSettings(): AudioSettings;
   narrationAudible(): boolean;
   narrationReadinessMessage(): string | null;
+  allowsChapterTransition(): boolean;
   projectPlayback(update: (current: ReaderPlaybackState) => ReaderPlaybackState): void;
   projectNotice(message: string | null): void;
   projectAudible(audible: boolean): void;
@@ -84,6 +83,7 @@ export function createReaderPlaybackApplication(
   });
   let nextPositionSaveIntent: PositionSaveIntent | null = null;
   let sessionProjectedPlaybackChange = false;
+  let jumpRun = 0;
   let chapterTransitionRun = 0;
   let chapterTransitionTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -107,9 +107,42 @@ export function createReaderPlaybackApplication(
   };
 
   const commitJump = (resolve: (current: ReaderPlaybackState) => ReaderPlaybackState) => {
+    const current = options.currentPlayback();
+    const next = resolve(current);
+    if (
+      next.activeSentenceIndex === current.activeSentenceIndex &&
+      next.status === current.status
+    ) {
+      return;
+    }
+
+    const reader = options.currentReader();
+    const sentence = reader.sentences[next.activeSentenceIndex];
+    const shouldResume = current.status === "playing" || options.narrationAudible();
+    const run = ++jumpRun;
     nextPositionSaveIntent = "immediate";
-    options.projectJump(resolve);
-    void dependencies.narration.reset();
+    sessionProjectedPlaybackChange = true;
+    options.projectAudible(false);
+    options.projectJump(() => (shouldResume ? { ...next, status: "playing" } : next));
+    void dependencies.narration
+      .reset()
+      .then(() => {
+        const activeReader = options.currentReader();
+        const activePlayback = options.currentPlayback();
+        if (
+          run !== jumpRun ||
+          !shouldResume ||
+          sentence == null ||
+          activeReader.book.id !== reader.book.id ||
+          activeReader.chapter.id !== reader.chapter.id ||
+          activeReader.sentences[activePlayback.activeSentenceIndex]?.id !== sentence.id ||
+          activePlayback.status !== "playing"
+        ) {
+          return;
+        }
+        dependencies.narration.requestPlayback(sentence.id);
+      })
+      .catch(dependencies.reportEventError);
   };
 
   const isUserVoiceChange = (event: DomainEvent<"NarrationSettingsChanged">) =>
@@ -157,6 +190,7 @@ export function createReaderPlaybackApplication(
       if (
         playback.status !== "ended" ||
         !options.currentSettings().autoAdvance ||
+        !options.allowsChapterTransition() ||
         nextChapter == null
       ) {
         return;
@@ -248,11 +282,6 @@ export function createReaderPlaybackApplication(
       sentenceIndex = nextReader.initialSentenceIndex,
       playbackStatus = "idle"
     ) {
-      const previousReader = options.currentReader();
-      const switchingBooks =
-        nextReader.book.id !== previousReader.book.id ||
-        nextReader.source !== previousReader.source;
-      if (switchingBooks) dependencies.settings.activate(nextReader.book.language);
       positionScheduler.flush();
       await positionSaveSettled;
       nextPositionSaveIntent = "immediate";

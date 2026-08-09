@@ -84,9 +84,15 @@ const commandPaletteEntries: readonly CommandPaletteEntry[] = [
   { command: "open-notes", label: "Open Notes", shortcut: "N", surfaces: ["reader"] },
   { command: "open-tools", label: "Open Tools", shortcut: "T", surfaces: ["reader"] },
   {
-    command: "save-paragraph-image",
-    label: "Save paragraph image",
+    command: "save-quote-image",
+    label: "Create quote image",
     shortcut: "Shift + S",
+    surfaces: ["reader"]
+  },
+  {
+    command: "toggle-distraction-free",
+    label: "Toggle distraction-free reading",
+    shortcut: "D",
     surfaces: ["reader"]
   },
   {
@@ -100,6 +106,12 @@ const commandPaletteEntries: readonly CommandPaletteEntry[] = [
     label: "Search the Library",
     shortcut: "Ctrl / Cmd + F",
     surfaces: ["library"]
+  },
+  {
+    command: "search-across-books",
+    label: "Search across all books",
+    shortcut: "Ctrl / Cmd + Shift + F",
+    surfaces: "all"
   },
   {
     command: "select-library-filter-all",

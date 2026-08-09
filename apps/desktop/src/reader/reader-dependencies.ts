@@ -9,6 +9,8 @@ import {
 } from "@sonelle/audio";
 import {
   createNarrationSession as createManifestNarrationSession,
+  prepareNarrationBook,
+  type NarrationBookPreparationProgress,
   type NarrationRoutingMode,
   type NarrationPreparationAdapter
 } from "@sonelle/audio/narration";
@@ -28,6 +30,10 @@ import {
 import { createHtmlAudioPlayer } from "../audio/html-audio-player";
 import { createHtmlManifestNarrationPlayer } from "../audio/html-manifest-narration-player";
 import { reportAppError } from "../platform/error-reporting";
+import {
+  createExternalLinkOpener,
+  type ExternalLinkOpener
+} from "../platform/external-link-opener";
 import {
   createAppWindowController,
   type AppWindowController
@@ -54,24 +60,24 @@ import {
   type BookOpenRequestAdapter,
   type BookExporter,
   type BookImporter,
+  type BookMetadataEditor,
   type BookmarkStore,
   type LibrarySearch,
   type ReadingPositionStore
 } from "../library/library-contracts";
+import type { ReaderDocumentDto } from "../library/library-models";
 import { createBookCatalog } from "../library/book-catalog";
 import { createBookDropAdapter } from "../library/book-drop-adapter";
 import { createBookOpenRequestAdapter } from "../library/book-open-request-adapter";
 import { createBookExporter } from "../library/book-exporter";
 import { createBookImporter } from "../library/book-importer";
+import { createBookMetadataEditor } from "../library/book-metadata-editor";
 import { createBookmarkStore } from "../library/bookmark-store";
 import { createLibrarySearch } from "../library/library-search";
 import { createReadingPositionStore } from "../library/reading-position-store";
 import { isTauriRuntime } from "../platform/tauri-runtime";
 import { createSystemFontCatalog, type SystemFontCatalog } from "../platform/system-font-catalog";
-import {
-  createParagraphImageExporter,
-  type ParagraphImageExporter
-} from "./reader-paragraph-image";
+import { createQuoteImageExporter, type QuoteImageExporter } from "./reader-quote-image";
 import {
   createReaderPreferencesRepository,
   type ReaderPreferencesRepository
@@ -82,6 +88,13 @@ import {
   type ReaderNarrationWorkflowOptions
 } from "./reader-narration-workflow";
 import { createReaderNarrationPrefetchWorkflow } from "./reader-narration-prefetch-workflow";
+import { buildReaderViewFromDocument } from "./reader-view";
+import { createReaderNarrationSessionChapter } from "./reader-narration";
+
+export interface ReaderBookNarrationIdentity {
+  voiceId: string;
+  modelRevision: string;
+}
 
 export interface ReaderNarrationService {
   capabilities: {
@@ -94,6 +107,15 @@ export interface ReaderNarrationService {
   createWorkflow(
     options: Omit<ReaderNarrationWorkflowOptions, "engineInstallations">
   ): ReaderNarrationWorkflow;
+  bookIdentity(document: ReaderDocumentDto, voiceId: string): ReaderBookNarrationIdentity | null;
+  prepareBook(
+    document: ReaderDocumentDto,
+    voiceId: string,
+    options: {
+      signal?: AbortSignal;
+      onProgress(progress: NarrationBookPreparationProgress): void;
+    }
+  ): Promise<{ sentenceCount: number }>;
 }
 
 export interface ReaderExperienceDependencies {
@@ -105,14 +127,16 @@ export interface ReaderExperienceDependencies {
   bookOpenRequestAdapter: BookOpenRequestAdapter;
   bookExporter: BookExporter;
   bookImporter: BookImporter;
+  bookMetadataEditor: BookMetadataEditor;
   bookmarkStore: BookmarkStore;
   dictionaryRepository: DictionaryRepository;
   engineInstallationRepository: EngineInstallationRepository;
   eventDispatcher: DomainEventDispatcher;
+  externalLinkOpener: ExternalLinkOpener;
   fontCatalog: SystemFontCatalog;
   librarySearch: LibrarySearch;
   narration: ReaderNarrationService;
-  paragraphImageExporter: ParagraphImageExporter;
+  quoteImageExporter: QuoteImageExporter;
   readerPreferencesRepository: ReaderPreferencesRepository;
   readingPositionStore: ReadingPositionStore;
   voiceInstallationRepository: VoiceInstallationRepository;
@@ -144,10 +168,12 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
     }),
     bookExporter: createBookExporter(),
     bookImporter: createBookImporter(),
+    bookMetadataEditor: createBookMetadataEditor(),
     bookmarkStore: createBookmarkStore(),
     dictionaryRepository: createDictionaryRepository(),
     engineInstallationRepository: createEngineInstallationRepository(),
     eventDispatcher,
+    externalLinkOpener: createExternalLinkOpener(),
     fontCatalog: createSystemFontCatalog(),
     librarySearch: createLibrarySearch(),
     narration: {
@@ -192,9 +218,39 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
           },
           { ...options, engineInstallations: () => engineInstallations }
         );
+      },
+      bookIdentity(document, voiceId) {
+        const chapter = document.chapters[0];
+        if (chapter == null) return null;
+        const sessionChapter = createReaderNarrationSessionChapter(
+          buildReaderViewFromDocument(document, { chapterId: chapter.id }),
+          voiceId,
+          narrationSessionRoutingMode,
+          engineInstallations
+        );
+        return {
+          voiceId: sessionChapter.voiceId,
+          modelRevision: sessionChapter.modelRevision
+        };
+      },
+      async prepareBook(document, voiceId, options) {
+        const chapters = document.chapters.map((chapter) =>
+          createReaderNarrationSessionChapter(
+            buildReaderViewFromDocument(document, { chapterId: chapter.id }),
+            voiceId,
+            narrationSessionRoutingMode,
+            engineInstallations
+          )
+        );
+        const result = await prepareNarrationBook(
+          { adapter: narrationPreparationAdapter },
+          { bookId: document.book.id, chapters },
+          options
+        );
+        return { sentenceCount: result.sentenceCount };
       }
     },
-    paragraphImageExporter: createParagraphImageExporter(),
+    quoteImageExporter: createQuoteImageExporter(),
     readerPreferencesRepository: createReaderPreferencesRepository(),
     readingPositionStore: createReadingPositionStore(),
     voiceInstallationRepository: createVoiceInstallationRepository()

@@ -65,6 +65,15 @@ describe("fixture reader view", () => {
               startSentenceIndex: 0,
               sentenceCount: 1
             }
+          ],
+          presentations: [
+            {
+              index: 0,
+              kind: "navigation",
+              indentLevel: 2,
+              marker: null,
+              emphasized: true
+            }
           ]
         }
       ],
@@ -95,6 +104,12 @@ describe("fixture reader view", () => {
       "."
     ]);
     expect(reader.paragraphs[0]?.sentences[0]).toBe(reader.sentences[0]);
+    expect(reader.paragraphs[0]?.presentation).toEqual({
+      kind: "navigation",
+      indentLevel: 2,
+      marker: null,
+      emphasized: true
+    });
   });
 
   it("can open a requested chapter and sentence for bookmark navigation", () => {
@@ -232,7 +247,13 @@ describe("fixture reader view", () => {
         index,
         startSentenceIndex: index,
         endSentenceIndex: index + 1,
-        sentences: [sentence]
+        sentences: [sentence],
+        presentation: {
+          kind: "body",
+          indentLevel: 0,
+          marker: null,
+          emphasized: false
+        }
       } satisfies ReaderParagraphView;
     });
 

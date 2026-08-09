@@ -1,6 +1,10 @@
 import { createSentenceId, normalizeReaderSearchText } from "@sonelle/reader";
 import { segmentParagraphs, segmentSentences } from "@sonelle/text";
-import type { ReaderDocumentDto } from "../library/library-models";
+import type {
+  ReaderDocumentDto,
+  ReaderLinkDto,
+  ReaderReferenceDto
+} from "../library/library-models";
 import { fixtureBook, type FixtureBook } from "./fixture-book";
 
 export interface ReaderSentenceView {
@@ -8,6 +12,8 @@ export interface ReaderSentenceView {
   index: number;
   text: string;
   searchText: string;
+  references?: ReaderReferenceDto[];
+  links?: ReaderLinkDto[];
 }
 
 export interface ReaderParagraphView {
@@ -16,7 +22,22 @@ export interface ReaderParagraphView {
   startSentenceIndex: number;
   endSentenceIndex: number;
   sentences: ReaderSentenceView[];
+  presentation: ReaderParagraphPresentation;
 }
+
+export interface ReaderParagraphPresentation {
+  kind: "body" | "heading" | "quote" | "navigation" | "ordered" | "unordered";
+  indentLevel: number;
+  marker: string | null;
+  emphasized: boolean;
+}
+
+const defaultParagraphPresentation: ReaderParagraphPresentation = {
+  kind: "body",
+  indentLevel: 0,
+  marker: null,
+  emphasized: false
+};
 
 export interface ReaderChapterNavigationItem {
   id: string;
@@ -137,7 +158,9 @@ export function buildFixtureReaderView(
     id: createSentenceId(book.id, chapter.id, sentence.index),
     index: sentence.index,
     text: sentence.text,
-    searchText: normalizeReaderSearchText(sentence.text)
+    searchText: normalizeReaderSearchText(sentence.text),
+    references: [],
+    links: []
   }));
 
   return {
@@ -199,7 +222,11 @@ export function buildReaderViewFromDocument(
     id: sentence.id,
     index: sentence.index,
     text: sentence.text,
-    searchText: normalizeReaderSearchText(sentence.text)
+    searchText: normalizeReaderSearchText(sentence.text),
+    references: (chapter.references ?? []).filter(
+      (reference) => reference.sentenceId === sentence.id
+    ),
+    links: (chapter.links ?? []).filter((link) => link.sentenceId === sentence.id)
   }));
 
   return {
@@ -229,7 +256,11 @@ export function buildReaderViewFromDocument(
     ),
     totalSentenceCount: document.chapters.reduce((total, entry) => total + entry.sentenceCount, 0),
     sentences: sentenceViews,
-    paragraphs: buildParagraphsFromDocument(chapter.paragraphs, sentenceViews)
+    paragraphs: buildParagraphsFromDocument(
+      chapter.paragraphs,
+      chapter.presentations,
+      sentenceViews
+    )
   };
 }
 
@@ -253,7 +284,8 @@ function buildParagraphsFromBody(
     index: paragraph.index,
     sentences: paragraph.sentences
       .map((sentence) => sentences[sentence.index])
-      .filter((sentence): sentence is ReaderSentenceView => sentence != null)
+      .filter((sentence): sentence is ReaderSentenceView => sentence != null),
+    presentation: defaultParagraphPresentation
   }));
 
   return paragraphs.length > 0
@@ -263,17 +295,22 @@ function buildParagraphsFromBody(
 
 function buildParagraphsFromDocument(
   paragraphs: ReaderDocumentDto["chapters"][number]["paragraphs"],
+  presentations: ReaderDocumentDto["chapters"][number]["presentations"],
   sentences: ReaderSentenceView[]
 ): ReaderParagraphView[] {
   if (paragraphs != null && paragraphs.length > 0) {
     const sentenceByIndex = new Map(sentences.map((sentence) => [sentence.index, sentence]));
+    const presentationByIndex = new Map(
+      (presentations ?? []).map(({ index, ...presentation }) => [index, presentation])
+    );
     const mappedParagraphs = paragraphs
       .map((paragraph) => ({
         id: paragraph.id,
         index: paragraph.index,
         sentences: Array.from({ length: Math.max(0, paragraph.sentenceCount) }, (_, offset) =>
           sentenceByIndex.get(paragraph.startSentenceIndex + offset)
-        ).filter((sentence): sentence is ReaderSentenceView => sentence != null)
+        ).filter((sentence): sentence is ReaderSentenceView => sentence != null),
+        presentation: presentationByIndex.get(paragraph.index) ?? defaultParagraphPresentation
       }))
       .map(withParagraphRange)
       .filter((paragraph) => paragraph.sentences.length > 0);
@@ -293,7 +330,8 @@ function chunkSentencesIntoParagraphs(sentences: ReaderSentenceView[]): ReaderPa
       withParagraphRange({
         id: `fallback-paragraph-${index / chunkSize + 1}`,
         index: index / chunkSize,
-        sentences: sentences.slice(index, index + chunkSize)
+        sentences: sentences.slice(index, index + chunkSize),
+        presentation: defaultParagraphPresentation
       })
     );
   }

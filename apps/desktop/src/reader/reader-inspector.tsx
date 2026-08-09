@@ -1,4 +1,4 @@
-import { createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js";
 import { type AudioSettings, type NarrationVoice } from "@sonelle/audio";
 import { primaryDefinition, type SavedDictionaryEntry, type WordInsight } from "@sonelle/learning";
 import type { ReaderSearchResult } from "@sonelle/reader";
@@ -8,11 +8,21 @@ import type {
   OfflineVoiceView,
   PreparedAudioView
 } from "./reader-offline-narration-application";
-import type { LibraryBookmarkDto } from "../library/library-contracts";
+import type {
+  BookCoverSelection,
+  LibraryBookmarkDto,
+  UpdateBookMetadataInput
+} from "../library/library-contracts";
 import { formatBytes } from "./reader-formatting";
 import { DictionaryStatus, StateBlock } from "./reader-feedback";
 import type { InspectorTab } from "./reader-experience-types";
 import type { ReaderSentenceView } from "./reader-view";
+import type {
+  BookNarrationProgressView,
+  BookNarrationReadiness
+} from "./reader-book-narration-preparation";
+import type { ReaderSessionLimit } from "./reader-session-control-application";
+import type { BookMetadataNotice } from "./reader-book-metadata-workflow";
 import {
   BookmarkIcon,
   CheckIcon,
@@ -295,6 +305,14 @@ function BookmarkPanel(componentProps: { model: ReaderBookmarkInspectorModel }) 
 }
 
 export interface ReaderSettingsInspectorModel {
+  book: {
+    id: string;
+    title: string;
+    author: string;
+    coverImageSrc: string | null;
+    editable: boolean;
+  };
+  bookMetadataNotice: BookMetadataNotice | null;
   audioSettings: AudioSettings;
   voiceInstallation: OfflineVoiceView;
   offlineLibrary: "individual-voice" | "language-pack";
@@ -308,6 +326,10 @@ export interface ReaderSettingsInspectorModel {
   systemFontFamilies: readonly string[];
   audioCacheStats: PreparedAudioView | null;
   audioCacheNotice: string | null;
+  bookNarrationReadiness: BookNarrationReadiness | null;
+  bookNarrationProgress: BookNarrationProgressView | null;
+  sessionLimit: ReaderSessionLimit;
+  canPrepareBook: boolean;
   exportNotice: string | null;
   onAudioSettingsChange: (settings: Partial<AudioSettings>) => void;
   onInstallVoice: () => void;
@@ -321,20 +343,32 @@ export interface ReaderSettingsInspectorModel {
   onResetAudioSettings: () => void;
   onRefreshCache: () => void;
   onClearCache: () => void;
+  onPrepareBook: () => void;
+  onCancelBookPreparation: () => void;
+  onSessionLimitChange: (limit: ReaderSessionLimit) => void;
   onExportBook: () => void;
+  onChooseBookCover: () => Promise<BookCoverSelection | null>;
+  onSaveBookMetadata: (input: UpdateBookMetadataInput) => void;
 }
 
 function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) {
   const props = componentProps.model;
   return (
     <section class="inspector-panel settings-panel" aria-label="Settings">
+      <div class="narration-profile-context">
+        <HeadphonesIcon />
+        <span>
+          <small>Book narration profile</small>
+          <strong title={props.book.title}>{props.book.title}</strong>
+        </span>
+      </div>
       <SpeedSelect
         value={props.audioSettings.playbackRate}
         onChange={(playbackRate) => props.onAudioSettingsChange({ playbackRate })}
       />
       <div class="settings-action-row">
         <button class="secondary-tool-button" type="button" onClick={props.onResetAudioSettings}>
-          Reset audio settings
+          Reset this book's audio settings
         </button>
       </div>
       <div class="setting-field">
@@ -399,6 +433,14 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
         }
         onChange={(voiceId) => props.onAudioSettingsChange({ voiceId })}
       />
+      <Show when={props.book.editable}>
+        <BookMetadataEditorPanel
+          book={props.book}
+          notice={props.bookMetadataNotice}
+          onChooseCover={props.onChooseBookCover}
+          onSave={props.onSaveBookMetadata}
+        />
+      </Show>
       <Show when={props.offlineLibrary === "individual-voice"}>
         <VoiceInstallationCard
           installation={props.voiceInstallation}
@@ -412,25 +454,18 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
           onRefresh={props.onRefreshEngines}
         />
       </Show>
-      <div class="tool-card">
-        <span class="inspector-section-title">Prepared audio for this book</span>
-        <p>
-          {props.audioCacheStats == null
-            ? "Checking prepared audio"
-            : `${props.audioCacheStats.sentenceCount} sentence${props.audioCacheStats.sentenceCount === 1 ? "" : "s"} · ${formatBytes(props.audioCacheStats.sizeBytes)}`}
-        </p>
-        <div class="dictionary-actions">
-          <button type="button" onClick={() => props.onRefreshCache()}>
-            Refresh
-          </button>
-          <button type="button" onClick={props.onClearCache}>
-            Clear
-          </button>
-        </div>
-        <Show when={props.audioCacheNotice}>
-          {(notice) => <p class="library-notice">{notice()}</p>}
-        </Show>
-      </div>
+      <SessionControls limit={props.sessionLimit} onChange={props.onSessionLimitChange} />
+      <BookReadinessPanel
+        readiness={props.bookNarrationReadiness}
+        progress={props.bookNarrationProgress}
+        canPrepare={props.canPrepareBook}
+        fallbackStats={props.audioCacheStats}
+        notice={props.audioCacheNotice}
+        onPrepare={props.onPrepareBook}
+        onCancel={props.onCancelBookPreparation}
+        onRefresh={props.onRefreshCache}
+        onClear={props.onClearCache}
+      />
       <div class="tool-card">
         <span class="inspector-section-title">Data management</span>
         <button class="primary-tool-button" type="button" onClick={props.onExportBook}>
@@ -441,6 +476,283 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
         </Show>
       </div>
     </section>
+  );
+}
+
+function BookMetadataEditorPanel(props: {
+  book: ReaderSettingsInspectorModel["book"];
+  notice: BookMetadataNotice | null;
+  onChooseCover(): Promise<BookCoverSelection | null>;
+  onSave(input: UpdateBookMetadataInput): void;
+}) {
+  const [title, setTitle] = createSignal(props.book.title);
+  const [author, setAuthor] = createSignal(props.book.author);
+  const [coverPath, setCoverPath] = createSignal<string | null>(null);
+  const [coverPreview, setCoverPreview] = createSignal<string | null>(props.book.coverImageSrc);
+  const [removeCover, setRemoveCover] = createSignal(false);
+  let projectedBookSignature = "";
+
+  createEffect(() => {
+    const signature = [
+      props.book.id,
+      props.book.title,
+      props.book.author,
+      props.book.coverImageSrc ?? ""
+    ].join("\u0000");
+    if (projectedBookSignature === signature) return;
+    projectedBookSignature = signature;
+    setTitle(props.book.title);
+    setAuthor(props.book.author);
+    setCoverPath(null);
+    setCoverPreview(props.book.coverImageSrc);
+    setRemoveCover(false);
+  });
+
+  const chooseCover = async () => {
+    const selection = await props.onChooseCover();
+    if (selection == null) return;
+    setCoverPath(selection.path);
+    setCoverPreview(selection.previewSrc);
+    setRemoveCover(false);
+  };
+
+  return (
+    <form
+      class="tool-card book-metadata-editor"
+      aria-label="Book details"
+      onSubmit={(event) => {
+        event.preventDefault();
+        props.onSave({
+          bookId: props.book.id,
+          title: title(),
+          author: author(),
+          coverPath: coverPath(),
+          removeCover: removeCover()
+        });
+      }}
+    >
+      <span class="inspector-section-title">Book details</span>
+      <div class="book-metadata-cover-row">
+        <span class="book-metadata-cover" aria-hidden="true">
+          <Show when={coverPreview()} fallback={<span>{title().slice(0, 1).toUpperCase()}</span>}>
+            {(source) => <img src={source()} alt="" />}
+          </Show>
+        </span>
+        <div>
+          <button class="mini-tool-button" type="button" onClick={() => void chooseCover()}>
+            Choose cover
+          </button>
+          <Show when={coverPreview() != null}>
+            <button
+              class="book-cover-remove"
+              type="button"
+              onClick={() => {
+                setCoverPath(null);
+                setCoverPreview(null);
+                setRemoveCover(true);
+              }}
+            >
+              Remove cover
+            </button>
+          </Show>
+        </div>
+      </div>
+      <label class="book-metadata-field">
+        <span>Title</span>
+        <input
+          aria-label="Book title"
+          value={title()}
+          maxlength="500"
+          onInput={(event) => setTitle(event.currentTarget.value)}
+        />
+      </label>
+      <label class="book-metadata-field">
+        <span>Author</span>
+        <input
+          aria-label="Book author"
+          value={author()}
+          maxlength="500"
+          onInput={(event) => setAuthor(event.currentTarget.value)}
+        />
+      </label>
+      <button
+        class="primary-tool-button"
+        type="submit"
+        disabled={title().trim().length === 0 || props.notice?.tone === "pending"}
+      >
+        {props.notice?.tone === "pending" ? "Saving details" : "Save book details"}
+      </button>
+      <Show when={props.notice}>
+        {(notice) => (
+          <p classList={{ "book-metadata-notice": true, [notice().tone]: true }}>
+            {notice().message}
+          </p>
+        )}
+      </Show>
+    </form>
+  );
+}
+
+const sessionControlOptions: readonly EnhancedSelectOption[] = [
+  { id: "off", label: "Off", description: "Keep narrating", meta: "No limit" },
+  { id: "duration:15", label: "15 minutes", description: "Stop after 15 minutes", meta: "Timer" },
+  { id: "duration:30", label: "30 minutes", description: "Stop after 30 minutes", meta: "Timer" },
+  { id: "duration:45", label: "45 minutes", description: "Stop after 45 minutes", meta: "Timer" },
+  { id: "duration:60", label: "1 hour", description: "Stop after 60 minutes", meta: "Timer" },
+  {
+    id: "paragraph",
+    label: "End of paragraph",
+    description: "Finish the current paragraph",
+    meta: "Natural stop"
+  },
+  {
+    id: "chapter",
+    label: "End of chapter",
+    description: "Finish the current chapter",
+    meta: "Natural stop"
+  }
+];
+
+function SessionControls(props: {
+  limit: ReaderSessionLimit;
+  onChange(limit: ReaderSessionLimit): void;
+}) {
+  const value = () =>
+    props.limit.kind === "duration" ? `duration:${props.limit.durationMinutes}` : props.limit.kind;
+  return (
+    <EnhancedSelect
+      label="Sleep and session"
+      ariaLabel="Narration stop setting"
+      value={value()}
+      options={sessionControlOptions}
+      triggerMeta="Listening session"
+      icon={HeadphonesIcon}
+      onChange={(next) => props.onChange(parseSessionLimit(next))}
+    />
+  );
+}
+
+function parseSessionLimit(value: string): ReaderSessionLimit {
+  if (value === "paragraph" || value === "chapter" || value === "off") {
+    return { kind: value };
+  }
+  const durationMinutes = Number(value.split(":")[1]);
+  return {
+    kind: "duration",
+    durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : 30
+  };
+}
+
+function BookReadinessPanel(props: {
+  readiness: BookNarrationReadiness | null;
+  progress: BookNarrationProgressView | null;
+  canPrepare: boolean;
+  fallbackStats: PreparedAudioView | null;
+  notice: string | null;
+  onPrepare(): void;
+  onCancel(): void;
+  onRefresh(): void;
+  onClear(): void;
+}) {
+  const isPreparing = () => props.progress != null;
+  const preparedSentenceCount = () =>
+    props.readiness?.preparedSentenceCount ?? props.fallbackStats?.sentenceCount ?? 0;
+  const totalSentenceCount = () => props.readiness?.totalSentenceCount;
+  const storedSize = () => props.readiness?.sizeBytes ?? props.fallbackStats?.sizeBytes ?? 0;
+  const progressValue = () =>
+    (totalSentenceCount() ?? 0) > 0
+      ? Math.min(100, Math.round((preparedSentenceCount() / (totalSentenceCount() ?? 1)) * 100))
+      : 0;
+  const isReady = () =>
+    (totalSentenceCount() ?? 0) > 0 && preparedSentenceCount() >= (totalSentenceCount() ?? 0);
+  const status = () => {
+    if (isPreparing()) return { label: "Preparing", className: "preparing" };
+    if (!props.canPrepare) return { label: "Unavailable", className: "unavailable" };
+    if (props.readiness == null) return { label: "Checking", className: "checking" };
+    if (isReady()) return { label: "Ready", className: "ready" };
+    if (preparedSentenceCount() > 0) return { label: "Partly ready", className: "partial" };
+    return { label: "Not prepared", className: "unavailable" };
+  };
+  const prepareLabel = () => {
+    if (!props.canPrepare) return "Preparation unavailable";
+    return isReady() ? "Entire book ready" : "Prepare entire book";
+  };
+
+  return (
+    <div class="tool-card book-readiness-card">
+      <div class="book-readiness-heading">
+        <span class="inspector-section-title">Offline readiness</span>
+        <span class={`book-readiness-state ${status().className}`}>{status().label}</span>
+      </div>
+      <div class="book-readiness-summary">
+        <span class="book-readiness-metric">
+          <strong>
+            <Show
+              when={totalSentenceCount() != null}
+              fallback={preparedSentenceCount().toLocaleString()}
+            >
+              {preparedSentenceCount().toLocaleString()} /{" "}
+              {(totalSentenceCount() ?? 0).toLocaleString()}
+            </Show>
+          </strong>
+          <small>{totalSentenceCount() == null ? "sentences prepared" : "sentences ready"}</small>
+        </span>
+        <span class="book-readiness-metric">
+          <strong>{formatBytes(storedSize())}</strong>
+          <small>stored audio</small>
+        </span>
+      </div>
+      <Show
+        when={(totalSentenceCount() ?? 0) > 0}
+        fallback={
+          <Show when={props.canPrepare}>
+            <div class="book-readiness-progress checking" aria-live="polite">
+              <progress aria-label="Checking book narration readiness" />
+              <small>Checking chapter readiness...</small>
+            </div>
+          </Show>
+        }
+      >
+        <div class="book-readiness-progress">
+          <span>
+            <small>Book progress</small>
+            <strong>{progressValue()}%</strong>
+          </span>
+          <progress aria-label="Book narration readiness" max="100" value={progressValue()} />
+        </div>
+      </Show>
+      <Show when={(props.readiness?.estimatedSizeBytes ?? 0) > storedSize()}>
+        <small class="book-readiness-estimate">
+          Estimated full book: {formatBytes(props.readiness?.estimatedSizeBytes ?? 0)}
+        </small>
+      </Show>
+      <Show
+        when={isPreparing()}
+        fallback={
+          <button
+            class="primary-tool-button"
+            type="button"
+            disabled={!props.canPrepare || isReady()}
+            onClick={props.onPrepare}
+          >
+            {prepareLabel()}
+          </button>
+        }
+      >
+        <button class="secondary-tool-button" type="button" onClick={props.onCancel}>
+          Cancel preparation
+        </button>
+      </Show>
+      <div class="book-readiness-actions" aria-label="Prepared audio maintenance">
+        <button class="secondary-tool-button" type="button" onClick={props.onRefresh}>
+          Refresh
+        </button>
+        <button class="secondary-tool-button mini-danger" type="button" onClick={props.onClear}>
+          Clear audio
+        </button>
+      </div>
+      <Show when={props.notice}>{(notice) => <p class="library-notice">{notice()}</p>}</Show>
+    </div>
   );
 }
 

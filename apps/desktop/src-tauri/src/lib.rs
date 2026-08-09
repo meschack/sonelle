@@ -46,6 +46,7 @@ pub fn run() {
 
     builder
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             error_log::initialize(app.handle()).map_err(io::Error::other)?;
             let store = SonelleStore::open(app.handle()).map_err(|error| {
@@ -77,6 +78,7 @@ pub fn run() {
             commands::delete_bookmark,
             commands::export_book_data,
             commands::get_audio_cache_stats,
+            commands::get_narration_chapter_cache_stats,
             commands::get_narration_engine_status,
             book_open_request::take_pending_book_open_requests,
             commands::import_epub,
@@ -93,6 +95,7 @@ pub fn run() {
             commands::save_reading_position,
             commands::search_library,
             commands::stop_sentence_audio,
+            commands::update_book_metadata,
             commands::get_narration_voice_status,
             commands::install_narration_voice
         ])

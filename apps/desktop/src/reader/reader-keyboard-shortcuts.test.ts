@@ -39,11 +39,21 @@ describe("reader keyboard shortcuts", () => {
       "open-tools"
     );
     expect(resolveReaderKeyboardShortcut({ key: "S", shiftKey: true, surface: "reader" })).toBe(
-      "save-paragraph-image"
+      "save-quote-image"
     );
     expect(resolveReaderKeyboardShortcut({ key: "L", shiftKey: true, surface: "reader" })).toBe(
       "open-library"
     );
+    expect(resolveReaderKeyboardShortcut({ key: "d", surface: "reader" })).toBe(
+      "toggle-distraction-free"
+    );
+    expect(
+      resolveReaderKeyboardShortcut({
+        key: "Escape",
+        surface: "reader",
+        distractionFree: true
+      })
+    ).toBe("toggle-distraction-free");
   });
 
   it("keeps import and shortcut help available across app surfaces", () => {
@@ -54,6 +64,14 @@ describe("reader keyboard shortcuts", () => {
       "open-shortcut-reference"
     );
     expect(resolveReaderKeyboardShortcut({ key: "m", surface: "library" })).toBeNull();
+    expect(
+      resolveReaderKeyboardShortcut({
+        key: "f",
+        ctrlKey: true,
+        shiftKey: true,
+        surface: "reader"
+      })
+    ).toBe("search-across-books");
   });
 
   it("makes the shortcut reference modal and dismissible", () => {

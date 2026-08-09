@@ -8,13 +8,15 @@ use crate::audio::{
     SentenceAudioRequest,
 };
 use crate::library_import::prepare_epub_import;
+use crate::narration_cache::NarrationChapterCacheStats;
 use crate::narration_engine_pack::{
     engine_status, install_engine, NarrationEngineInstallationStatus,
 };
 use crate::narration_manifest::{
     cancel_manifest_narration as cancel_manifest_narration_request, clear_manifest_cache,
-    manifest_cache_summary, prepare_manifest_narration as prepare_manifest_narration_asset,
-    ManifestNarrationRequest, PreparedManifestNarration,
+    manifest_cache_summary, manifest_chapter_cache_summary,
+    prepare_manifest_narration as prepare_manifest_narration_asset, ManifestNarrationRequest,
+    PreparedManifestNarration,
 };
 
 #[tauri::command]
@@ -22,8 +24,9 @@ pub fn cancel_manifest_narration(request_id: String) {
     cancel_manifest_narration_request(request_id);
 }
 use crate::storage::{
-    BookExportView, BookmarkView, LibraryBookView, LibrarySearchRequest, LibrarySearchResultView,
-    ReaderDocumentView, SaveBookmarkRequest, SaveReadingPositionRequest, SonelleStore,
+    BookExportView, BookMetadataView, BookmarkView, LibraryBookView, LibrarySearchRequest,
+    LibrarySearchResultView, ReaderDocumentView, SaveBookmarkRequest, SaveReadingPositionRequest,
+    SonelleStore, UpdateBookMetadataRequest,
 };
 use crate::system_fonts::list_system_font_families;
 use crate::voice_installation::{install_voice, voice_status, NarrationVoiceInstallationStatus};
@@ -53,6 +56,18 @@ pub async fn open_book(
     let store = managed_store(&app);
     run_blocking("library.open", move || {
         store.open_book(&book_id, chapter_id.as_deref())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn update_book_metadata(
+    app: AppHandle,
+    request: UpdateBookMetadataRequest,
+) -> Result<BookMetadataView, String> {
+    let store = managed_store(&app);
+    run_blocking("library.metadata.update", move || {
+        store.update_book_metadata(request)
     })
     .await
 }
@@ -140,6 +155,19 @@ pub async fn get_audio_cache_stats(
 ) -> Result<AudioCacheStats, String> {
     run_blocking("audio-cache.summary", move || {
         book_audio_cache_summary(&app, &book_id)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn get_narration_chapter_cache_stats(
+    app: AppHandle,
+    book_id: String,
+    voice_id: String,
+    model_revision: String,
+) -> Result<Vec<NarrationChapterCacheStats>, String> {
+    run_blocking("audio-cache.chapter-summary", move || {
+        manifest_chapter_cache_summary(&app, &book_id, &voice_id, &model_revision)
     })
     .await
 }

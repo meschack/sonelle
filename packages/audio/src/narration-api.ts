@@ -10,6 +10,12 @@ export type {
 } from "./narration-contracts";
 export { digestNarrationPassageText } from "./narration-identity";
 export {
+  prepareNarrationBook,
+  type NarrationBookPreparationInput,
+  type NarrationBookPreparationProgress,
+  type NarrationBookPreparationResult
+} from "./narration-book-preparation";
+export {
   createNarrationChapterOutline,
   createNarrationPassages,
   type NarrationPassageOptions

@@ -5,7 +5,7 @@
 - translating keyboard input into semantic reader commands
 - defining the user-facing shortcut reference shown by the desktop app
 - deciding which commands are global, reader-only, or allowed while editing text
-- resolving Library navigation, filter, sidebar, fullscreen, and command-palette commands
+- resolving Library navigation, filter, sidebar, distraction-free, fullscreen, and command-palette commands
 
 ## Refuses To Own
 
@@ -26,6 +26,13 @@ focus operation. `Enter` then opens the focused card through the existing Librar
 
 Primary-modifier commands remain available while an input has focus. Unmodified letter keys are
 ignored there so typing in search and settings fields never triggers reader actions.
+
+`D` toggles distraction-free reading on the reader surface. `Escape` exits that mode before
+resuming its usual transient-state clearing behavior.
+
+`Ctrl/Cmd+Shift+F` is global. It opens the Library workspace, focuses its search field, and searches
+titles, authors, and imported book text. The ordinary `Ctrl/Cmd+F` remains scoped to the current
+surface: the current chapter in Reader and the collection search field in Library.
 
 ## Domain Events
 

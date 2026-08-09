@@ -33,6 +33,25 @@ pub struct ReaderBookView {
     pub cover_image_src: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateBookMetadataRequest {
+    pub book_id: String,
+    pub title: String,
+    pub author: String,
+    pub cover_path: Option<String>,
+    pub remove_cover: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookMetadataView {
+    pub book_id: String,
+    pub title: String,
+    pub author: String,
+    pub cover_image_src: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReaderChapterView {
@@ -42,6 +61,44 @@ pub struct ReaderChapterView {
     pub sentence_count: i64,
     pub sentences: Vec<ReaderSentenceView>,
     pub paragraphs: Vec<ReaderParagraphView>,
+    pub references: Vec<ReaderReferenceView>,
+    pub links: Vec<ReaderLinkView>,
+    pub presentations: Vec<ReaderParagraphPresentationView>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReaderReferenceView {
+    pub id: String,
+    pub sentence_id: String,
+    pub sentence_index: usize,
+    pub offset: usize,
+    pub marker: String,
+    pub kind: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReaderLinkView {
+    pub id: String,
+    pub sentence_id: String,
+    pub sentence_index: usize,
+    pub offset: usize,
+    pub length: usize,
+    pub href: Option<String>,
+    pub target_chapter_id: Option<String>,
+    pub target_sentence_index: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReaderParagraphPresentationView {
+    pub index: usize,
+    pub kind: String,
+    pub indent_level: usize,
+    pub marker: Option<String>,
+    pub emphasized: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

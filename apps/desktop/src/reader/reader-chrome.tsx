@@ -3,6 +3,7 @@ import type { PlaybackStatus, ReaderProgress } from "@sonelle/reader";
 import type { ReaderChapterNavigationItem } from "./reader-view";
 import {
   BookmarkIcon,
+  FocusIcon,
   HelpIcon,
   NextIcon,
   PauseIcon,
@@ -15,9 +16,9 @@ import {
 } from "./reader-icons";
 
 interface ProductBarProps {
-  showParagraphImageAction: boolean;
-  canSaveParagraphImage: boolean;
-  onSaveParagraphImage: () => void;
+  showQuoteImageAction: boolean;
+  canSaveQuoteImage: boolean;
+  onSaveQuoteImage: () => void;
   onOpenShortcutReference: () => void;
 }
 
@@ -30,15 +31,15 @@ export function ProductBar(props: ProductBarProps) {
       </div>
       <span class="product-tagline">Your private reading desk</span>
       <div class="product-status-actions">
-        <Show when={props.showParagraphImageAction}>
+        <Show when={props.showQuoteImageAction}>
           <button
-            class="product-icon-action product-paragraph-image-action"
+            class="product-icon-action product-quote-image-action"
             type="button"
-            aria-label="Save paragraph as image"
+            aria-label="Create quote image"
             aria-keyshortcuts="Shift+S"
-            title="Save paragraph as image (Shift+S)"
-            disabled={!props.canSaveParagraphImage}
-            onClick={props.onSaveParagraphImage}
+            title="Create quote image (Shift+S)"
+            disabled={!props.canSaveQuoteImage}
+            onClick={props.onSaveQuoteImage}
           >
             <ShareIcon />
           </button>
@@ -65,6 +66,7 @@ interface ReaderTopAppBarProps {
   sentenceCount: number;
   onOpenSearch: () => void;
   onOpenSettings: () => void;
+  onEnterDistractionFree: () => void;
 }
 
 export function ReaderTopAppBar(props: ReaderTopAppBarProps) {
@@ -86,6 +88,15 @@ export function ReaderTopAppBar(props: ReaderTopAppBarProps) {
         </span>
       </div>
       <div class="top-app-actions">
+        <button
+          type="button"
+          aria-label="Enter distraction-free reading"
+          aria-keyshortcuts="D"
+          title="Distraction-free reading (D)"
+          onClick={props.onEnterDistractionFree}
+        >
+          <FocusIcon />
+        </button>
         <button
           type="button"
           aria-label="Open search"

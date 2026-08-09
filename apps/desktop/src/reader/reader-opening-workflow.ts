@@ -41,7 +41,8 @@ export function createReaderOpeningWorkflow(
         sentenceId: sentence?.id ?? "",
         sentenceIndex,
         playbackStatus,
-        source: reader.source
+        source: reader.source,
+        language: reader.book.language
       });
       pending.set(event.id, { reader, sentenceIndex, playbackStatus });
       try {

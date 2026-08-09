@@ -624,6 +624,62 @@ svg {
   word-spacing: -0.08em;
 }
 
+.reader-paragraph.structured-entry {
+  position: relative;
+}
+
+.reader-paragraph.structured-entry.indent-1 {
+  margin-left: 1.35em;
+}
+.reader-paragraph.structured-entry.indent-2 {
+  margin-left: 2.7em;
+}
+.reader-paragraph.structured-entry.indent-3 {
+  margin-left: 4.05em;
+}
+.reader-paragraph.structured-entry.indent-4 {
+  margin-left: 5.4em;
+}
+
+.reader-paragraph[data-structure="navigation"] {
+  margin-bottom: 14px;
+}
+
+.reader-paragraph[data-structure="navigation"].emphasized {
+  font-weight: 700;
+  margin-bottom: 16px;
+  margin-top: 24px;
+}
+
+.reader-paragraph[data-structure="heading"] {
+  font-weight: 700;
+  margin-top: 24px;
+}
+
+.reader-paragraph[data-structure="quote"] {
+  border-left: 3px solid var(--line-strong);
+  padding-left: 1.1em;
+}
+
+.reader-paragraph[data-structure="ordered"],
+.reader-paragraph[data-structure="unordered"] {
+  margin-bottom: 12px;
+  padding-left: 1.6em;
+}
+
+.reader-list-marker {
+  color: var(--muted);
+  left: 0;
+  position: absolute;
+  text-align: right;
+  transform: translateX(-0.45em);
+  width: 1.4em;
+}
+
+.reader-paragraph[data-structure="unordered"] > .reader-list-marker::before {
+  content: "\2022";
+}
+
 .sentence {
   display: inline;
   margin: 0;
@@ -705,6 +761,99 @@ svg {
   background: rgba(21, 63, 52, 0.12);
   color: var(--green);
   outline: none;
+}
+
+.reader-link {
+  color: var(--green);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--green) 68%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.reader-link:hover,
+.reader-link:focus-visible {
+  background: rgba(21, 63, 52, 0.12);
+  border-radius: 3px;
+  outline: none;
+}
+
+.reader-reference-button {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--green);
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--ui-font);
+  font-weight: 800;
+  line-height: 1;
+  margin: 0 2px;
+  padding: 0 1px;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.reader-reference-button:hover,
+.reader-reference-button:focus-visible {
+  background: rgba(21, 63, 52, 0.12);
+  border-radius: 3px;
+  outline: none;
+}
+
+.reference-popover {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  display: grid;
+  font-family: var(--ui-font);
+  font-size: 15px;
+  gap: 14px;
+  left: 0;
+  line-height: 1.55;
+  max-height: calc(100vh - 32px);
+  max-width: min(460px, calc(100vw - 32px));
+  min-width: min(340px, calc(100vw - 32px));
+  overflow: auto;
+  padding: 20px;
+  position: fixed;
+  top: 0;
+  z-index: 1200;
+}
+
+.reference-popover-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.reference-popover-heading strong {
+  color: var(--green);
+  font-size: 18px;
+}
+
+.reference-popover-heading small {
+  background: var(--mint);
+  border-radius: 999px;
+  color: var(--green);
+  font-weight: 800;
+  padding: 3px 8px;
+}
+
+.reference-popover > button {
+  background: #eeeceb;
+  border: 0;
+  border-radius: 6px;
+  color: var(--ink);
+  font-weight: 750;
+  justify-self: start;
+  min-height: 34px;
+  padding: 0 12px;
 }
 
 .word-popover {
@@ -1187,6 +1336,144 @@ svg {
 .offline-narration-file-card progress {
   accent-color: var(--green);
   height: 8px;
+  width: 100%;
+}
+
+.book-readiness-card {
+  display: grid;
+  gap: 14px;
+}
+
+.book-readiness-heading {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.book-readiness-state {
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1;
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+
+.book-readiness-state.ready,
+.book-readiness-state.partial {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.book-readiness-state.preparing,
+.book-readiness-state.checking {
+  background: #fff1c7;
+  color: #7a5410;
+}
+
+.book-readiness-state.unavailable {
+  background: #eeeceb;
+  color: var(--muted);
+}
+
+.book-readiness-summary {
+  border-block: 1px solid var(--line-soft);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 13px 0;
+}
+
+.book-readiness-metric {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.book-readiness-metric + .book-readiness-metric {
+  border-left: 1px solid var(--line-soft);
+  padding-left: 14px;
+}
+
+.book-readiness-metric strong {
+  color: var(--ink);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.book-readiness-metric small,
+.book-readiness-estimate,
+.book-readiness-progress small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.book-readiness-progress {
+  display: grid;
+  gap: 7px;
+}
+
+.book-readiness-progress > span {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.book-readiness-progress > span strong {
+  color: var(--green);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.book-readiness-progress > progress {
+  appearance: none;
+  background: var(--line-soft);
+  border: 0;
+  border-radius: 999px;
+  height: 7px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.book-readiness-progress > progress::-webkit-progress-bar {
+  background: var(--line-soft);
+}
+
+.book-readiness-progress > progress::-webkit-progress-value {
+  background: var(--green);
+  border-radius: 999px;
+}
+
+.book-readiness-progress > progress::-moz-progress-bar {
+  background: var(--green);
+  border-radius: 999px;
+}
+
+.book-readiness-progress.checking > progress {
+  accent-color: var(--green);
+}
+
+.book-readiness-card > .primary-tool-button,
+.book-readiness-card > .secondary-tool-button {
+  width: 100%;
+}
+
+.book-readiness-actions {
+  border-top: 1px solid var(--line-soft);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-top: 14px;
+}
+
+.book-readiness-actions button {
+  min-width: 0;
   width: 100%;
 }
 
