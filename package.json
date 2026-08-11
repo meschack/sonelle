@@ -23,6 +23,7 @@
     "qa:real-books": "cargo test real_book_qa_imports_configured_epubs_through_storage_workflow -- --ignored --nocapture",
     "perf:large-books": "cargo test large_book_performance_harness_reports_reader_timings -- --ignored --nocapture",
     "profile:android": "node scripts/profile-android-device.mjs",
+    "stability:android": "node scripts/run-android-stability.mjs",
     "spike:narration:setup": "node scripts/setup-narration-spike.mjs",
     "spike:narration:models": "node scripts/setup-narration-spike.mjs --models",
     "spike:narration:verify": "node scripts/setup-narration-spike.mjs --models --verify-only",

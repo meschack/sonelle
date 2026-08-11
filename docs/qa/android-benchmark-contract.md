@@ -174,6 +174,11 @@ The physical-device capture procedure and its guarded helper are documented in
 [Android device profiling](android-device-profiling.md). The helper refuses emulators and writes a
 device-specific worksheet beside its raw captures.
 
+The one-hour mixed reader and narration procedure is documented in
+[Android 60-minute stability run](android-stability-run.md). Its guarded helper binds the signed APK
+to internal build metadata, samples the physical device throughout the run, and leaves audible
+sentence correctness as an explicit human verdict.
+
 Before device capture, verify the same EPUBs through the native QA paths:
 
 ```sh
