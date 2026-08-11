@@ -90,6 +90,9 @@ export function createReaderLibraryApplication(
       return book.lastReadAt > latest.lastReadAt ? book : latest;
     }, null) ?? books[0];
 
+  const recoveryOptions = (book: LibraryBookSummary): OpenBookOptions =>
+    book.lastReadAt == null ? {} : { playbackStatus: "paused" };
+
   const refreshBookmarks = async (bookId?: string) => {
     try {
       const bookmarks = await dependencies.bookmarks.list(bookId);
@@ -220,7 +223,7 @@ export function createReaderLibraryApplication(
         const books = await refreshBooks();
         const book = resumeBook(books);
         if (options.currentBookSource() === "sample" && book != null) {
-          await open(book.id);
+          await open(book.id, recoveryOptions(book));
         }
       } catch (error) {
         reportLibraryError(error);

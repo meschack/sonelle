@@ -34,6 +34,8 @@ Reading-position updates also project their timestamp into library summaries. St
 fact to resume the most recently read book, while `open_book` restores the stored chapter and clamps
 the sentence index to its readable range. A stale removed chapter is discarded and falls back to the
 first readable chapter instead of leaking an invalid position to the reader.
+After process reclamation, that durable position is restored with playback explicitly paused. The
+storage layer never persists transient playing state, narration requests, or media-session state.
 
 The `.readex` application-data directory is retained as an intentional compatibility path for
 existing local libraries. New user-facing naming remains Sonelle.
