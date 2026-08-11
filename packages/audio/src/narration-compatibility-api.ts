@@ -1,8 +1,8 @@
 export type {
   AudioReadiness,
-  NarrationGateway,
+  LegacyNarrationGateway,
   NarrationPlaybackMode,
-  PrefetchingNarrationGateway,
+  LegacyPrefetchingNarrationGateway,
   SentenceAudio,
   SentenceNarration,
   SentenceNarrationRequest

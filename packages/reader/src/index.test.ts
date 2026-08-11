@@ -112,6 +112,21 @@ describe("reader playback", () => {
       )
     ).toEqual({ activeSentenceIndex: 1, status: "paused" });
   });
+
+  it("keeps duplicate sentence-start callbacks idempotent", () => {
+    const sentenceIds = ["sentence-1", "sentence-2", "sentence-3"];
+    const event = narrationEvent("NarrationSentenceEntered", {
+      sentenceId: "sentence-2",
+      passageId: "passage-1"
+    });
+    const first = projectNarrationEventToPlayback(
+      { activeSentenceIndex: 0, status: "playing" },
+      sentenceIds,
+      event
+    );
+
+    expect(projectNarrationEventToPlayback(first, sentenceIds, event)).toEqual(first);
+  });
 });
 
 describe("reader progress", () => {

@@ -297,7 +297,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   );
   let readerSearchInput: HTMLInputElement | undefined;
   const sentenceElements = new Map<string, HTMLElement>();
-  const narrationWorkflow = narrationService.createWorkflow({
+  const narrationGateway = narrationService.createGateway({
     currentReader: reader,
     currentSettings: audioSettings,
     projectPlayback: (event) => playbackApplication.projectNarration(event),
@@ -317,7 +317,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     {
       eventDispatcher,
       repository: audioSettingsRepository,
-      narration: narrationWorkflow,
+      narration: narrationGateway,
       activateSettings: narrationService.activateSettings,
       reportEventError: reportEventReactionFailure
     },
@@ -364,7 +364,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   let allowsChapterTransition = () => true;
   const playbackApplication = createReaderPlaybackApplication(
     {
-      narration: narrationWorkflow,
+      narration: narrationGateway,
       eventDispatcher,
       positions: dependencies.readingPositionStore,
       preparesAcrossChapters: narrationService.capabilities.preparesAcrossChapters,
@@ -455,7 +455,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       audioCache: dependencies.audioCacheRepository,
       engineInstallations: dependencies.engineInstallationRepository,
       eventDispatcher,
-      narration: narrationWorkflow,
+      narration: narrationGateway,
       offlineLibrary: narrationService.capabilities.offlineLibrary,
       voiceInstallations: dependencies.voiceInstallationRepository,
       friendlyError: toFriendlyNarrationError,
@@ -751,7 +751,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     let disposed = false;
     let stopLibraryApplication: (() => void) | undefined;
     let stopOfflineNarrationApplication: (() => void) | undefined;
-    const stopNarrationWorkflow = narrationWorkflow.start();
+    const disconnectNarration = narrationGateway.connect();
     const stopNarrationSettingsWorkflow = narrationSettingsWorkflow.start();
     const stopTypographyWorkflow = typographyWorkflow.start();
     const stopAppearanceWorkflow = appearanceWorkflow.start();
@@ -795,7 +795,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       window.removeEventListener("resize", clampSidebarWidthsToViewport);
       stopLibraryApplication?.();
       stopOfflineNarrationApplication?.();
-      stopNarrationWorkflow();
+      disconnectNarration();
       stopNarrationSettingsWorkflow();
       stopTypographyWorkflow();
       stopAppearanceWorkflow();

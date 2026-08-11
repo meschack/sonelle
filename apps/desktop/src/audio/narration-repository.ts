@@ -6,7 +6,7 @@ import {
   type MediaSourceGateway
 } from "../platform/media-source-gateway";
 import {
-  type NarrationGateway,
+  type LegacyNarrationGateway,
   type NarrationPlaybackMode,
   type SentenceNarration
 } from "@sonelle/audio/compatibility";
@@ -20,13 +20,13 @@ interface NarrationDevelopmentErrorContext {
 
 export function createNarrationRepository(
   mediaSources: MediaSourceGateway = createDesktopMediaSourceGateway()
-): NarrationGateway {
+): LegacyNarrationGateway {
   return isTauriRuntime()
     ? createNativeNarrationRepository(mediaSources)
     : unavailableNarrationRepository;
 }
 
-const unavailableNarrationRepository: NarrationGateway = {
+const unavailableNarrationRepository: LegacyNarrationGateway = {
   async prepareSentenceAudio() {
     throw new Error("Narration is available in the desktop app.");
   },
@@ -36,7 +36,7 @@ const unavailableNarrationRepository: NarrationGateway = {
   async stopPreparedSentenceAudio() {}
 };
 
-function createNativeNarrationRepository(mediaSources: MediaSourceGateway): NarrationGateway {
+function createNativeNarrationRepository(mediaSources: MediaSourceGateway): LegacyNarrationGateway {
   return {
     async prepareSentenceAudio(request) {
       const narration = await invoke<SentenceNarration>("prepare_sentence_audio", { request });

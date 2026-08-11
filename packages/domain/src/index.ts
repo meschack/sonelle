@@ -60,6 +60,7 @@ export interface DomainEventPayloadMap {
     lastSentenceId: EntityId;
   };
   NarrationPlaybackFailed: SentenceRef & { passageId: EntityId | null; reason: string };
+  NarrationPlaybackInterrupted: SentenceRef & { passageId: EntityId | null };
   NarrationSessionLimitChanged: {
     bookId: EntityId;
     kind: "off" | "duration" | "paragraph" | "chapter";

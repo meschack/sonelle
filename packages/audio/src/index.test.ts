@@ -15,11 +15,11 @@ import {
 } from "./index";
 import {
   createPrefetchingNarrationGateway,
-  type NarrationGateway,
+  type LegacyNarrationGateway,
   type SentenceNarration,
   type SentenceNarrationRequest
 } from "./narration-compatibility-api";
-import { FakeNarrationGateway } from "./narration-fakes";
+import { FakeLegacyNarrationGateway } from "./narration-fakes";
 
 describe("sentence narration", () => {
   it("keeps compatibility and session machinery out of the settings entry point", () => {
@@ -29,7 +29,7 @@ describe("sentence narration", () => {
   });
 
   it("keeps fake narration deterministic and cached for tests", async () => {
-    const gateway = new FakeNarrationGateway();
+    const gateway = new FakeLegacyNarrationGateway();
     const request = {
       bookId: "book",
       chapterId: "chapter",
@@ -199,7 +199,7 @@ describe("sentence narration", () => {
   });
 });
 
-class CountingNarrationGateway implements NarrationGateway {
+class CountingNarrationGateway implements LegacyNarrationGateway {
   prepareCount = 0;
 
   async prepareSentenceAudio(request: SentenceNarrationRequest): Promise<SentenceNarration> {

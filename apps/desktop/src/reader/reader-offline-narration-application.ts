@@ -1,5 +1,5 @@
 import { createDomainEvent, type DomainEvent, type DomainEventDispatcher } from "@sonelle/domain";
-import { routeNarrationEngine } from "@sonelle/audio/narration";
+import { routeNarrationEngine, type NarrationGateway } from "@sonelle/audio/narration";
 import type { AudioCacheRepository } from "../audio/audio-cache-repository";
 import type {
   EngineInstallationRepository,
@@ -11,7 +11,6 @@ import type {
   VoiceInstallationState
 } from "../audio/voice-installation-repository";
 import { createReaderEngineInstallationWorkflow } from "./reader-engine-installation-workflow";
-import type { ReaderNarrationWorkflow } from "./reader-narration-workflow";
 import { createReaderVoiceInstallationWorkflow } from "./reader-voice-installation-workflow";
 
 const narrationEngineIds: readonly NarrationEngineId[] = ["kokoro", "supertonic"];
@@ -68,7 +67,7 @@ interface ReaderOfflineNarrationDependencies {
   audioCache: AudioCacheRepository;
   engineInstallations: EngineInstallationRepository;
   eventDispatcher: DomainEventDispatcher;
-  narration: ReaderNarrationWorkflow;
+  narration: NarrationGateway;
   offlineLibrary: "individual-voice" | "language-pack";
   voiceInstallations: VoiceInstallationRepository;
   friendlyError(error: unknown): string;
@@ -143,7 +142,7 @@ export function createReaderOfflineNarrationApplication(
 
   const handleClearRequested = async (event: DomainEvent<"PreparedNarrationClearingRequested">) => {
     try {
-      await dependencies.narration.reset();
+      await dependencies.narration.stop();
       const stats = await dependencies.audioCache.clear(event.payload.bookId);
       await dependencies.eventDispatcher.dispatch(
         createDomainEvent("PreparedNarrationCleared", { bookId: event.payload.bookId, ...stats })

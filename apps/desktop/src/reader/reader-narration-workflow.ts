@@ -1,5 +1,8 @@
 import type {
+  NarrationGateway,
+  NarrationGatewayEvent,
   NarrationEngineId,
+  NarrationReadiness,
   NarrationRoutingMode,
   NarrationSession
 } from "@sonelle/audio/narration";
@@ -7,18 +10,16 @@ import type { AudioSettings } from "@sonelle/audio";
 import { createDomainEvent, type DomainEvent, type DomainEventDispatcher } from "@sonelle/domain";
 import type { ReaderView } from "./reader-view";
 import { createReaderNarrationSessionChapter } from "./reader-narration";
-import type {
-  ReaderNarrationPrefetchWorkflow,
-  UpcomingNarrationRequest
-} from "./reader-narration-prefetch-workflow";
+import type { ReaderNarrationPrefetchWorkflow } from "./reader-narration-prefetch-workflow";
 
 export type ReaderNarrationProjectionEvent =
   | DomainEvent<"NarrationSentenceEntered">
   | DomainEvent<"NarrationPlaybackPaused">
   | DomainEvent<"NarrationPlaybackEnded">
-  | DomainEvent<"NarrationPlaybackFailed">;
+  | DomainEvent<"NarrationPlaybackFailed">
+  | DomainEvent<"NarrationPlaybackInterrupted">;
 
-export interface ReaderNarrationWorkflowOptions {
+export interface DesktopNarrationGatewayOptions {
   currentReader(): ReaderView;
   currentSettings(): AudioSettings;
   engineInstallations(): Partial<Record<NarrationEngineId, { modelRevision: string }>>;
@@ -29,32 +30,58 @@ export interface ReaderNarrationWorkflowOptions {
   reportError(error: unknown, stage: "playback" | "prefetch", sentenceId: string): void;
 }
 
-interface ReaderNarrationWorkflowDependencies {
+interface DesktopNarrationGatewayDependencies {
   eventDispatcher: DomainEventDispatcher;
   prefetchWorkflow: ReaderNarrationPrefetchWorkflow;
   routingMode: NarrationRoutingMode;
   session: NarrationSession;
 }
 
-export interface ReaderNarrationWorkflow {
-  requestPlayback(sentenceId: string): void;
-  pause(): Promise<void>;
-  setOutput(settings: AudioSettings): void;
-  prefetchUpcoming(input: UpcomingNarrationRequest): void;
-  reset(): Promise<void>;
-  start(): () => void;
-}
+/**
+ * Adapts the desktop narration session and prefetch flow to the platform-neutral gateway.
+ * Engine routing is resolved here; reader state and rendering remain outside this module.
+ * Lifecycle facts are published as domain events and mirrored to gateway subscribers.
+ */
+export function createDesktopNarrationGateway(
+  dependencies: DesktopNarrationGatewayDependencies,
+  options: DesktopNarrationGatewayOptions
+): NarrationGateway {
+  let currentReadiness: NarrationReadiness = "idle";
+  let lastSentenceId: string | null = null;
+  let activeSentenceId: string | null = null;
+  let openSessionKey: string | null = null;
+  const listeners = new Set<(event: NarrationGatewayEvent) => void>();
 
-export function createReaderNarrationWorkflow(
-  dependencies: ReaderNarrationWorkflowDependencies,
-  options: ReaderNarrationWorkflowOptions
-): ReaderNarrationWorkflow {
   const publish = async (event: Parameters<DomainEventDispatcher["dispatch"]>[0]) => {
     try {
       await dependencies.eventDispatcher.dispatch(event);
     } catch (error) {
       reportErrorSafely(options, error, "playback", "unknown");
     }
+  };
+
+  const ensureSessionOpen = () => {
+    const reader = options.currentReader();
+    const settings = options.currentSettings();
+    const sessionChapter = createReaderNarrationSessionChapter(
+      reader,
+      settings.voiceId,
+      dependencies.routingMode,
+      options.engineInstallations()
+    );
+    const sessionKey = [
+      reader.book.id,
+      reader.chapter.id,
+      sessionChapter.engineId,
+      sessionChapter.modelRevision,
+      sessionChapter.voiceId
+    ].join("\u001f");
+    if (openSessionKey !== sessionKey) {
+      dependencies.session.open(sessionChapter);
+      openSessionKey = sessionKey;
+    }
+    dependencies.session.setOutput(settings);
+    return reader;
   };
 
   const handlePlaybackRequested = async (event: DomainEvent<"NarrationPlaybackRequested">) => {
@@ -67,15 +94,7 @@ export function createReaderNarrationWorkflow(
     );
     if (sentence == null) return;
 
-    dependencies.session.open(
-      createReaderNarrationSessionChapter(
-        reader,
-        event.payload.voiceId,
-        dependencies.routingMode,
-        options.engineInstallations()
-      )
-    );
-    dependencies.session.setOutput(options.currentSettings());
+    ensureSessionOpen();
     try {
       await dependencies.session.play(sentence.id);
     } catch (error) {
@@ -92,10 +111,23 @@ export function createReaderNarrationWorkflow(
     }
   };
 
-  return {
-    requestPlayback(sentenceId) {
-      const reader = options.currentReader();
-      void publish(
+  const startPlayback = (sentenceId: string) => {
+    const interruptedSentenceId = activeSentenceId;
+    const reader = options.currentReader();
+    lastSentenceId = sentenceId;
+    activeSentenceId = sentenceId;
+    void (async () => {
+      if (interruptedSentenceId != null) {
+        await publish(
+          createDomainEvent("NarrationPlaybackInterrupted", {
+            bookId: reader.book.id,
+            chapterId: reader.chapter.id,
+            sentenceId: interruptedSentenceId,
+            passageId: null
+          })
+        );
+      }
+      await publish(
         createDomainEvent("NarrationPlaybackRequested", {
           bookId: reader.book.id,
           chapterId: reader.chapter.id,
@@ -103,26 +135,73 @@ export function createReaderNarrationWorkflow(
           voiceId: options.currentSettings().voiceId
         })
       );
+    })();
+  };
+
+  return {
+    async prepare(sentenceId) {
+      const reader = ensureSessionOpen();
+      const sentence = reader.sentences.find((candidate) => candidate.id === sentenceId);
+      if (sentence == null) return;
+      try {
+        await dependencies.session.prepare(sentenceId);
+      } catch (error) {
+        reportErrorSafely(options, error, "playback", sentenceId);
+        await publish(
+          createDomainEvent("NarrationPlaybackFailed", {
+            bookId: reader.book.id,
+            chapterId: reader.chapter.id,
+            passageId: null,
+            sentenceId,
+            reason: "Narration needs attention. Please try again."
+          })
+        );
+      }
+    },
+    readiness() {
+      return currentReadiness;
+    },
+    start(sentenceId) {
+      startPlayback(sentenceId);
     },
     pause() {
       return dependencies.session.pause();
     },
-    setOutput(settings) {
-      dependencies.session.setOutput(settings);
+    resume() {
+      if (lastSentenceId != null) startPlayback(lastSentenceId);
     },
-    prefetchUpcoming(input) {
-      dependencies.prefetchWorkflow.request(input);
-    },
-    reset() {
+    async stop() {
       const reader = options.currentReader();
-      return publish(
+      const interruptedSentenceId = activeSentenceId;
+      activeSentenceId = null;
+      if (interruptedSentenceId != null) {
+        await publish(
+          createDomainEvent("NarrationPlaybackInterrupted", {
+            bookId: reader.book.id,
+            chapterId: reader.chapter.id,
+            sentenceId: interruptedSentenceId,
+            passageId: null
+          })
+        );
+      }
+      await publish(
         createDomainEvent("NarrationResetRequested", {
           bookId: reader.book.id,
           chapterId: reader.chapter.id
         })
       );
     },
-    start() {
+    setOutput(settings) {
+      dependencies.session.setOutput(settings);
+    },
+    prepareUpcoming(input) {
+      dependencies.prefetchWorkflow.request(input);
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    connect() {
       const stopPrefetch = dependencies.prefetchWorkflow.start();
       const subscriptions = [
         dependencies.eventDispatcher.subscribe("NarrationPlaybackRequested", () => {
@@ -138,13 +217,16 @@ export function createReaderNarrationWorkflow(
             reader.book.id === event.payload.bookId &&
             reader.chapter.id === event.payload.chapterId
           ) {
+            currentReadiness = "preparing";
             options.projectPreparing(true);
           }
         }),
-        dependencies.eventDispatcher.subscribe("PassageNarrationReady", () =>
-          options.projectPreparing(false)
-        ),
+        dependencies.eventDispatcher.subscribe("PassageNarrationReady", () => {
+          currentReadiness = "ready";
+          options.projectPreparing(false);
+        }),
         dependencies.eventDispatcher.subscribe("NarrationSentenceEntered", (event) => {
+          activeSentenceId = event.payload.sentenceId;
           options.projectPreparing(false);
           options.projectAudible(true);
           options.projectPlayback(event);
@@ -154,25 +236,42 @@ export function createReaderNarrationWorkflow(
           options.projectAudible(false);
         }),
         dependencies.eventDispatcher.subscribe("NarrationPlaybackPaused", (event) => {
+          if (activeSentenceId === event.payload.sentenceId) activeSentenceId = null;
           options.projectPreparing(false);
           options.projectAudible(false);
           options.projectPlayback(event);
         }),
         dependencies.eventDispatcher.subscribe("NarrationPlaybackEnded", (event) => {
+          if (activeSentenceId === event.payload.lastSentenceId) activeSentenceId = null;
           options.projectPreparing(false);
           options.projectAudible(false);
           options.projectPlayback(event);
         }),
         dependencies.eventDispatcher.subscribe("NarrationPlaybackFailed", (event) => {
+          if (activeSentenceId === event.payload.sentenceId) activeSentenceId = null;
+          currentReadiness = "needs-attention";
           options.projectPreparing(false);
           options.projectAudible(false);
           options.projectPlayback(event);
         }),
+        dependencies.eventDispatcher.subscribe("NarrationPlaybackInterrupted", (event) => {
+          if (activeSentenceId === event.payload.sentenceId) activeSentenceId = null;
+          options.projectPreparing(false);
+          options.projectAudible(false);
+          options.projectPlayback(event);
+        }),
+        ...gatewayEventNames.map((name) =>
+          dependencies.eventDispatcher.subscribe(name, (event) => {
+            listeners.forEach((listener) => listener(event as NarrationGatewayEvent));
+          })
+        ),
         dependencies.eventDispatcher.subscribe("NarrationResetRequested", () => {
           dependencies.prefetchWorkflow.reset();
         }),
         dependencies.eventDispatcher.subscribe("NarrationResetRequested", () => {
           dependencies.session.close();
+          openSessionKey = null;
+          currentReadiness = "idle";
         }),
         dependencies.eventDispatcher.subscribe("NarrationResetRequested", () => {
           options.projectAudible(false);
@@ -199,8 +298,18 @@ export function createReaderNarrationWorkflow(
   };
 }
 
+const gatewayEventNames = [
+  "NarrationPreparationStarted",
+  "PassageNarrationReady",
+  "NarrationSentenceEntered",
+  "NarrationPlaybackPaused",
+  "NarrationPlaybackEnded",
+  "NarrationPlaybackFailed",
+  "NarrationPlaybackInterrupted"
+] as const;
+
 function reportErrorSafely(
-  options: ReaderNarrationWorkflowOptions,
+  options: DesktopNarrationGatewayOptions,
   error: unknown,
   stage: "playback" | "prefetch",
   sentenceId: string

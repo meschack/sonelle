@@ -6,7 +6,7 @@ import type {
   PreparedNarration
 } from "./narration-api";
 import {
-  FakeNarrationGateway,
+  FakeLegacyNarrationGateway,
   FakePassageNarrationAdapter,
   FakeSentenceBatchNarrationAdapter
 } from "./narration-fakes";
@@ -35,7 +35,7 @@ describe("deterministic narration adapters", () => {
   });
 
   it("represents current Piper output as one complete sentence span", async () => {
-    const adapter = new PiperCompatibilityAdapter(new FakeNarrationGateway());
+    const adapter = new PiperCompatibilityAdapter(new FakeLegacyNarrationGateway());
     const narration = await adapter.prepare({
       ...preparationRequest("piper"),
       passage: { ...preparationRequest("piper").passage, sentences: [sentences[0]] },

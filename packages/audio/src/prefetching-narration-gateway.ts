@@ -1,6 +1,6 @@
 import type {
-  NarrationGateway,
-  PrefetchingNarrationGateway,
+  LegacyNarrationGateway,
+  LegacyPrefetchingNarrationGateway,
   SentenceNarration,
   SentenceNarrationRequest
 } from "./legacy-narration";
@@ -10,9 +10,9 @@ interface PrefetchingNarrationOptions {
 }
 
 export function createPrefetchingNarrationGateway(
-  gateway: NarrationGateway,
+  gateway: LegacyNarrationGateway,
   options: PrefetchingNarrationOptions = {}
-): PrefetchingNarrationGateway {
+): LegacyPrefetchingNarrationGateway {
   const maxEntries = Math.max(1, options.maxEntries ?? 4);
   const prepared = new Map<string, Promise<SentenceNarration>>();
 
