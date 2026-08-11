@@ -1,14 +1,17 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
+import type { MediaSourceGateway } from "../platform/media-source-gateway";
 import type { ReaderDocumentDto } from "./library-models";
 
-export function resolveDocumentAssets(document: ReaderDocumentDto): ReaderDocumentDto {
-  return { ...document, book: resolveBookCover(document.book) };
+export function resolveDocumentAssets(
+  document: ReaderDocumentDto,
+  mediaSources: MediaSourceGateway
+): ReaderDocumentDto {
+  return { ...document, book: resolveBookCover(document.book, mediaSources) };
 }
 
 export function resolveBookCover<TBook extends { coverImageSrc?: string | null }>(
-  book: TBook
+  book: TBook,
+  mediaSources: MediaSourceGateway
 ): TBook {
-  const source = book.coverImageSrc;
-  if (source == null || /^[a-z][a-z\d+.-]*:/i.test(source)) return book;
-  return { ...book, coverImageSrc: convertFileSrc(source, "asset") };
+  const resolved = mediaSources.resolve({ kind: "book-cover", source: book.coverImageSrc });
+  return { ...book, coverImageSrc: resolved.status === "available" ? resolved.url : null };
 }

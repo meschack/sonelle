@@ -1,11 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { isTauriRuntime } from "../platform/tauri-runtime";
+import {
+  createDesktopMediaSourceGateway,
+  type MediaSourceGateway
+} from "../platform/media-source-gateway";
 import { resolveDocumentAssets } from "./book-assets";
 import type { BookImportGateway, BookImportOutcome, BookImportRequest } from "./library-contracts";
 import type { ReaderDocumentDto } from "./library-models";
 
-export function createBookImportGateway(): BookImportGateway {
+export function createBookImportGateway(
+  mediaSources: MediaSourceGateway = createDesktopMediaSourceGateway()
+): BookImportGateway {
   if (!isTauriRuntime()) return unavailableBookImportGateway;
 
   return {
@@ -14,7 +20,7 @@ export function createBookImportGateway(): BookImportGateway {
       if (source == null) return { status: "cancelled" };
 
       const document = await invoke<ReaderDocumentDto>("import_epub", { path: source });
-      return imported(resolveDocumentAssets(document));
+      return imported(resolveDocumentAssets(document, mediaSources));
     }
   };
 }

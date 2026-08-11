@@ -1,4 +1,8 @@
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
+import {
+  createDesktopMediaSourceGateway,
+  type MediaSourceGateway
+} from "../platform/media-source-gateway";
 import type {
   NarrationPreparationAdapter,
   NarrationPreparationRequest,
@@ -8,18 +12,16 @@ import type {
 type NativeManifestNarration = PreparedNarration;
 
 type InvokeCommand = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
-type ConvertSourceUrl = (filePath: string, protocol?: string) => string;
-
 interface NativeManifestNarrationAdapterDependencies {
   invoke?: InvokeCommand;
-  convertFileSrc?: ConvertSourceUrl;
+  mediaSources?: MediaSourceGateway;
 }
 
 export function createNativeManifestNarrationAdapter(
   dependencies: NativeManifestNarrationAdapterDependencies = {}
 ): NarrationPreparationAdapter {
   const invokeCommand = dependencies.invoke ?? invoke;
-  const convertSourceUrl = dependencies.convertFileSrc ?? convertFileSrc;
+  const mediaSources = dependencies.mediaSources ?? createDesktopMediaSourceGateway();
 
   return {
     async prepare(
@@ -38,10 +40,14 @@ export function createNativeManifestNarrationAdapter(
       );
       throwIfAborted(signal);
 
-      return {
-        ...narration,
-        sourceUrl: convertSourceUrl(narration.sourceUrl, "asset")
-      };
+      const resolved = mediaSources.resolve({
+        kind: "prepared-narration",
+        source: narration.sourceUrl
+      });
+      if (resolved.status !== "available") {
+        throw new Error("Prepared narration is not available to play.");
+      }
+      return { ...narration, sourceUrl: resolved.url };
     }
   };
 }

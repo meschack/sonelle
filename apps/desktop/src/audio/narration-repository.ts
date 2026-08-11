@@ -1,6 +1,10 @@
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { reportAppError } from "../platform/error-reporting";
 import { isTauriRuntime } from "../platform/tauri-runtime";
+import {
+  createDesktopMediaSourceGateway,
+  type MediaSourceGateway
+} from "../platform/media-source-gateway";
 import {
   type NarrationGateway,
   type NarrationPlaybackMode,
@@ -14,8 +18,12 @@ interface NarrationDevelopmentErrorContext {
   playbackMode?: NarrationPlaybackMode | "manifest" | null;
 }
 
-export function createNarrationRepository(): NarrationGateway {
-  return isTauriRuntime() ? nativeNarrationRepository : unavailableNarrationRepository;
+export function createNarrationRepository(
+  mediaSources: MediaSourceGateway = createDesktopMediaSourceGateway()
+): NarrationGateway {
+  return isTauriRuntime()
+    ? createNativeNarrationRepository(mediaSources)
+    : unavailableNarrationRepository;
 }
 
 const unavailableNarrationRepository: NarrationGateway = {
@@ -28,25 +36,31 @@ const unavailableNarrationRepository: NarrationGateway = {
   async stopPreparedSentenceAudio() {}
 };
 
-const nativeNarrationRepository: NarrationGateway = {
-  async prepareSentenceAudio(request) {
-    const narration = await invoke<SentenceNarration>("prepare_sentence_audio", { request });
-    return {
-      ...narration,
-      sourceUrl: narration.sourceUrl == null ? null : convertFileSrc(narration.sourceUrl, "asset")
-    };
-  },
+function createNativeNarrationRepository(mediaSources: MediaSourceGateway): NarrationGateway {
+  return {
+    async prepareSentenceAudio(request) {
+      const narration = await invoke<SentenceNarration>("prepare_sentence_audio", { request });
+      const resolved = mediaSources.resolve({
+        kind: "prepared-narration",
+        source: narration.sourceUrl
+      });
+      return {
+        ...narration,
+        sourceUrl: resolved.status === "available" ? resolved.url : null
+      };
+    },
 
-  async playPreparedSentenceAudio(request, narration) {
-    if (narration.playbackMode === "native-speech") {
-      await invoke("play_sentence_audio", { request });
+    async playPreparedSentenceAudio(request, narration) {
+      if (narration.playbackMode === "native-speech") {
+        await invoke("play_sentence_audio", { request });
+      }
+    },
+
+    async stopPreparedSentenceAudio() {
+      await invoke("stop_sentence_audio");
     }
-  },
-
-  async stopPreparedSentenceAudio() {
-    await invoke("stop_sentence_audio");
-  }
-};
+  };
+}
 
 export function toFriendlyNarrationError(error: unknown): string {
   const message = diagnosticErrorMessage(error).toLocaleLowerCase();
