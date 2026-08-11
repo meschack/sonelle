@@ -53,6 +53,14 @@ The visual direction is Sonelle's quiet reading desk reduced to one column: Sato
 SpaceMono Nerd Font Propo labels the current book, the existing green and paper palette stays intact,
 and a fixed four-slot frame replaces the desktop rails rather than compressing them onto a phone.
 
+The shell defines one 48-pixel minimum interaction target for its header, dock, contents, Library,
+and contextual tools. Narrow widths wrap the narration transport beneath its status instead of
+shrinking controls. `viewport-fit=cover` and safe-area insets protect the header, reading column,
+dock, contents, and bottom sheets on cutout and gesture-navigation devices. Short landscape layouts
+reduce decorative spacing while keeping the same document order and scrollable reading region.
+Browser text adjustment remains enabled at 100%; larger reader text scrolls inside the reading slot
+without pushing navigation or narration controls out of reach.
+
 ## Domain Events
 
 The shell emits no events itself. Returning to the Library invokes the existing `ReaderClosed` flow;
@@ -64,6 +72,8 @@ chapter, content, tool, and playback actions remain owned by their existing appl
 - desktop rails and inspector are not mounted inside the phone reader
 - shell slots never duplicate reader or playback behavior
 - mobile narration controls invoke the shared playback application; desktop keeps its existing rail
+- safe-area padding adds breathing room to system insets rather than replacing it
+- narrow and large-text layouts wrap or scroll; essential controls never shrink below 48 pixels
 - tools are temporary chrome; closing them leaves the reading column and position unchanged
 
 ## Tests
@@ -84,3 +94,8 @@ component separately covers system Back and focus restoration for the tools shee
 The dock component projects playing and needs-attention states and verifies each transport intent.
 The composed-reader tracer proves the phone mounts the dock instead of the desktop rail and routes
 its controls affordance to the shared settings sheet.
+
+The mobile layout contract pins representative portrait/narrow, large-text, and short-landscape
+rules: edge-to-edge viewport support, 48-pixel targets, safe-area coverage, ordered scroll regions,
+and the wrapped narrow dock. Rendered device QA remains the final check for manufacturer-specific
+system bars and font scaling.
