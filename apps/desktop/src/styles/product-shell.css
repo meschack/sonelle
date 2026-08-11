@@ -2071,6 +2071,128 @@
   position: static;
 }
 
+.mobile-narration-dock {
+  align-items: center;
+  background: color-mix(in srgb, var(--surface) 94%, var(--accent-soft));
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto 44px;
+  min-height: 76px;
+  padding: 9px 14px;
+}
+
+.mobile-narration-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mobile-narration-copy > span,
+.mobile-narration-copy > small {
+  color: var(--muted);
+  font-family: "SpaceMono Nerd Font Propo", "Space Mono", monospace;
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.mobile-narration-copy > span {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mobile-narration-copy > strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 720;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-narration-transport {
+  align-items: center;
+  display: flex;
+  gap: 2px;
+}
+
+.mobile-narration-dock button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  height: 40px;
+  justify-content: center;
+  padding: 0;
+  touch-action: manipulation;
+  width: 40px;
+}
+
+.mobile-narration-dock button:hover:not(:disabled),
+.mobile-narration-dock button:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.mobile-narration-dock button:disabled {
+  cursor: default;
+  opacity: 0.34;
+}
+
+.mobile-narration-dock button svg {
+  height: 18px;
+  width: 18px;
+}
+
+.mobile-narration-dock .mobile-narration-play {
+  background: var(--accent);
+  color: var(--surface);
+  height: 44px;
+  width: 44px;
+}
+
+.mobile-narration-dock .mobile-narration-play:hover:not(:disabled),
+.mobile-narration-dock .mobile-narration-play:focus-visible {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.mobile-narration-stop-glyph {
+  background: currentColor;
+  border-radius: 2px;
+  height: 10px;
+  width: 10px;
+}
+
+.mobile-narration-settings {
+  border: 1px solid var(--line) !important;
+}
+
+.mobile-narration-settings.attention {
+  background: var(--accent-soft);
+  border-color: var(--accent) !important;
+  color: var(--accent);
+}
+
+@media (max-width: 520px) {
+  .mobile-narration-dock {
+    gap: 6px;
+    grid-template-columns: minmax(78px, 1fr) auto 40px;
+    padding-inline: 10px;
+  }
+
+  .mobile-narration-dock button {
+    height: 36px;
+    width: 36px;
+  }
+
+  .mobile-narration-dock .mobile-narration-play {
+    height: 40px;
+    width: 40px;
+  }
+}
+
 .mobile-reader-sheet-backdrop {
   align-items: end;
   background: rgba(7, 28, 23, 0.32);

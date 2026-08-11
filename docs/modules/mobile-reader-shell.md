@@ -4,6 +4,7 @@
 
 - selecting phone or desktop reader composition at the application boundary
 - the phone reader's compact header and explicit navigation, content, tools, and playback slots
+- the compact narration dock's phone-sized projection of shared playback state and intents
 - touch-first Library and contextual reading-tools sheets, including focus restoration and Back
   behavior
 
@@ -26,6 +27,13 @@ or search and settings inside the tools sheet. Library rows project book identit
 progress, while selection calls the existing library application and closes the sheet. The full
 Library remains available as an explicit management action. The reading column occupies a bounded
 scroll region, so opening sheets or mounting playback does not resize the text column.
+
+The mobile playback slot receives `MobileNarrationDock`, a deliberately smaller projection than the
+desktop rail. It shows current narration truth and emits previous, play/pause/resume, next, stop, and
+open-controls intents into the existing playback application. Readiness or attention state changes
+the controls affordance into a recovery link; the Reading tools sheet remains the one place for
+voice, speed, sleep, and offline preparation controls. The dock does not prepare audio, persist
+position, or interpret engine callbacks.
 
 The EPUB contents navigator remains owned by shared reader chrome. On mobile it uses the same
 touch-safe sheet language as the Library while preserving publisher hierarchy and anchor targets.
@@ -55,6 +63,7 @@ chapter, content, tool, and playback actions remain owned by their existing appl
 - phone composition is selected once at the application boundary
 - desktop rails and inspector are not mounted inside the phone reader
 - shell slots never duplicate reader or playback behavior
+- mobile narration controls invoke the shared playback application; desktop keeps its existing rail
 - tools are temporary chrome; closing them leaves the reading column and position unchanged
 
 ## Tests
@@ -71,3 +80,7 @@ The contextual-tools tracer taps a reader word, resolves its intended definition
 and Notes, opens the exact sentence from each result, and dismisses through the scrim. It holds the
 reading scroll offset constant and proves no narration pause was requested throughout. The shell
 component separately covers system Back and focus restoration for the tools sheet.
+
+The dock component projects playing and needs-attention states and verifies each transport intent.
+The composed-reader tracer proves the phone mounts the dock instead of the desktop rail and routes
+its controls affordance to the shared settings sheet.

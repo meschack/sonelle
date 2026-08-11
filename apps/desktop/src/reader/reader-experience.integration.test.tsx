@@ -357,7 +357,21 @@ describe("ReaderExperience integration", () => {
     expect(container.querySelector('[aria-label="Mobile reader"]')).not.toBeNull();
     expect(container.querySelector(".product-bar")).toBeNull();
     expect(container.querySelector(".library-rail")).toBeNull();
+    expect(container.querySelector(".mobile-narration-dock")).not.toBeNull();
+    expect(container.querySelector(".mobile-reader-playback-slot .audio-rail")).toBeNull();
     expect(container.querySelector(".mobile-reader-title")?.textContent).toContain("Pocket Reader");
+
+    container.querySelector<HTMLButtonElement>('[aria-label="Open narration controls"]')?.click();
+    await vi.waitFor(() =>
+      expect(container.querySelector('[role="dialog"][aria-label="Reading tools"]')).not.toBeNull()
+    );
+    expect(container.querySelector('[aria-label="Narration voice"]')).not.toBeNull();
+    container
+      .querySelector<HTMLButtonElement>(".mobile-reader-tools-sheet > header button")
+      ?.click();
+    await vi.waitFor(() =>
+      expect(container.querySelector('[role="dialog"][aria-label="Reading tools"]')).toBeNull()
+    );
 
     const chapter = container.querySelector<HTMLSelectElement>(
       '.mobile-reader-navigation-slot [aria-label="Current chapter"]'
