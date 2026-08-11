@@ -23,6 +23,26 @@ shared reader can render without treating an intentionally absent desktop adapte
 Desktop-only commands remain in the desktop handler. A later mobile feature must add its own adapter
 and command deliberately instead of widening this shell by accident.
 
+## Capability boundary
+
+`capabilities/android.json` is the only capability profile applied to Android. It grants the main
+reader window Tauri's core defaults and nothing else. The desktop `default.json` profile is explicitly
+limited to Linux, macOS, and Windows, so its dialog and opener permissions cannot leak into a mobile
+build through Tauri's all-platform default.
+
+Do not add a plugin's broad default permission merely because its Rust plugin is initialized. When a
+mobile feature needs native access:
+
+1. name the user action and the exact Tauri command it requires;
+2. add the narrowest permission to `android.json`, including allow/deny scope where the plugin
+   supports it;
+3. add a repository contract assertion for the permission and its forbidden neighbors;
+4. verify the supported action on Android and document the capability's owner here.
+
+Filesystem, shell, dialog, opener, and process permissions remain absent until an owning mobile slice
+proves one is necessary. Application commands registered by Sonelle's Rust mobile handler are governed
+by that handler and are not a reason to grant unrelated plugin permissions.
+
 ## Domain events
 
 None. The shell only selects platform adapters and command availability; it does not own long-running
@@ -34,3 +54,5 @@ work or project domain state.
 - `cargo check` verifies the desktop target and the Android development build verifies the mobile
   command graph.
 - Emulator QA loads the fixture book and navigates between chapters through the rendered WebView.
+- The capability contract test verifies Android has a dedicated core-only profile and that desktop
+  permissions are platform-constrained.
