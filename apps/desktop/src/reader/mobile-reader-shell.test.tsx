@@ -17,8 +17,11 @@ it("keeps navigation, tools, reading, and playback in explicit mobile slots", ()
         content={<article data-slot="content">Reading text</article>}
         tools={<aside data-slot="tools">Typography</aside>}
         playback={<footer data-slot="playback">Play</footer>}
+        libraryBooks={[]}
+        activeBookId="book-1"
         toolsOpen={true}
-        onBackToLibrary={back}
+        onOpenBook={vi.fn()}
+        onOpenFullLibrary={back}
         onOpenSearch={vi.fn()}
         onOpenTools={vi.fn()}
         onCloseTools={vi.fn()}
@@ -37,8 +40,13 @@ it("keeps navigation, tools, reading, and playback in explicit mobile slots", ()
   expect(
     container.querySelector('.mobile-reader-playback-slot [data-slot="playback"]')
   ).not.toBeNull();
-  container.querySelector<HTMLButtonElement>('[aria-label="Back to library"]')?.click();
-  expect(back).toHaveBeenCalledOnce();
+  const library = container.querySelector<HTMLButtonElement>('[aria-label="Open library"]');
+  library?.click();
+  expect(container.querySelector('[role="dialog"][aria-label="Library"]')).not.toBeNull();
+  container
+    .querySelector<HTMLButtonElement>(".mobile-reader-library-sheet > header button")
+    ?.click();
+  expect(container.querySelector('[role="dialog"][aria-label="Library"]')).toBeNull();
 
   dispose();
   container.remove();
