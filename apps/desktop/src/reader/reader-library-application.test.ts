@@ -5,7 +5,12 @@ import {
   type AnyDomainEvent
 } from "@sonelle/domain";
 import { libraryImportNotice } from "@sonelle/library";
-import type { LibraryBookmarkDto } from "../library/library-contracts";
+import type {
+  BookImportGateway,
+  BookImportOutcome,
+  BookImportProgress,
+  LibraryBookmarkDto
+} from "../library/library-contracts";
 import type { LibraryBookSummary, ReaderDocumentDto } from "../library/library-models";
 import { createReaderLibraryApplication } from "./reader-library-application";
 
@@ -200,7 +205,10 @@ describe("reader library application", () => {
     await handleOpenRequest?.("/tmp/book.epub");
     await vi.waitFor(() => expect(opened).toEqual(["book-1"]));
 
-    expect(importBook).toHaveBeenCalledWith({ kind: "provided", source: "/tmp/book.epub" });
+    expect(importBook).toHaveBeenCalledWith(
+      { kind: "provided", source: "/tmp/book.epub" },
+      expect.objectContaining({ onProgress: expect.any(Function) })
+    );
     expect(events.map((event) => event.name)).toEqual(["BookImportRequested"]);
     expect(books).toEqual([["book-1"]]);
     expect(notices[notices.length - 1]).toBe(libraryImportNotice("reopened"));
@@ -219,5 +227,68 @@ describe("reader library application", () => {
     stop();
     expect(stopDropListener).toHaveBeenCalledOnce();
     expect(stopOpenRequestListener).toHaveBeenCalledOnce();
+  });
+
+  it("keeps reader operations responsive while a large import remains in progress", async () => {
+    const dispatcher = createDomainEventDispatcher();
+    let resolveImport: (outcome: BookImportOutcome) => void = () => undefined;
+    let reportProgress: (progress: BookImportProgress) => void = () => undefined;
+    const importBook = vi.fn<BookImportGateway["importBook"]>(
+      (_request, options) =>
+        new Promise((resolve) => {
+          resolveImport = resolve;
+          reportProgress = options?.onProgress ?? reportProgress;
+        })
+    );
+    const openDocument = vi.fn().mockResolvedValue(undefined);
+    const notices: Array<string | null> = [];
+    const importing: boolean[] = [];
+    const application = createReaderLibraryApplication(
+      {
+        catalog: {
+          list: vi.fn().mockResolvedValue([book]),
+          open: vi.fn().mockResolvedValue(document)
+        },
+        drops: { listen: async () => () => undefined },
+        openRequests: { listen: async () => () => undefined },
+        importGateway: { importBook },
+        importSourceStore: { prepare: vi.fn() },
+        bookmarks: { list: vi.fn().mockResolvedValue([]), save: vi.fn(), delete: vi.fn() },
+        eventDispatcher: dispatcher,
+        friendlyError: () => "Library needs attention"
+      },
+      {
+        activeView: () => "reader",
+        currentBookSource: () => "library",
+        projectBooks: vi.fn(),
+        projectBookmarks: vi.fn(),
+        projectLoading: vi.fn(),
+        projectImporting: (active) => importing.push(active),
+        projectDropTarget: vi.fn(),
+        projectLibraryNotice: (notice) => notices.push(notice),
+        projectBookmarkNotice: vi.fn(),
+        openDocument,
+        openBookmarkInspector: vi.fn()
+      }
+    );
+    const stop = await application.start();
+
+    const pendingImport = application.importFromPath("/data/import-sources/large.epub");
+    await vi.waitFor(() => expect(importing).toEqual([true]));
+    await vi.waitFor(() => expect(importBook).toHaveBeenCalledOnce());
+    reportProgress({ phase: "reading" });
+    await vi.waitFor(() => expect(notices).toContain("Reading your book…"));
+
+    await application.open("book-1", { sentenceIndex: 0 });
+    expect(openDocument).toHaveBeenCalledWith(document, { sentenceIndex: 0 });
+
+    reportProgress({ phase: "saving" });
+    resolveImport({ status: "imported", document });
+    await pendingImport;
+
+    expect(notices).toContain("Adding it to your library…");
+    expect(notices[notices.length - 1]).toBe(libraryImportNotice("reopened"));
+    expect(importing).toEqual([true, false]);
+    stop();
   });
 });

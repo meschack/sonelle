@@ -24,6 +24,7 @@ export interface DomainEventPayloadMap {
     source: string;
     reusedExisting: boolean;
   };
+  BookImportProgressed: { phase: "reading" | "saving" };
   BookImportPreparationCancelled: { requestId: EntityId };
   BookImportFailed: { path: string | null; reason: string };
   BookImported: {

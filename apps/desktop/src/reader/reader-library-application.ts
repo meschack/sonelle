@@ -169,6 +169,11 @@ export function createReaderLibraryApplication(
           importing = false;
           options.projectImporting(false);
         }),
+        dependencies.eventDispatcher.subscribe("BookImportProgressed", (event) => {
+          options.projectLibraryNotice(
+            event.payload.phase === "reading" ? "Reading your book…" : "Adding it to your library…"
+          );
+        }),
         dependencies.eventDispatcher.subscribe("BookImportFailed", (event) => {
           options.projectLibraryNotice(event.payload.reason);
         }),

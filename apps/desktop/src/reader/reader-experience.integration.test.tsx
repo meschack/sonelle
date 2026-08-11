@@ -159,7 +159,12 @@ describe("ReaderExperience integration", () => {
     await vi.waitFor(() => expect(pause).toHaveBeenCalledOnce());
 
     dispatchShortcut("o", { ctrlKey: true });
-    await vi.waitFor(() => expect(importBook).toHaveBeenCalledWith({ kind: "choose" }));
+    await vi.waitFor(() =>
+      expect(importBook).toHaveBeenCalledWith(
+        { kind: "choose" },
+        expect.objectContaining({ onProgress: expect.any(Function) })
+      )
+    );
 
     dispose();
     container.remove();

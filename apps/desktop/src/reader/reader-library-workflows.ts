@@ -40,9 +40,17 @@ export function createReaderLibraryWorkflows(
   };
 
   const importBook = async (request: BookImportRequest, path: string | null) => {
+    let progressEvents = Promise.resolve();
     try {
       const existingBookIds = new Set((await dependencies.catalog.list()).map((book) => book.id));
-      const outcome = await dependencies.importGateway.importBook(request);
+      const outcome = await dependencies.importGateway.importBook(request, {
+        onProgress(progress) {
+          progressEvents = progressEvents.then(() =>
+            publish(createDomainEvent("BookImportProgressed", { phase: progress.phase }))
+          );
+        }
+      });
+      await progressEvents;
       if (outcome.status === "cancelled") {
         await publish(createDomainEvent("BookImportCancelled", { path }));
         return;
@@ -62,6 +70,7 @@ export function createReaderLibraryWorkflows(
         })
       );
     } catch (error) {
+      await progressEvents;
       await publish(
         createDomainEvent("BookImportFailed", {
           path,

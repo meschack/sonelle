@@ -32,16 +32,27 @@ storage access. `BookImportSourceStore` copies that selected source into Sonelle
 before provider permission can disappear. `BookImportSourcePrepared` then sends the managed file
 through the shared native importer. Its transactional storage commit is followed by `BookImported`,
 which refreshes the library projection and opens the book without an application restart. Native
-`library_import` turns parsed EPUB data into a storage import. `library_migration` runs after startup on a blocking runtime task, reads legacy rows in
-bounded keyset batches, and isolates individual repair failures.
+`library_import` turns parsed EPUB data into a storage import. EPUB reading, normalization, and the
+SQLite transaction run on a blocking runtime worker rather than the Tauri async runtime, so a large
+book cannot hold the webview's command loop. The native command reports `reading` and `saving`
+phases through its IPC channel; the shared workflow republishes those as `BookImportProgressed`
+facts, and the library application projects humane status text without letting platform callbacks
+mutate Solid state directly. `library_migration` runs after startup on a blocking runtime task, reads
+legacy rows in bounded keyset batches, and isolates individual repair failures.
 
 ## Domain Events
 
 Import dispatches requested, source-selected, preparation-started, preparation-progressed,
-source-prepared, cancelled, imported, and failed facts through the application
+source-prepared, import-progressed, cancelled, imported, and failed facts through the application
 dispatcher. Native storage persists the resulting book, chapter, sentence, and paragraph
 projections without maintaining a separate event history. Legacy repair logs failures to local
 diagnostics and updates missing projections directly.
+
+Backgrounding does not cancel an active native import. If Android keeps the process, its progress and
+terminal fact reconcile through the same projection when the webview resumes. If Android removes the
+process, the SQLite transaction exposes no partial book and the content-addressed managed source can
+be reused when the reader retries the import. This is the recoverable state; Sonelle never guesses
+that an interrupted book was successfully added.
 
 Readable manifest documents are available to spine extraction so relative footnote, endnote, and
 citation targets can resolve across files. Reference markers are removed from narration text and
@@ -59,6 +70,8 @@ missing; unresolved destinations remain explicitly unavailable instead of becomi
 - cancellation is a normal outcome; unreadable sources are failures
 - only fully written, synchronized Android sources receive an importable `.epub` path
 - imported text, paragraph, sentence, and reference projections commit atomically
+- native EPUB parsing and persistence never execute on the async command runtime
+- import progress reaches presentation only through domain facts and application projections
 - contents metadata never injects publisher HTML or CSS into the reader
 - repair never blocks Tauri setup and one unreadable book does not stop later repairs
 - batches remain bounded and resumable by stable identifiers
@@ -71,4 +84,8 @@ listing, and reopening through the same native modules compiled for Android. Ren
 selected-source, cancelled, and unreadable-source outcomes through the same interface used by
 production. The Android adapter contract instruments the picker and readability probe for successful
 selection, platform cancellation, and revoked-source failure. Reader application and integration
-tests preserve desktop dialog, drag-and-drop, and file-open behavior.
+tests preserve desktop dialog, drag-and-drop, and file-open behavior. The large-import concurrency
+tracer holds the native gateway unresolved while proving reader navigation remains available, then
+checks ordered phase projection and terminal reconciliation. The ignored performance harness records
+real EPUB parse, persistence, open, and chapter-switch durations against the benchmark corpus; device
+ANR and timing gates remain part of the physical-device worksheet.
