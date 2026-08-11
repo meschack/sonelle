@@ -20,10 +20,12 @@ import type {
   BookImportGateway,
   BookMetadataEditor,
   LibrarySearch,
-  LibrarySearchResultDto
+  LibrarySearchResultDto,
+  SaveReadingPositionInput
 } from "../library/library-contracts";
 import type { LibraryBookSummary, ReaderDocumentDto } from "../library/library-models";
 import { ReaderExperience } from "./reader-experience";
+import type { ReaderNarrationProjectionEvent } from "./reader-narration-workflow";
 import { buildFixtureReaderView } from "./reader-view";
 
 beforeAll(() => {
@@ -308,6 +310,58 @@ describe("ReaderExperience integration", () => {
     expect(container.querySelector(".sentence-window-jump")?.textContent).toContain(
       "Next 48 sentences"
     );
+
+    dispose();
+    container.remove();
+  });
+
+  it("flushes the active reading position when the Android webview backgrounds", async () => {
+    const pause = vi.fn().mockResolvedValue(undefined);
+    const saveReadingPosition = vi.fn().mockResolvedValue(undefined);
+    let projectNarration: ((event: ReaderNarrationProjectionEvent) => void) | undefined;
+    let background: (() => void) | undefined;
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause,
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      libraryBooks: [createLibraryBook("background-book", "Background Book", 0)],
+      openBook: vi.fn(async () => createReaderDocument("background-book")),
+      saveReadingPosition,
+      captureNarrationProjection: (project) => {
+        projectNarration = project;
+      },
+      captureBackground: (listener) => {
+        background = listener;
+      }
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+    await vi.waitFor(() => expect(projectNarration).toBeTypeOf("function"));
+    saveReadingPosition.mockClear();
+    pause.mockClear();
+
+    projectNarration?.(
+      createDomainEvent("NarrationSentenceEntered", {
+        bookId: "background-book",
+        chapterId: "background-book-chapter",
+        sentenceId: "background-book-sentence",
+        passageId: "background-passage"
+      })
+    );
+    await Promise.resolve();
+    background?.();
+
+    await vi.waitFor(() =>
+      expect(saveReadingPosition).toHaveBeenCalledWith({
+        bookId: "background-book",
+        chapterId: "background-book-chapter",
+        sentenceIndex: 0
+      })
+    );
+    await vi.waitFor(() => expect(pause).toHaveBeenCalled());
 
     dispose();
     container.remove();
@@ -1125,6 +1179,9 @@ interface DependencySpies {
   chooseBookCover?: BookMetadataEditor["chooseCover"];
   updateBookMetadata?: BookMetadataEditor["update"];
   openExternalLink?: (href: string) => Promise<void>;
+  saveReadingPosition?: (position: SaveReadingPositionInput) => Promise<void>;
+  captureNarrationProjection?: (project: (event: ReaderNarrationProjectionEvent) => void) => void;
+  captureBackground?: (listener: () => void) => void;
 }
 
 function createDependencies(spies: DependencySpies): ReaderExperienceDependencies {
@@ -1151,6 +1208,12 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
   } satisfies NarrationGateway;
 
   return {
+    appLifecycle: {
+      listenForBackground(listener) {
+        spies.captureBackground?.(listener);
+        return () => undefined;
+      }
+    },
     appWindow: {
       toggleFullscreen: spies.toggleFullscreen ?? vi.fn().mockResolvedValue(undefined)
     },
@@ -1234,7 +1297,10 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       activateSettings: (settings) => settings,
       voices: () => SUPPORTED_NARRATION_VOICES,
       observeEngineInstallation: vi.fn(),
-      createGateway: () => narrationGateway,
+      createGateway: (options) => {
+        spies.captureNarrationProjection?.(options.projectPlayback);
+        return narrationGateway;
+      },
       bookIdentity: () => ({ voiceId: "voice-1", modelRevision: "test-revision" }),
       prepareBook: vi.fn().mockResolvedValue({ sentenceCount: 0 })
     },
@@ -1245,7 +1311,9 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       load: () => spies.readerPreferences ?? createReaderPreferences(),
       save: spies.savePreferences ?? vi.fn()
     },
-    readingPositionStore: { save: vi.fn().mockResolvedValue(undefined) },
+    readingPositionStore: {
+      save: spies.saveReadingPosition ?? vi.fn().mockResolvedValue(undefined)
+    },
     voiceInstallationRepository: {
       getStatus: vi.fn().mockResolvedValue(readyVoice),
       install: vi.fn().mockResolvedValue(readyVoice),

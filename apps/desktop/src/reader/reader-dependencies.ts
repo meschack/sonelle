@@ -79,6 +79,10 @@ import { createBookMetadataEditor } from "../library/book-metadata-editor";
 import { createBookmarkStore } from "../library/bookmark-store";
 import { createLibrarySearch } from "../library/library-search";
 import { createReadingPositionStore } from "../library/reading-position-store";
+import {
+  createAppLifecycleGateway,
+  type AppLifecycleGateway
+} from "../platform/app-lifecycle-gateway";
 import { isTauriRuntime } from "../platform/tauri-runtime";
 import { createSystemFontCatalog, type SystemFontCatalog } from "../platform/system-font-catalog";
 import { createPlatformMediaSourceGateway } from "../platform/media-source-gateway";
@@ -123,6 +127,7 @@ export interface ReaderNarrationService {
 }
 
 export interface ReaderExperienceDependencies {
+  appLifecycle: AppLifecycleGateway;
   appWindow: AppWindowController;
   audioCacheRepository: AudioCacheRepository;
   audioSettingsRepository: AudioSettingsRepository;
@@ -168,6 +173,7 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
   const engineInstallations: Partial<Record<NarrationEngineId, EngineInstallationState>> = {};
 
   return {
+    appLifecycle: createAppLifecycleGateway(),
     appWindow: createAppWindowController(),
     audioCacheRepository: createAudioCacheRepository(),
     audioSettingsRepository: createAudioSettingsRepository(),

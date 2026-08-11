@@ -27,6 +27,11 @@ Library summaries perform only a lightweight health check for Sonelle-managed EP
 missing or damaged source is reported as recoverable `needs-attention` state while the stored book
 remains readable and can be restored by reimporting.
 
+Reading-position updates also project their timestamp into library summaries. Startup uses that
+fact to resume the most recently read book, while `open_book` restores the stored chapter and clamps
+the sentence index to its readable range. A stale removed chapter is discarded and falls back to the
+first readable chapter instead of leaking an invalid position to the reader.
+
 The `.readex` application-data directory is retained as an intentional compatibility path for
 existing local libraries. New user-facing naming remains Sonelle.
 
@@ -49,6 +54,7 @@ in-process dispatcher after their core storage operation succeeds.
   book, derived from the active chapter position and bounded by the book's sentence count
 - initialization removes the discontinued `domain_events` table from existing libraries
 - opening a persisted book never depends on the continued presence of its managed EPUB source
+- restored reading positions always address the active stored chapter and a bounded sentence index
 - unmanaged desktop source paths retain their existing behavior and are not polled for health
 - migrations preserve existing local libraries, including the intentional `.readex` compatibility path
 

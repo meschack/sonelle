@@ -47,6 +47,12 @@ mutating either sidebar preference, so leaving the mode restores the reader layo
 user left it. Narration and sentence-level keyboard controls remain active while the chrome is
 hidden.
 
+Reading-position changes continue through the shared throttled scheduler. Manual navigation saves
+immediately, narration progress is coalesced, and backgrounding the webview flushes the pending
+position before pausing playback. On a cold start, the library application opens the book with the
+latest persisted reading activity; native storage remains the authority for its chapter and sentence
+fallback.
+
 ## Domain Events
 
 Library workflows complete their core operation and dispatch the resulting event. `ReaderOpened`
@@ -71,3 +77,5 @@ across every inspector surface through the composed reader shell.
 An imported-book tracer opens a structurally rich document from the Library and verifies its first
 chapter, link and list presentation, stable sentence range, and bounded mounted content. Native EPUB
 tests commit both small and structurally complex fixtures before reopening their reader documents.
+Lifecycle tests cover background flushing and most-recent-book restoration, while the shared
+scheduler tests bound write frequency during narration.

@@ -312,6 +312,7 @@ impl SonelleStore {
                     books.sentence_count,
                     books.source_path,
                     reading_positions.chapter_id,
+                    reading_positions.updated_at,
                     CASE
                       WHEN reading_positions.chapter_id IS NULL THEN 0
                       ELSE MIN(
@@ -346,7 +347,8 @@ impl SonelleStore {
                     sentence_count: row.get(6)?,
                     source_status: self.managed_source_status(&row.get::<_, String>(7)?),
                     last_chapter_id: row.get(8)?,
-                    completed_sentence_count: row.get(9)?,
+                    last_read_at: row.get(9)?,
+                    completed_sentence_count: row.get(10)?,
                 })
             })
             .map_err(|_| "We couldn't read your library.".to_string())?
@@ -464,6 +466,7 @@ impl SonelleStore {
             requested_chapter_id,
             position.as_ref().map(|entry| entry.chapter_id.as_str()),
         );
+        let position = sanitize_reading_position(position, &chapters, active_chapter_id.as_deref());
 
         if let Some(chapter_id) = active_chapter_id.as_deref() {
             let sentences = self.read_sentences_for_chapter(&connection, chapter_id)?;
@@ -1518,6 +1521,24 @@ fn resolve_active_chapter_id(
         .map(str::to_string)
 }
 
+fn sanitize_reading_position(
+    position: Option<ReadingPositionView>,
+    chapters: &[ReaderChapterView],
+    active_chapter_id: Option<&str>,
+) -> Option<ReadingPositionView> {
+    let mut position = position?;
+    let chapter = chapters
+        .iter()
+        .find(|chapter| Some(chapter.id.as_str()) == active_chapter_id)?;
+    if position.chapter_id != chapter.id || chapter.sentence_count <= 0 {
+        return None;
+    }
+    position.sentence_index = position
+        .sentence_index
+        .clamp(0, chapter.sentence_count.saturating_sub(1));
+    Some(position)
+}
+
 fn bookmark_id(book_id: &str, chapter_id: &str, sentence_id: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(book_id.as_bytes());
@@ -1763,7 +1784,9 @@ mod tests {
         assert_eq!(document.book.title, "Test Book");
         assert_eq!(document.book.language.as_deref(), Some("fr-FR"));
         assert_eq!(document.chapters[0].sentences.len(), 2);
-        assert_eq!(store.list_books().expect("books should list").len(), 1);
+        let books = store.list_books().expect("books should list");
+        assert_eq!(books.len(), 1);
+        assert!(books[0].last_read_at.is_some());
 
         store
             .save_reading_position(SaveReadingPositionRequest {
@@ -1772,6 +1795,9 @@ mod tests {
                 sentence_index: 1,
             })
             .expect("position should save");
+        assert!(store.list_books().expect("books should list")[0]
+            .last_read_at
+            .is_some());
 
         let reopened = store
             .open_book("book-test", None)
@@ -2064,8 +2090,8 @@ mod tests {
     fn opens_reader_payload_with_only_active_chapter_sentences() {
         let temp_dir = temp_store_dir();
         fs::create_dir_all(&temp_dir).expect("test store dir should be created");
-        let store = SonelleStore::open_at(temp_dir.join("sonelle.sqlite3"))
-            .expect("store should initialize");
+        let db_path = temp_dir.join("sonelle.sqlite3");
+        let store = SonelleStore::open_at(db_path.clone()).expect("store should initialize");
 
         let document = store
             .save_imported_book(ImportedBook {
@@ -2137,6 +2163,44 @@ mod tests {
         );
         assert!(restored.chapters[0].sentences.is_empty());
         assert_eq!(restored.chapters[1].sentences.len(), 1);
+
+        store
+            .save_reading_position(SaveReadingPositionRequest {
+                book_id: "book-active".to_string(),
+                chapter_id: "book-active:chapter-1".to_string(),
+                sentence_index: 99,
+            })
+            .expect("out-of-range position should save defensively");
+        let clamped = store
+            .open_book("book-active", None)
+            .expect("out-of-range sentence should reopen safely");
+        assert_eq!(
+            clamped
+                .position
+                .expect("position should be clamped")
+                .sentence_index,
+            1
+        );
+
+        let connection = Connection::open(&db_path).expect("raw test connection should open");
+        connection
+            .execute_batch("PRAGMA foreign_keys = OFF;")
+            .expect("test should allow a stale legacy position");
+        connection
+            .execute(
+                "UPDATE reading_positions SET chapter_id = 'removed-chapter' WHERE book_id = ?1",
+                params!["book-active"],
+            )
+            .expect("test should simulate a removed saved chapter");
+        drop(connection);
+        let fallback = store
+            .open_book("book-active", None)
+            .expect("removed chapter should fall back safely");
+        assert_eq!(
+            fallback.active_chapter_id.as_deref(),
+            Some("book-active:chapter-1")
+        );
+        assert!(fallback.position.is_none());
 
         fs::remove_dir_all(temp_dir).ok();
     }
