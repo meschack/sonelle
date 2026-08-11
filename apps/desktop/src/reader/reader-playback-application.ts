@@ -231,7 +231,11 @@ export function createReaderPlaybackApplication(
         const shouldResume = resumeAfterInterruption && intent.mayResume;
         resumeAfterInterruption = false;
         if (shouldResume) requestPlayback();
+        return;
       }
+      case "output-disconnected":
+        resumeAfterInterruption = false;
+        pausePlaybackNow();
     }
   };
 

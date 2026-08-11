@@ -48,6 +48,10 @@ export class FakeMediaSessionGateway implements MediaSessionGateway {
     this.emit({ type: "interruption-ended", mayResume });
   }
 
+  disconnectOutput(): void {
+    this.emit({ type: "output-disconnected" });
+  }
+
   private emit(intent: MediaSessionIntent) {
     this.listeners.forEach((listener) => listener(intent));
   }

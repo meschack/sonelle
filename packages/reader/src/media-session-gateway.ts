@@ -42,7 +42,8 @@ export type MediaSessionIntent =
       source: MediaSessionIntentSource;
     }
   | { type: "interruption-started" }
-  | { type: "interruption-ended"; mayResume: boolean };
+  | { type: "interruption-ended"; mayResume: boolean }
+  | { type: "output-disconnected" };
 
 export interface MediaSessionGateway {
   publish(snapshot: MediaSessionSnapshot): void;
