@@ -72,6 +72,121 @@ describe("narration session", () => {
     expect(player.getOutput()).toEqual({ playbackRate: 1.1, volume: 0.8 });
   });
 
+  it("accepts sentence entry once in reading order and ignores late platform callbacks", async () => {
+    const events: AnyDomainEvent[] = [];
+    const player = new AdversarialManifestNarrationPlayer();
+    const session = createNarrationSession({
+      adapter: new FakePassageNarrationAdapter(),
+      player,
+      eventDispatcher: collectingEventDispatcher(events),
+      createRequestId: createIncrementingIds()
+    });
+
+    session.open({
+      outline: createOutline(),
+      engineId: "kokoro",
+      modelRevision: "fake-kokoro",
+      voiceId: "kokoro-en"
+    });
+
+    await session.play("s1");
+    player.emitLate("s1");
+    await Promise.resolve();
+
+    expect(
+      events
+        .filter((event) => event.name === "NarrationSentenceEntered")
+        .map((event) => event.payload.sentenceId)
+    ).toEqual(["s1", "s2", "s3"]);
+    expect(events.filter((event) => event.name === "NarrationPlaybackEnded")).toHaveLength(1);
+  });
+
+  it("invalidates sentence callbacks after playback fails", async () => {
+    const events: AnyDomainEvent[] = [];
+    const player = new FailingManifestNarrationPlayer();
+    const session = createNarrationSession({
+      adapter: new FakePassageNarrationAdapter(),
+      player,
+      eventDispatcher: collectingEventDispatcher(events),
+      createRequestId: createIncrementingIds()
+    });
+    session.open({
+      outline: createOutline(),
+      engineId: "kokoro",
+      modelRevision: "fake-kokoro",
+      voiceId: "kokoro-en"
+    });
+
+    await session.play("s1");
+    player.emitLate("s2");
+    await Promise.resolve();
+
+    expect(
+      events
+        .filter((event) => event.name === "NarrationSentenceEntered")
+        .map((event) => event.payload.sentenceId)
+    ).not.toContain("s2");
+    expect(events.at(-1)?.name).toBe("NarrationPlaybackFailed");
+    expect(events.filter((event) => event.name === "NarrationPlaybackEnded")).toHaveLength(0);
+  });
+
+  it("fails closed when playback completes without every expected sentence callback", async () => {
+    const events: AnyDomainEvent[] = [];
+    const session = createNarrationSession({
+      adapter: new FakePassageNarrationAdapter(),
+      player: new IncompleteManifestNarrationPlayer(),
+      eventDispatcher: collectingEventDispatcher(events),
+      createRequestId: createIncrementingIds()
+    });
+    session.open({
+      outline: createOutline(),
+      engineId: "kokoro",
+      modelRevision: "fake-kokoro",
+      voiceId: "kokoro-en"
+    });
+
+    await session.play("s1");
+
+    expect(events.at(-1)?.name).toBe("NarrationPlaybackFailed");
+    expect(events.filter((event) => event.name === "PassageNarrationPlaybackEnded")).toHaveLength(
+      0
+    );
+    expect(events.filter((event) => event.name === "NarrationPlaybackEnded")).toHaveLength(0);
+  });
+
+  it("keeps the entered sentence valid when playback stops between sentence callbacks", async () => {
+    const events: AnyDomainEvent[] = [];
+    const player = new ControlledManifestNarrationPlayer();
+    const session = createNarrationSession({
+      adapter: new FakePassageNarrationAdapter(),
+      player,
+      eventDispatcher: collectingEventDispatcher(events),
+      createRequestId: createIncrementingIds()
+    });
+    session.open({
+      outline: createOutline(),
+      engineId: "kokoro",
+      modelRevision: "fake-kokoro",
+      voiceId: "kokoro-en"
+    });
+
+    const playback = session.play("s1");
+    await player.waitForPlayCount(1);
+    await session.pause();
+    await playback;
+
+    expect(
+      events
+        .filter((event) => event.name === "NarrationSentenceEntered")
+        .map((event) => event.payload.sentenceId)
+    ).not.toContain("s2");
+    expect(events.at(-1)).toMatchObject({
+      name: "NarrationPlaybackPaused",
+      payload: { sentenceId: "s1" }
+    });
+    expect(events.filter((event) => event.name === "NarrationPlaybackEnded")).toHaveLength(0);
+  });
+
   it("stops at the requested sentence when auto-advance is off", async () => {
     const events: AnyDomainEvent[] = [];
     const session = createNarrationSession({
@@ -389,7 +504,11 @@ class ObservedNarrationAdapter implements NarrationPreparationAdapter {
 class ControlledManifestNarrationPlayer implements ManifestAwareNarrationPlayer {
   private playbackRate = 1;
   private volume = 1;
-  private active: { resolve: () => void } | null = null;
+  private active: {
+    resolve: () => void;
+    input: ManifestPlaybackInput;
+    handlers: ManifestPlaybackHandlers;
+  } | null = null;
   private playCount = 0;
   private playWaiters: Array<() => void> = [];
 
@@ -399,7 +518,7 @@ class ControlledManifestNarrationPlayer implements ManifestAwareNarrationPlayer 
     handlers.sentenceEntered(input.startSentenceId);
 
     return new Promise<void>((resolve) => {
-      this.active = { resolve };
+      this.active = { resolve, input, handlers };
     });
   }
 
@@ -415,6 +534,15 @@ class ControlledManifestNarrationPlayer implements ManifestAwareNarrationPlayer 
   finishCurrentPlayback(): void {
     const active = this.active;
     this.active = null;
+    if (active != null) {
+      const sentenceIds = active.input.narration.sentences.map((sentence) => sentence.sentenceId);
+      const startIndex = sentenceIds.indexOf(active.input.startSentenceId);
+      for (const sentenceId of sentenceIds.slice(startIndex + 1)) {
+        if (active.input.stopAfterSentenceId === active.input.startSentenceId) break;
+        active.handlers.sentenceEntered(sentenceId);
+        if (active.input.stopAfterSentenceId === sentenceId) break;
+      }
+    }
     active?.resolve();
   }
 
@@ -426,4 +554,61 @@ class ControlledManifestNarrationPlayer implements ManifestAwareNarrationPlayer 
   getOutput(): NarrationOutputSettings {
     return { playbackRate: this.playbackRate, volume: this.volume };
   }
+}
+
+class AdversarialManifestNarrationPlayer implements ManifestAwareNarrationPlayer {
+  private readonly completedHandlers: ManifestPlaybackHandlers[] = [];
+
+  async play(input: ManifestPlaybackInput, handlers: ManifestPlaybackHandlers): Promise<void> {
+    const sentenceIds = input.narration.sentences.map((sentence) => sentence.sentenceId);
+    const startIndex = sentenceIds.indexOf(input.startSentenceId);
+    const expected = sentenceIds.slice(startIndex);
+    const first = expected[0];
+    const second = expected[1];
+
+    if (second != null) handlers.sentenceEntered(second);
+    if (first != null) {
+      handlers.sentenceEntered(first);
+      handlers.sentenceEntered(first);
+    }
+    if (second != null) handlers.sentenceEntered(second);
+    for (const sentenceId of expected.slice(2)) handlers.sentenceEntered(sentenceId);
+    this.completedHandlers.push(handlers);
+  }
+
+  setOutput(): void {}
+
+  stop(): void {}
+
+  emitLate(sentenceId: string): void {
+    for (const handlers of this.completedHandlers) handlers.sentenceEntered(sentenceId);
+  }
+}
+
+class FailingManifestNarrationPlayer implements ManifestAwareNarrationPlayer {
+  private handlers: ManifestPlaybackHandlers | null = null;
+
+  async play(input: ManifestPlaybackInput, handlers: ManifestPlaybackHandlers): Promise<void> {
+    this.handlers = handlers;
+    handlers.sentenceEntered(input.startSentenceId);
+    throw new Error("platform playback failed");
+  }
+
+  setOutput(): void {}
+
+  stop(): void {}
+
+  emitLate(sentenceId: string): void {
+    this.handlers?.sentenceEntered(sentenceId);
+  }
+}
+
+class IncompleteManifestNarrationPlayer implements ManifestAwareNarrationPlayer {
+  async play(input: ManifestPlaybackInput, handlers: ManifestPlaybackHandlers): Promise<void> {
+    handlers.sentenceEntered(input.startSentenceId);
+  }
+
+  setOutput(): void {}
+
+  stop(): void {}
 }
