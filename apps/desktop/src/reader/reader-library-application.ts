@@ -4,7 +4,7 @@ import type {
   BookCatalog,
   BookDropAdapter,
   BookDropEvent,
-  BookImporter,
+  BookImportGateway,
   BookOpenRequestAdapter,
   BookmarkStore,
   LibraryBookmarkDto,
@@ -19,7 +19,7 @@ interface ReaderLibraryApplicationDependencies {
   catalog: BookCatalog;
   drops: BookDropAdapter;
   openRequests: BookOpenRequestAdapter;
-  importer: BookImporter;
+  importGateway: BookImportGateway;
   bookmarks: BookmarkStore;
   eventDispatcher: DomainEventDispatcher;
   friendlyError(error: unknown): string;
@@ -59,7 +59,7 @@ export function createReaderLibraryApplication(
   const workflows = createReaderLibraryWorkflows({
     eventDispatcher: dependencies.eventDispatcher,
     catalog: dependencies.catalog,
-    importer: dependencies.importer,
+    importGateway: dependencies.importGateway,
     bookmarks: dependencies.bookmarks,
     friendlyError: dependencies.friendlyError,
     onEventError: dependencies.onEventError

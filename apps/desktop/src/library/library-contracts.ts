@@ -2,9 +2,13 @@ import type { LibraryBookSummary, ReaderDocumentDto } from "./library-models";
 
 export type { LibraryBookSummary, ReaderDocumentDto } from "./library-models";
 
-export interface BookImporter {
-  importFromDialog(): Promise<ReaderDocumentDto | null>;
-  importFromPath(path: string): Promise<ReaderDocumentDto>;
+export type BookImportRequest = { kind: "choose" } | { kind: "provided"; source: string };
+
+export type BookImportOutcome =
+  { status: "cancelled" } | { status: "imported"; document: ReaderDocumentDto };
+
+export interface BookImportGateway {
+  importBook(request: BookImportRequest): Promise<BookImportOutcome>;
 }
 
 export interface BookCatalog {
