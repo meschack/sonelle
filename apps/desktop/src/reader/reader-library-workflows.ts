@@ -2,6 +2,7 @@ import { createDomainEvent, type DomainEvent, type DomainEventDispatcher } from 
 import type {
   BookCatalog,
   BookImportGateway,
+  BookImportRequest,
   BookImportSourceStore,
   BookmarkStore,
   SaveBookmarkInput
@@ -38,13 +39,10 @@ export function createReaderLibraryWorkflows(
     }
   };
 
-  const handleImportRequested = async (event: DomainEvent<"BookImportRequested">) => {
-    const { path } = event.payload;
+  const importBook = async (request: BookImportRequest, path: string | null) => {
     try {
       const existingBookIds = new Set((await dependencies.catalog.list()).map((book) => book.id));
-      const outcome = await dependencies.importGateway.importBook(
-        path == null ? { kind: "choose" } : { kind: "provided", source: path }
-      );
+      const outcome = await dependencies.importGateway.importBook(request);
       if (outcome.status === "cancelled") {
         await publish(createDomainEvent("BookImportCancelled", { path }));
         return;
@@ -71,6 +69,15 @@ export function createReaderLibraryWorkflows(
         })
       );
     }
+  };
+
+  const handleImportRequested = async (event: DomainEvent<"BookImportRequested">) => {
+    const { path } = event.payload;
+    await importBook(path == null ? { kind: "choose" } : { kind: "provided", source: path }, path);
+  };
+
+  const handleSourcePrepared = async (event: DomainEvent<"BookImportSourcePrepared">) => {
+    await importBook({ kind: "provided", source: event.payload.source }, event.payload.source);
   };
 
   const handleSourceSelected = async (event: DomainEvent<"BookImportSourceSelected">) => {
@@ -151,7 +158,8 @@ export function createReaderLibraryWorkflows(
     start() {
       const subscriptions = [
         dependencies.eventDispatcher.subscribe("BookImportRequested", handleImportRequested),
-        dependencies.eventDispatcher.subscribe("BookImportSourceSelected", handleSourceSelected)
+        dependencies.eventDispatcher.subscribe("BookImportSourceSelected", handleSourceSelected),
+        dependencies.eventDispatcher.subscribe("BookImportSourcePrepared", handleSourcePrepared)
       ];
       return () => {
         activePreparation?.controller.abort();

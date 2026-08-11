@@ -12,7 +12,8 @@
 
 - reader presentation models, playback activation, Solid state, or narration preparation
 - dictionary lookup and provider selection
-- EPUB parsing from Android managed sources; source preparation stops at a durable readable file
+- EPUB parsing directly from transient Android provider URIs; source preparation stops at a durable
+  readable file
 
 ## Interface
 
@@ -28,8 +29,10 @@ as a path. The Android adapter opens the least-privilege system document picker 
 fallback MIME types, normalizes the platform's rejected cancellation response, and probes the
 returned document URI before publishing `BookImportSourceSelected`. It does not request broad
 storage access. `BookImportSourceStore` copies that selected source into Sonelle-controlled storage
-before provider permission can disappear. Native `library_import` turns parsed EPUB data into a
-storage import. `library_migration` runs after startup on a blocking runtime task, reads legacy rows in
+before provider permission can disappear. `BookImportSourcePrepared` then sends the managed file
+through the shared native importer. Its transactional storage commit is followed by `BookImported`,
+which refreshes the library projection and opens the book without an application restart. Native
+`library_import` turns parsed EPUB data into a storage import. `library_migration` runs after startup on a blocking runtime task, reads legacy rows in
 bounded keyset batches, and isolates individual repair failures.
 
 ## Domain Events
@@ -57,7 +60,8 @@ projected onto their owning sentence with an inline offset.
 ## Tests
 
 Rust tests cover EPUB edge cases, transactional import, search, assets, and multi-batch repair with an
-isolated failure. Renderer workflow tests use a fake `BookImportGateway` to cover imported,
+isolated failure. A representative managed EPUB tracer covers parsing, atomic storage, immediate
+listing, and reopening through the same native modules compiled for Android. Renderer workflow tests use a fake `BookImportGateway` to cover imported,
 selected-source, cancelled, and unreadable-source outcomes through the same interface used by
 production. The Android adapter contract instruments the picker and readability probe for successful
 selection, platform cancellation, and revoked-source failure. Reader application and integration

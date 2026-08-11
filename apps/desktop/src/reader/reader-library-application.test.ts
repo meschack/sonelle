@@ -6,7 +6,7 @@ import {
 } from "@sonelle/domain";
 import { libraryImportNotice } from "@sonelle/library";
 import type { LibraryBookmarkDto } from "../library/library-contracts";
-import type { LibraryBookSummary } from "../library/library-models";
+import type { LibraryBookSummary, ReaderDocumentDto } from "../library/library-models";
 import { createReaderLibraryApplication } from "./reader-library-application";
 
 const book: LibraryBookSummary = {
@@ -39,16 +39,25 @@ describe("reader library application", () => {
   it("ends the busy state when Android source preparation finishes", async () => {
     const dispatcher = createDomainEventDispatcher();
     const importing: boolean[] = [];
+    const projectedBooks: LibraryBookSummary[][] = [];
+    const openedDocuments: ReaderDocumentDto[] = [];
     const application = createReaderLibraryApplication(
       {
-        catalog: { list: vi.fn().mockResolvedValue([]), open: vi.fn() },
+        catalog: {
+          list: vi.fn().mockResolvedValue([book]),
+          open: vi.fn().mockResolvedValue(document)
+        },
         drops: { listen: async () => () => undefined },
         openRequests: { listen: async () => () => undefined },
         importGateway: {
-          importBook: vi.fn().mockResolvedValue({
-            status: "source-selected",
-            source: "content://books/the-book.epub"
-          })
+          importBook: vi.fn().mockImplementation(async (request) =>
+            request.kind === "choose"
+              ? {
+                  status: "source-selected",
+                  source: "content://books/the-book.epub"
+                }
+              : { status: "imported", document }
+          )
         },
         importSourceStore: {
           prepare: vi.fn().mockResolvedValue({
@@ -63,14 +72,14 @@ describe("reader library application", () => {
       {
         activeView: () => "library",
         currentBookSource: () => "library",
-        projectBooks: vi.fn(),
+        projectBooks: (books) => projectedBooks.push(books),
         projectBookmarks: vi.fn(),
         projectLoading: vi.fn(),
         projectImporting: (active) => importing.push(active),
         projectDropTarget: vi.fn(),
         projectLibraryNotice: vi.fn(),
         projectBookmarkNotice: vi.fn(),
-        openDocument: vi.fn(),
+        openDocument: async (next) => void openedDocuments.push(next),
         openBookmarkInspector: vi.fn()
       }
     );
@@ -78,6 +87,12 @@ describe("reader library application", () => {
 
     await application.importFromDialog();
     await vi.waitFor(() => expect(importing).toEqual([true, false]));
+    expect(projectedBooks[projectedBooks.length - 1]).toEqual([book]);
+    expect(openedDocuments[openedDocuments.length - 1]?.book).toMatchObject({
+      title: "Book",
+      author: "Writer"
+    });
+    expect(openedDocuments[openedDocuments.length - 1]?.chapters).toHaveLength(1);
 
     stop();
   });

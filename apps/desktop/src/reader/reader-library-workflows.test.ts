@@ -160,9 +160,11 @@ describe("reader library workflows", () => {
     const selected = vi.fn();
     const progressed = vi.fn();
     const prepared = vi.fn();
+    const imported = vi.fn();
     dispatcher.subscribe("BookImportSourceSelected", selected);
     dispatcher.subscribe("BookImportPreparationProgressed", progressed);
     dispatcher.subscribe("BookImportSourcePrepared", prepared);
+    dispatcher.subscribe("BookImported", imported);
     const prepare = vi.fn().mockImplementation(async (_source, options) => {
       options.onProgress({ completedBytes: 5, totalBytes: 10 });
       return {
@@ -175,10 +177,14 @@ describe("reader library workflows", () => {
       friendlyError,
       catalog: { list: vi.fn().mockResolvedValue([]) },
       importGateway: {
-        importBook: vi.fn().mockResolvedValue({
-          status: "source-selected",
-          source: "content://books/the-book.epub"
-        })
+        importBook: vi.fn().mockImplementation(async (request) =>
+          request.kind === "choose"
+            ? {
+                status: "source-selected",
+                source: "content://books/the-book.epub"
+              }
+            : { status: "imported", document: importedDocument }
+        )
       },
       importSourceStore: { prepare },
       bookmarks: { save: vi.fn(), delete: vi.fn() }
@@ -210,6 +216,47 @@ describe("reader library workflows", () => {
       "content://books/the-book.epub",
       expect.objectContaining({ requestId: expect.any(String) })
     );
+    expect(imported).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ bookId: "book-1", title: "The Book" })
+      })
+    );
+    stop();
+  });
+
+  it("publishes a humane failure when a prepared Android source cannot be imported", async () => {
+    const dispatcher = createDomainEventDispatcher();
+    const failed = vi.fn();
+    const imported = vi.fn();
+    dispatcher.subscribe("BookImportFailed", failed);
+    dispatcher.subscribe("BookImported", imported);
+    const managedSource = "/data/import-sources/damaged.epub";
+    const importBook = vi.fn().mockRejectedValue(new Error("That EPUB could not be read."));
+    const workflows = createReaderLibraryWorkflows({
+      eventDispatcher: dispatcher,
+      friendlyError,
+      catalog: { list: vi.fn().mockResolvedValue([]) },
+      importGateway: { importBook },
+      importSourceStore: unusedImportSourceStore,
+      bookmarks: { save: vi.fn(), delete: vi.fn() }
+    });
+    const stop = workflows.start();
+
+    await dispatcher.dispatch(
+      createDomainEvent("BookImportSourcePrepared", {
+        requestId: "import-request-1",
+        source: managedSource,
+        reusedExisting: false
+      })
+    );
+
+    expect(importBook).toHaveBeenCalledWith({ kind: "provided", source: managedSource });
+    expect(failed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: { path: managedSource, reason: "That EPUB could not be read." }
+      })
+    );
+    expect(imported).not.toHaveBeenCalled();
     stop();
   });
 

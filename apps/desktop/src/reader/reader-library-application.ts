@@ -158,10 +158,6 @@ export function createReaderLibraryApplication(
           importing = false;
           options.projectImporting(false);
         }),
-        dependencies.eventDispatcher.subscribe("BookImportSourcePrepared", () => {
-          importing = false;
-          options.projectImporting(false);
-        }),
         dependencies.eventDispatcher.subscribe("BookImportPreparationCancelled", () => {
           importing = false;
           options.projectImporting(false);

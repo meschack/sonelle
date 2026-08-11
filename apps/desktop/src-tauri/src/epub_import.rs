@@ -1403,6 +1403,7 @@ mod tests {
         normalize_epub_path, parse_epub3_nav_titles, parse_ncx_titles, parse_package,
         read_epub_language, EpubStyles,
     };
+    use crate::{library_import::prepare_epub_import, storage::SonelleStore};
 
     #[test]
     fn reads_indentation_and_emphasis_from_epub_class_styles() {
@@ -2037,6 +2038,64 @@ mod tests {
         let cover = book.cover_image.expect("cover should import");
         assert_eq!(cover.media_type, "image/png");
         assert_eq!(cover.bytes, b"png-cover");
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn imports_a_representative_managed_epub_into_the_mobile_library() {
+        let temp_dir = temp_epub_dir();
+        fs::create_dir_all(&temp_dir).expect("temp dir should be created");
+        let epub_path = temp_dir.join("managed-source.epub");
+        write_epub(
+            &epub_path,
+            [
+                (
+                    "META-INF/container.xml",
+                    r#"<?xml version="1.0"?>
+                    <container>
+                      <rootfiles><rootfile full-path="EPUB/content.opf" /></rootfiles>
+                    </container>"#,
+                ),
+                (
+                    "EPUB/content.opf",
+                    r#"<package xmlns:dc="http://purl.org/dc/elements/1.1/">
+                      <metadata>
+                        <dc:title>Pocket Reading</dc:title>
+                        <dc:creator>Sonelle</dc:creator>
+                        <dc:language>en</dc:language>
+                      </metadata>
+                      <manifest>
+                        <item id="c1" href="chapter.xhtml" media-type="application/xhtml+xml" />
+                      </manifest>
+                      <spine><itemref idref="c1" /></spine>
+                    </package>"#,
+                ),
+                (
+                    "EPUB/chapter.xhtml",
+                    r#"<html><body><h1>A Small Chapter</h1><p>First sentence. Second sentence.</p></body></html>"#,
+                ),
+            ],
+        );
+        let store = SonelleStore::open_at(temp_dir.join("sonelle.sqlite3"))
+            .expect("mobile library should initialize");
+
+        let prepared = prepare_epub_import(&epub_path).expect("managed EPUB should parse");
+        let saved = store
+            .save_imported_book(prepared)
+            .expect("managed EPUB should commit atomically");
+        let listed = store.list_books().expect("mobile library should refresh");
+        let reopened = store
+            .open_book(&saved.book.id, None)
+            .expect("imported book should open immediately");
+
+        assert_eq!(saved.book.title, "Pocket Reading");
+        assert_eq!(saved.book.author, "Sonelle");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].chapter_count, 1);
+        assert_eq!(reopened.chapters[0].title, "A Small Chapter");
+        assert_eq!(reopened.chapters[0].sentences.len(), 3);
+        assert_eq!(reopened.chapters[0].sentences[1].text, "First sentence.");
 
         fs::remove_dir_all(temp_dir).ok();
     }
