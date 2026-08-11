@@ -25,6 +25,7 @@
     "profile:android": "node scripts/profile-android-device.mjs",
     "stability:android": "node scripts/run-android-stability.mjs",
     "report:android-core": "node scripts/report-android-core-flow.mjs",
+    "decide:android-shell": "node scripts/record-android-shell-decision.mjs",
     "audit:android-release": "node scripts/audit-android-release.mjs",
     "spike:narration:setup": "node scripts/setup-narration-spike.mjs",
     "spike:narration:models": "node scripts/setup-narration-spike.mjs --models",
