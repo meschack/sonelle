@@ -86,6 +86,10 @@ import {
 import { isTauriRuntime } from "../platform/tauri-runtime";
 import { createSystemFontCatalog, type SystemFontCatalog } from "../platform/system-font-catalog";
 import { createPlatformMediaSourceGateway } from "../platform/media-source-gateway";
+import {
+  createReaderShellViewport,
+  type ReaderShellViewport
+} from "../platform/reader-shell-viewport";
 import { createQuoteImageExporter, type QuoteImageExporter } from "./reader-quote-image";
 import {
   createReaderPreferencesRepository,
@@ -148,6 +152,7 @@ export interface ReaderExperienceDependencies {
   mediaSession: MediaSessionGateway;
   narration: ReaderNarrationService;
   quoteImageExporter: QuoteImageExporter;
+  readerShellViewport: ReaderShellViewport;
   readerPreferencesRepository: ReaderPreferencesRepository;
   readingPositionStore: ReadingPositionStore;
   voiceInstallationRepository: VoiceInstallationRepository;
@@ -269,6 +274,7 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
       }
     },
     quoteImageExporter: createQuoteImageExporter(),
+    readerShellViewport: createReaderShellViewport(),
     readerPreferencesRepository: createReaderPreferencesRepository(),
     readingPositionStore: createReadingPositionStore(),
     voiceInstallationRepository: createVoiceInstallationRepository()

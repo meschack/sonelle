@@ -1922,6 +1922,221 @@
   font-weight: 500;
 }
 
+.sonelle-shell:has(> .mobile-reader-shell) {
+  display: block;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mobile-reader-shell {
+  background: var(--surface);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mobile-reader-header {
+  align-items: center;
+  background: color-mix(in srgb, var(--surface) 94%, white);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  min-height: 64px;
+  padding: max(8px, env(safe-area-inset-top)) 14px 8px;
+  position: relative;
+  z-index: 4;
+}
+
+.mobile-reader-back,
+.mobile-reader-actions button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--green);
+  display: inline-flex;
+  height: 40px;
+  justify-content: center;
+  padding: 0;
+  width: 40px;
+}
+
+.mobile-reader-back:focus-visible,
+.mobile-reader-actions button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(21, 63, 52, 0.16);
+  outline: none;
+}
+
+.mobile-reader-back svg,
+.mobile-reader-actions svg {
+  height: 18px;
+  width: 18px;
+}
+
+.mobile-reader-title {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mobile-reader-title span {
+  color: var(--muted);
+  font-family: "SpaceMono Nerd Font Propo", monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mobile-reader-title strong {
+  color: var(--green);
+  font-size: 16px;
+  font-weight: 720;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-reader-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.mobile-reader-navigation-slot {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+
+.mobile-reader-navigation-slot .chapter-navigation {
+  display: grid;
+  gap: 0;
+  grid-template-columns: 1fr;
+  min-height: 62px;
+  padding: 10px 18px;
+}
+
+.mobile-reader-navigation-slot .chapter-divider,
+.mobile-reader-navigation-slot .chapter-meta-block:not(:first-child) {
+  display: none;
+}
+
+.mobile-reader-navigation-slot .mobile-contents-trigger {
+  display: block;
+  margin: -2px 18px 10px;
+  width: calc(100% - 36px);
+}
+
+.mobile-reader-content-slot {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mobile-reader-content-slot .reader-layout {
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 26px 22px 42px;
+}
+
+.mobile-reader-content-slot .page {
+  max-width: 680px;
+}
+
+.mobile-reader-content-slot .article-title {
+  font-size: clamp(32px, 9vw, 44px);
+  margin-bottom: 30px;
+}
+
+.mobile-reader-playback-slot {
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+  position: relative;
+  z-index: 5;
+}
+
+.mobile-reader-playback-slot .audio-rail {
+  border-top: 0;
+  position: static;
+}
+
+.mobile-reader-tools-backdrop {
+  align-items: end;
+  background: rgba(7, 28, 23, 0.32);
+  display: grid;
+  inset: 0;
+  position: fixed;
+  z-index: 20;
+}
+
+.mobile-reader-tools-sheet {
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -18px 60px rgba(7, 28, 23, 0.18);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: 92dvh;
+  min-height: 62dvh;
+  overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.mobile-reader-tools-sheet > header {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  min-height: 68px;
+  padding: 12px 18px;
+}
+
+.mobile-reader-tools-sheet > header div {
+  display: grid;
+  gap: 2px;
+}
+
+.mobile-reader-tools-sheet > header span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.mobile-reader-tools-sheet > header strong {
+  color: var(--green);
+  font-size: 20px;
+}
+
+.mobile-reader-tools-sheet > header button {
+  background: var(--green-soft);
+  border: 0;
+  border-radius: 999px;
+  color: var(--green);
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.mobile-reader-tools-slot {
+  min-height: 0;
+  overflow: auto;
+}
+
+.mobile-reader-tools-slot .inspector {
+  border: 0;
+  display: grid;
+  grid-template-rows: 48px minmax(0, 1fr);
+  height: 100%;
+  max-height: none;
+}
+
+.mobile-reader-tools-slot .inspector-content {
+  max-height: none;
+}
+
 @media (max-width: 1180px) {
   .sonelle-shell {
     grid-template-columns: 230px minmax(0, 1fr);

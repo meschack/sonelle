@@ -62,6 +62,10 @@ entries preserve nesting through indentation and route valid chapter or anchor s
 the shared navigation application. Closing the panel returns to the unchanged reader; unavailable
 publisher targets are shown disabled rather than guessed.
 
+At phone width, the composition root selects the dedicated mobile reader shell described in
+`mobile-reader-shell.md`. Reader content and applications remain shared; only their chrome and slot
+placement change. Desktop rails are not mounted and squeezed into the phone viewport.
+
 Bookmark controls remain part of the shared reader and playback surfaces on Android. Saving or
 removing the active sentence refreshes the native bookmark projection through domain events, while
 opening a saved passage uses the same book, chapter, and sentence navigation path as desktop.

@@ -322,6 +322,85 @@ describe("ReaderExperience integration", () => {
     container.remove();
   });
 
+  it("composes the mobile reader shell for book open, chapter change, tools, and library return", async () => {
+    const mobileBook = createLibraryBook("mobile-reader", "Pocket Reader", 0);
+    const openBook = vi.fn(async (bookId: string, chapterId?: string) => {
+      const document = createReaderDocument(bookId);
+      document.book.title = "Pocket Reader";
+      document.chapters.push({
+        id: `${bookId}-chapter-2`,
+        title: "Chapter 2",
+        index: 1,
+        sentenceCount: 1,
+        sentences: [{ id: `${bookId}-sentence-2`, index: 0, text: "The next chapter." }]
+      });
+      document.activeChapterId = chapterId ?? document.chapters[0].id;
+      return document;
+    });
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      libraryBooks: [mobileBook],
+      openBook,
+      mobileReaderShell: true
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    await vi.waitFor(() => expect(openBook).toHaveBeenCalledWith("mobile-reader", undefined));
+    expect(container.querySelector('[aria-label="Mobile reader"]')).not.toBeNull();
+    expect(container.querySelector(".product-bar")).toBeNull();
+    expect(container.querySelector(".library-rail")).toBeNull();
+    expect(container.querySelector(".mobile-reader-title")?.textContent).toContain("Pocket Reader");
+
+    const chapter = container.querySelector<HTMLSelectElement>(
+      '.mobile-reader-navigation-slot [aria-label="Current chapter"]'
+    );
+    if (chapter == null) throw new Error("Mobile chapter navigation was not rendered");
+    chapter.value = "mobile-reader-chapter-2";
+    chapter.dispatchEvent(new Event("change", { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(openBook).toHaveBeenCalledWith("mobile-reader", "mobile-reader-chapter-2")
+    );
+    await vi.waitFor(() =>
+      expect(container.querySelector(".mobile-reader-title")?.textContent).toContain("Chapter 2")
+    );
+
+    container.querySelector<HTMLButtonElement>('[aria-label="Search this chapter"]')?.click();
+    await vi.waitFor(() =>
+      expect(container.querySelector('[role="dialog"][aria-label="Reading tools"]')).not.toBeNull()
+    );
+    container
+      .querySelector<HTMLButtonElement>(".mobile-reader-tools-sheet > header button")
+      ?.click();
+    await vi.waitFor(() =>
+      expect(container.querySelector('[role="dialog"][aria-label="Reading tools"]')).toBeNull()
+    );
+
+    container.querySelector<HTMLButtonElement>('[aria-label="Back to library"]')?.click();
+    const card = await vi.waitFor(() => {
+      expect(container.querySelector('[aria-label="Mobile reader"]')).toBeNull();
+      const element = container.querySelector<HTMLButtonElement>(
+        '[data-library-book-card="mobile-reader"]'
+      );
+      expect(element).not.toBeNull();
+      return element;
+    });
+    openBook.mockClear();
+    card?.click();
+    await vi.waitFor(() => expect(openBook).toHaveBeenCalledWith("mobile-reader", undefined));
+    await vi.waitFor(() =>
+      expect(container.querySelector('[aria-label="Mobile reader"]')).not.toBeNull()
+    );
+
+    dispose();
+    container.remove();
+  });
+
   it("flushes the active reading position when the Android webview backgrounds", async () => {
     const pause = vi.fn().mockResolvedValue(undefined);
     const saveReadingPosition = vi.fn().mockResolvedValue(undefined);
@@ -1444,6 +1523,7 @@ interface DependencySpies {
   captureNarrationProjection?: (project: (event: ReaderNarrationProjectionEvent) => void) => void;
   captureBackground?: (listener: () => void) => void;
   bookmarkStore?: BookmarkStore;
+  mobileReaderShell?: boolean;
 }
 
 function createDependencies(spies: DependencySpies): ReaderExperienceDependencies {
@@ -1568,6 +1648,10 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
     },
     quoteImageExporter: {
       export: spies.exportQuoteImage ?? vi.fn().mockResolvedValue("quote.png")
+    },
+    readerShellViewport: {
+      isMobile: () => spies.mobileReaderShell ?? false,
+      listen: () => () => undefined
     },
     readerPreferencesRepository: {
       load: () => spies.readerPreferences ?? createReaderPreferences(),
