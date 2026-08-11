@@ -7,6 +7,7 @@
 - bounded native ONNX runtime construction, cancellation, and installed narration-file packs
 - compatibility projection for legacy Piper sentence audio while that rollback path remains available
 - resumable whole-book preparation and per-chapter cache summaries
+- low-storage preflight and safe narration-only cleanup policy
 
 ## Refuses To Own
 
@@ -41,6 +42,14 @@ URLs or depend on application-data directory layout.
 
 Language-pack voices are projected only after their provider files report ready. Installation
 updates refresh the current book's voice field immediately; the UI does not poll provider state.
+
+The narration storage-maintenance module is the policy seam for mobile storage adapters. It checks
+manifest download requirements against available space while retaining a post-install reserve.
+Resumable staging counts toward bytes already present. Cleanup approves only a typed
+prepared-audio book identity or verified voice-pack identity; books, bookmarks, settings, and
+reading positions are absent from its interface. Prepared audio in an active listening session is
+protected, and a selected voice pack must be replaced before it can be removed. Both cleanup paths
+require explicit confirmation.
 
 ## Domain Events
 
@@ -77,6 +86,7 @@ legacy global profile remains the fallback for books without an explicit profile
   reordered, incomplete, failed, stopped, and post-completion callbacks cannot advance projection
 - provider thread counts and ONNX allocator settings remain bounded
 - user-facing errors describe recovery, not engine or queue internals
+- narration cleanup cannot address reader-library storage, and cannot remove active narration assets
 
 ## Tests
 
@@ -87,3 +97,5 @@ cover preparation events, settings reactions, reset, and cross-chapter prefetch.
 pack verification, cache writes, provider input validation, manifests, and cancellation. The
 release-candidate provider smoke installs local packs and runs real Kokoro and Supertonic inference
 sequentially with one ONNX thread per provider.
+Storage-maintenance tests cover resumable-install space accounting, insufficient-space recovery,
+confirmation, verified-pack boundaries, active playback, and narrow narration-only deletion.
