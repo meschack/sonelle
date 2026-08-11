@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
 
+import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import { expect, it, vi } from "vitest";
 import { MobileReaderShell } from "./mobile-reader-shell";
 
-it("keeps navigation, tools, reading, and playback in explicit mobile slots", () => {
+it("keeps navigation, tools, reading, and playback in explicit mobile slots", async () => {
   const back = vi.fn();
+  const [toolsOpen, setToolsOpen] = createSignal(false);
   const container = document.createElement("div");
   document.body.append(container);
   const dispose = render(
@@ -19,12 +21,12 @@ it("keeps navigation, tools, reading, and playback in explicit mobile slots", ()
         playback={<footer data-slot="playback">Play</footer>}
         libraryBooks={[]}
         activeBookId="book-1"
-        toolsOpen={true}
+        toolsOpen={toolsOpen()}
         onOpenBook={vi.fn()}
         onOpenFullLibrary={back}
         onOpenSearch={vi.fn()}
-        onOpenTools={vi.fn()}
-        onCloseTools={vi.fn()}
+        onOpenTools={() => setToolsOpen(true)}
+        onCloseTools={() => setToolsOpen(false)}
       />
     ),
     container
@@ -36,7 +38,18 @@ it("keeps navigation, tools, reading, and playback in explicit mobile slots", ()
   expect(
     container.querySelector('.mobile-reader-content-slot [data-slot="content"]')
   ).not.toBeNull();
+  expect(container.querySelector('.mobile-reader-tools-slot [data-slot="tools"]')).toBeNull();
+  const toolsTrigger = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Open reading tools"]'
+  );
+  toolsTrigger?.focus();
+  toolsTrigger?.click();
   expect(container.querySelector('.mobile-reader-tools-slot [data-slot="tools"]')).not.toBeNull();
+  await vi.waitFor(() => expect(document.activeElement?.textContent).toContain("Back to reading"));
+  window.history.replaceState(null, "");
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  expect(container.querySelector('.mobile-reader-tools-slot [data-slot="tools"]')).toBeNull();
+  await vi.waitFor(() => expect(document.activeElement).toBe(toolsTrigger));
   expect(
     container.querySelector('.mobile-reader-playback-slot [data-slot="playback"]')
   ).not.toBeNull();

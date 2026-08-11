@@ -2054,6 +2054,11 @@
   margin-bottom: 30px;
 }
 
+.mobile-reader-content-slot .word-token {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 .mobile-reader-playback-slot {
   border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
