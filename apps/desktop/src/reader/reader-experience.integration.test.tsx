@@ -12,6 +12,7 @@ import { createSavedDictionary } from "@sonelle/learning";
 import { createReaderPreferences, type ReaderPreferences } from "@sonelle/reader";
 import type { ReaderExperienceDependencies } from "./reader-dependencies";
 import type {
+  BookImportGateway,
   BookMetadataEditor,
   LibrarySearch,
   LibrarySearchResultDto
@@ -117,7 +118,7 @@ describe("ReaderExperience integration", () => {
   it("routes quote images, library closing, and imports through keyboard shortcuts", async () => {
     const pause = vi.fn().mockResolvedValue(undefined);
     const exportQuoteImage = vi.fn().mockResolvedValue("sonelle-passage.png");
-    const importFromDialog = vi.fn().mockResolvedValue(null);
+    const importBook = vi.fn().mockResolvedValue({ status: "cancelled" as const });
     const dependencies = createDependencies({
       dispatcher: createDomainEventDispatcher(),
       pause,
@@ -125,7 +126,7 @@ describe("ReaderExperience integration", () => {
       stopDrops: vi.fn(),
       stopVoiceEvents: vi.fn(),
       exportQuoteImage,
-      importFromDialog
+      importBook
     });
     const container = document.createElement("div");
     document.body.append(container);
@@ -150,7 +151,7 @@ describe("ReaderExperience integration", () => {
     await vi.waitFor(() => expect(pause).toHaveBeenCalledOnce());
 
     dispatchShortcut("o", { ctrlKey: true });
-    await vi.waitFor(() => expect(importFromDialog).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(importBook).toHaveBeenCalledWith({ kind: "choose" }));
 
     dispose();
     container.remove();
@@ -1053,7 +1054,7 @@ interface DependencySpies {
     author: string;
     chapterTitle: string;
   }) => Promise<string>;
-  importFromDialog?: () => Promise<null>;
+  importBook?: BookImportGateway["importBook"];
   getAudioCacheStats?: (bookId: string) => Promise<{ sentenceCount: number; sizeBytes: number }>;
   toggleFullscreen?: () => Promise<void>;
   libraryBooks?: LibraryBookSummary[];
@@ -1106,9 +1107,8 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
     bookExporter: {
       exportData: vi.fn().mockRejectedValue(new Error("No library book selected"))
     },
-    bookImporter: {
-      importFromDialog: spies.importFromDialog ?? vi.fn().mockResolvedValue(null),
-      importFromPath: vi.fn().mockRejectedValue(new Error("No import requested"))
+    bookImportGateway: {
+      importBook: spies.importBook ?? vi.fn().mockRejectedValue(new Error("No import requested"))
     },
     bookMetadataEditor: {
       chooseCover: spies.chooseBookCover ?? vi.fn().mockResolvedValue(null),
