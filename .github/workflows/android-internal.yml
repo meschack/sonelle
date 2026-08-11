@@ -1,0 +1,133 @@
+name: Android Internal Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Git revision to package
+        required: true
+        default: main
+        type: string
+
+concurrency:
+  group: android-internal-${{ inputs.revision }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build signed ARM64 APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: internal-android
+
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.revision }}
+
+      - name: Require a revision already merged into main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache Rust builds
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.1.0" \
+            "ndk;27.1.12297006"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare internal version and diagnostics
+        id: build
+        run: |
+          git fetch --force --tags
+          node scripts/prepare-release-version.mjs
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "catalog_sha256=$(sha256sum tools/narration-spike/engines.json | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Require and configure Android signing
+        env:
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_BASE64"
+          test -n "$ANDROID_KEY_PASSWORD"
+          echo "$ANDROID_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/sonelle-internal.jks"
+          {
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "password=$ANDROID_KEY_PASSWORD"
+            echo "storeFile=$RUNNER_TEMP/sonelle-internal.jks"
+          } > apps/desktop/src-tauri/gen/android/keystore.properties
+
+      - name: Build signed release-like APK
+        env:
+          SONELLE_BUILD_COMMIT: ${{ steps.build.outputs.commit }}
+          SONELLE_NARRATION_CATALOG_SHA256: ${{ steps.build.outputs.catalog_sha256 }}
+        run: |
+          export NDK_HOME="$ANDROID_HOME/ndk/27.1.12297006"
+          pnpm --filter @sonelle/desktop tauri android build --target aarch64 --apk --ci
+
+      - name: Verify and describe artifact
+        id: artifact
+        run: |
+          APK_PATH=$(find apps/desktop/src-tauri/gen/android/app/build/outputs/apk -type f -name '*release*.apk' ! -name '*unsigned*' -print -quit)
+          test -n "$APK_PATH"
+          "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify --verbose "$APK_PATH"
+          mkdir -p artifacts/android-internal
+          cp "$APK_PATH" artifacts/android-internal/sonelle-internal-arm64.apk
+          node scripts/create-android-build-metadata.mjs \
+            --artifact artifacts/android-internal/sonelle-internal-arm64.apk \
+            --commit "${{ steps.build.outputs.commit }}" \
+            --output artifacts/android-internal/build-metadata.json
+
+      - name: Upload signed internal build
+        uses: actions/upload-artifact@v7
+        with:
+          name: sonelle-android-internal-${{ steps.build.outputs.commit }}
+          retention-days: 14
+          if-no-files-found: error
+          path: artifacts/android-internal/*
+
+      - name: Remove signing material
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/sonelle-internal.jks"
+          rm -f apps/desktop/src-tauri/gen/android/keystore.properties

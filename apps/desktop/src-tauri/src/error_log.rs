@@ -54,8 +54,16 @@ struct ErrorLogEntry {
     details: Option<String>,
     app_version: String,
     build: String,
+    #[serde(default = "local_build_identity")]
+    build_commit: String,
+    #[serde(default = "local_build_identity")]
+    narration_catalog_sha256: String,
     platform: String,
     process_id: u32,
+}
+
+fn local_build_identity() -> String {
+    "local".to_string()
 }
 
 pub fn initialize(app: &AppHandle) -> Result<PathBuf, String> {
@@ -127,6 +135,12 @@ impl ErrorLogEntry {
             } else {
                 "production".to_string()
             },
+            build_commit: option_env!("SONELLE_BUILD_COMMIT")
+                .unwrap_or("local")
+                .to_string(),
+            narration_catalog_sha256: option_env!("SONELLE_NARRATION_CATALOG_SHA256")
+                .unwrap_or("local")
+                .to_string(),
             platform: std::env::consts::OS.to_string(),
             process_id: std::process::id(),
         }
@@ -270,6 +284,8 @@ mod tests {
         assert_eq!(document.version, ERROR_LOG_VERSION);
         assert_eq!(document.errors.len(), 2);
         assert_eq!(document.errors[0].scope, "audio.playback");
+        assert!(!document.errors[0].build_commit.is_empty());
+        assert!(!document.errors[0].narration_catalog_sha256.is_empty());
         assert_eq!(document.errors[1].source, "native");
 
         let _ = fs::remove_dir_all(root);
@@ -297,5 +313,27 @@ mod tests {
         assert_eq!(document.errors[1].scope, "storage");
 
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn preserves_diagnostics_written_before_build_identity_fields_existed() {
+        let legacy = r#"{
+          "version": 1,
+          "errors": [{
+            "timestamp": "2026-08-11T18:00:00.000Z",
+            "source": "native",
+            "scope": "storage",
+            "message": "Database failed",
+            "appVersion": "0.1.0",
+            "build": "production",
+            "platform": "android",
+            "processId": 42
+          }]
+        }"#;
+        let document: ErrorLogDocument =
+            serde_json::from_str(legacy).expect("legacy diagnostics should remain readable");
+
+        assert_eq!(document.errors[0].build_commit, "local");
+        assert_eq!(document.errors[0].narration_catalog_sha256, "local");
     }
 }
