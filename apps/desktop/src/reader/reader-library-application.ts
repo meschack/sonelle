@@ -5,6 +5,7 @@ import type {
   BookDropAdapter,
   BookDropEvent,
   BookImportGateway,
+  BookImportSourceStore,
   BookOpenRequestAdapter,
   BookmarkStore,
   LibraryBookmarkDto,
@@ -20,6 +21,7 @@ interface ReaderLibraryApplicationDependencies {
   drops: BookDropAdapter;
   openRequests: BookOpenRequestAdapter;
   importGateway: BookImportGateway;
+  importSourceStore: BookImportSourceStore;
   bookmarks: BookmarkStore;
   eventDispatcher: DomainEventDispatcher;
   friendlyError(error: unknown): string;
@@ -46,6 +48,7 @@ export interface ReaderLibraryApplication {
   open(bookId: string, options?: OpenBookOptions): Promise<void>;
   importFromDialog(): Promise<void>;
   importFromPath(path: string): Promise<void>;
+  cancelImportPreparation(): void;
   handleBrowserDrop(files: File[]): void;
   saveBookmark(input: SaveBookmarkInput): Promise<void>;
   deleteBookmark(bookmarkId: string, bookId: string): Promise<void>;
@@ -60,6 +63,7 @@ export function createReaderLibraryApplication(
     eventDispatcher: dependencies.eventDispatcher,
     catalog: dependencies.catalog,
     importGateway: dependencies.importGateway,
+    importSourceStore: dependencies.importSourceStore,
     bookmarks: dependencies.bookmarks,
     friendlyError: dependencies.friendlyError,
     onEventError: dependencies.onEventError
@@ -154,7 +158,11 @@ export function createReaderLibraryApplication(
           importing = false;
           options.projectImporting(false);
         }),
-        dependencies.eventDispatcher.subscribe("BookImportSourceSelected", () => {
+        dependencies.eventDispatcher.subscribe("BookImportSourcePrepared", () => {
+          importing = false;
+          options.projectImporting(false);
+        }),
+        dependencies.eventDispatcher.subscribe("BookImportPreparationCancelled", () => {
           importing = false;
           options.projectImporting(false);
         }),
@@ -214,6 +222,7 @@ export function createReaderLibraryApplication(
     open,
     importFromDialog: () => importBook(),
     importFromPath: (path) => importBook(path),
+    cancelImportPreparation: workflows.cancelImportPreparation,
     handleBrowserDrop(files) {
       options.projectDropTarget(false);
       const paths = files

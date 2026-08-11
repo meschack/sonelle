@@ -2,6 +2,7 @@ import { createDomainEvent, type DomainEvent, type DomainEventDispatcher } from 
 import type {
   BookCatalog,
   BookImportGateway,
+  BookImportSourceStore,
   BookmarkStore,
   SaveBookmarkInput
 } from "../library/library-contracts";
@@ -10,6 +11,7 @@ export interface ReaderLibraryWorkflowDependencies {
   eventDispatcher: DomainEventDispatcher;
   catalog: Pick<BookCatalog, "list">;
   importGateway: BookImportGateway;
+  importSourceStore: BookImportSourceStore;
   bookmarks: Pick<BookmarkStore, "delete" | "save">;
   friendlyError(error: unknown): string;
   onEventError?(error: unknown): void;
@@ -18,6 +20,7 @@ export interface ReaderLibraryWorkflowDependencies {
 export interface ReaderLibraryWorkflows {
   importFromDialog(): Promise<void>;
   importFromPath(path: string): Promise<void>;
+  cancelImportPreparation(): void;
   saveBookmark(input: SaveBookmarkInput): Promise<void>;
   deleteBookmark(bookmarkId: string, bookId: string): Promise<void>;
   start(): () => void;
@@ -26,6 +29,7 @@ export interface ReaderLibraryWorkflows {
 export function createReaderLibraryWorkflows(
   dependencies: ReaderLibraryWorkflowDependencies
 ): ReaderLibraryWorkflows {
+  let activePreparation: { requestId: string; controller: AbortController } | null = null;
   const publish = async (event: Parameters<DomainEventDispatcher["dispatch"]>[0]) => {
     try {
       await dependencies.eventDispatcher.dispatch(event);
@@ -69,12 +73,64 @@ export function createReaderLibraryWorkflows(
     }
   };
 
+  const handleSourceSelected = async (event: DomainEvent<"BookImportSourceSelected">) => {
+    const requestId = crypto.randomUUID();
+    const controller = new AbortController();
+    activePreparation?.controller.abort();
+    activePreparation = { requestId, controller };
+    await publish(createDomainEvent("BookImportPreparationStarted", { requestId }));
+    let progressEvents = Promise.resolve();
+
+    try {
+      const prepared = await dependencies.importSourceStore.prepare(event.payload.source, {
+        requestId,
+        signal: controller.signal,
+        onProgress(progress) {
+          progressEvents = progressEvents.then(() =>
+            publish(
+              createDomainEvent("BookImportPreparationProgressed", {
+                requestId,
+                completedBytes: progress.completedBytes,
+                totalBytes: progress.totalBytes
+              })
+            )
+          );
+        }
+      });
+      await progressEvents;
+      await publish(
+        createDomainEvent("BookImportSourcePrepared", {
+          requestId,
+          source: prepared.source,
+          reusedExisting: prepared.reusedExisting
+        })
+      );
+    } catch (error) {
+      await progressEvents;
+      if (controller.signal.aborted || isAbortError(error)) {
+        await publish(createDomainEvent("BookImportPreparationCancelled", { requestId }));
+      } else {
+        await publish(
+          createDomainEvent("BookImportFailed", {
+            path: null,
+            reason: dependencies.friendlyError(error)
+          })
+        );
+      }
+    } finally {
+      if (activePreparation?.requestId === requestId) activePreparation = null;
+    }
+  };
+
   return {
     async importFromDialog() {
       await publish(createDomainEvent("BookImportRequested", { path: null }));
     },
     async importFromPath(path) {
       await publish(createDomainEvent("BookImportRequested", { path }));
+    },
+    cancelImportPreparation() {
+      activePreparation?.controller.abort();
     },
     async saveBookmark(input) {
       const bookmark = await dependencies.bookmarks.save(input);
@@ -94,11 +150,19 @@ export function createReaderLibraryWorkflows(
     },
     start() {
       const subscriptions = [
-        dependencies.eventDispatcher.subscribe("BookImportRequested", handleImportRequested)
+        dependencies.eventDispatcher.subscribe("BookImportRequested", handleImportRequested),
+        dependencies.eventDispatcher.subscribe("BookImportSourceSelected", handleSourceSelected)
       ];
-      return () => subscriptions.forEach((unsubscribe) => unsubscribe());
+      return () => {
+        activePreparation?.controller.abort();
+        subscriptions.forEach((unsubscribe) => unsubscribe());
+      };
     }
   };
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 function reportEventErrorSafely(reporter: ((error: unknown) => void) | undefined, error: unknown) {

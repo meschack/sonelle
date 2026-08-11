@@ -195,6 +195,7 @@ function fakeLibrary(overrides: Partial<ReaderLibraryApplication> = {}): ReaderL
     open: vi.fn().mockResolvedValue(undefined),
     importFromDialog: vi.fn().mockResolvedValue(undefined),
     importFromPath: vi.fn().mockResolvedValue(undefined),
+    cancelImportPreparation: vi.fn(),
     handleBrowserDrop: vi.fn(),
     saveBookmark: vi.fn().mockResolvedValue(undefined),
     deleteBookmark: vi.fn().mockResolvedValue(undefined),

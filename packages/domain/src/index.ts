@@ -13,6 +13,18 @@ export interface DomainEventPayloadMap {
   BookImportRequested: { path: string | null };
   BookImportCancelled: { path: string | null };
   BookImportSourceSelected: { source: string };
+  BookImportPreparationStarted: { requestId: EntityId };
+  BookImportPreparationProgressed: {
+    requestId: EntityId;
+    completedBytes: number;
+    totalBytes: number | null;
+  };
+  BookImportSourcePrepared: {
+    requestId: EntityId;
+    source: string;
+    reusedExisting: boolean;
+  };
+  BookImportPreparationCancelled: { requestId: EntityId };
   BookImportFailed: { path: string | null; reason: string };
   BookImported: {
     bookId: EntityId;

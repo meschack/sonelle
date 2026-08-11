@@ -1118,6 +1118,9 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
     bookImportGateway: {
       importBook: spies.importBook ?? vi.fn().mockRejectedValue(new Error("No import requested"))
     },
+    bookImportSourceStore: {
+      prepare: vi.fn().mockRejectedValue(new Error("No import source selected"))
+    },
     bookMetadataEditor: {
       chooseCover: spies.chooseBookCover ?? vi.fn().mockResolvedValue(null),
       update:

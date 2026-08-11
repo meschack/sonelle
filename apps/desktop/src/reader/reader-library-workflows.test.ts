@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createDomainEventDispatcher } from "@sonelle/domain";
+import { createDomainEvent, createDomainEventDispatcher } from "@sonelle/domain";
 import { createReaderLibraryWorkflows } from "./reader-library-workflows";
 
 const importedDocument = {
@@ -17,6 +17,8 @@ const importedDocument = {
   position: null
 };
 
+const unusedImportSourceStore = { prepare: vi.fn() };
+
 describe("reader library workflows", () => {
   it("publishes an import fact and leaves reactions to listeners", async () => {
     const dispatcher = createDomainEventDispatcher();
@@ -33,6 +35,7 @@ describe("reader library workflows", () => {
       friendlyError: friendlyError,
       catalog: { list: vi.fn().mockResolvedValue([{ id: "book-1" }]) },
       importGateway: { importBook },
+      importSourceStore: unusedImportSourceStore,
       bookmarks: { save: vi.fn(), delete: vi.fn() }
     });
     const stop = workflows.start();
@@ -70,6 +73,7 @@ describe("reader library workflows", () => {
       friendlyError,
       catalog: { list: vi.fn().mockResolvedValue([]) },
       importGateway: { importBook: vi.fn() },
+      importSourceStore: unusedImportSourceStore,
       bookmarks
     });
 
@@ -104,6 +108,7 @@ describe("reader library workflows", () => {
       friendlyError,
       catalog: { list: vi.fn().mockResolvedValue([]) },
       importGateway: { importBook },
+      importSourceStore: unusedImportSourceStore,
       bookmarks: { save: vi.fn(), delete: vi.fn() }
     });
     const stop = workflows.start();
@@ -133,6 +138,7 @@ describe("reader library workflows", () => {
       friendlyError,
       catalog: { list: vi.fn().mockResolvedValue([]) },
       importGateway: { importBook },
+      importSourceStore: unusedImportSourceStore,
       bookmarks: { save: vi.fn(), delete: vi.fn() }
     });
     const stop = workflows.start();
@@ -149,10 +155,21 @@ describe("reader library workflows", () => {
     stop();
   });
 
-  it("publishes a selected Android source for the next import stage", async () => {
+  it("publishes progress and a deterministic prepared source for the shared importer", async () => {
     const dispatcher = createDomainEventDispatcher();
     const selected = vi.fn();
+    const progressed = vi.fn();
+    const prepared = vi.fn();
     dispatcher.subscribe("BookImportSourceSelected", selected);
+    dispatcher.subscribe("BookImportPreparationProgressed", progressed);
+    dispatcher.subscribe("BookImportSourcePrepared", prepared);
+    const prepare = vi.fn().mockImplementation(async (_source, options) => {
+      options.onProgress({ completedBytes: 5, totalBytes: 10 });
+      return {
+        source: "/data/import-sources/hash.epub",
+        reusedExisting: true
+      };
+    });
     const workflows = createReaderLibraryWorkflows({
       eventDispatcher: dispatcher,
       friendlyError,
@@ -163,6 +180,7 @@ describe("reader library workflows", () => {
           source: "content://books/the-book.epub"
         })
       },
+      importSourceStore: { prepare },
       bookmarks: { save: vi.fn(), delete: vi.fn() }
     });
     const stop = workflows.start();
@@ -175,6 +193,60 @@ describe("reader library workflows", () => {
         payload: { source: "content://books/the-book.epub" }
       })
     );
+    expect(progressed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ completedBytes: 5, totalBytes: 10 })
+      })
+    );
+    expect(prepared).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          source: "/data/import-sources/hash.epub",
+          reusedExisting: true
+        })
+      })
+    );
+    expect(prepare).toHaveBeenCalledWith(
+      "content://books/the-book.epub",
+      expect.objectContaining({ requestId: expect.any(String) })
+    );
+    stop();
+  });
+
+  it("cancels active source preparation without publishing a failure", async () => {
+    const dispatcher = createDomainEventDispatcher();
+    const cancelled = vi.fn();
+    const failed = vi.fn();
+    dispatcher.subscribe("BookImportPreparationCancelled", cancelled);
+    dispatcher.subscribe("BookImportFailed", failed);
+    const prepare = vi.fn().mockImplementation((_source, options) => {
+      return new Promise((_resolve, reject) => {
+        options.signal.addEventListener("abort", () => {
+          reject(new DOMException("Book import was cancelled.", "AbortError"));
+        });
+      });
+    });
+    const workflows = createReaderLibraryWorkflows({
+      eventDispatcher: dispatcher,
+      friendlyError,
+      catalog: { list: vi.fn().mockResolvedValue([]) },
+      importGateway: { importBook: vi.fn() },
+      importSourceStore: { prepare },
+      bookmarks: { save: vi.fn(), delete: vi.fn() }
+    });
+    const stop = workflows.start();
+
+    const running = dispatcher.dispatch(
+      createDomainEvent("BookImportSourceSelected", {
+        source: "content://books/the-book.epub"
+      })
+    );
+    await vi.waitFor(() => expect(prepare).toHaveBeenCalledOnce());
+    workflows.cancelImportPreparation();
+    await running;
+
+    expect(cancelled).toHaveBeenCalledOnce();
+    expect(failed).not.toHaveBeenCalled();
     stop();
   });
 });
