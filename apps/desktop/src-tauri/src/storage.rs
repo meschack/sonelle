@@ -685,6 +685,10 @@ impl SonelleStore {
                      FROM bookmarks
                      INNER JOIN books ON books.id = bookmarks.book_id
                      INNER JOIN chapters ON chapters.id = bookmarks.chapter_id
+                     INNER JOIN sentences
+                       ON sentences.id = bookmarks.sentence_id
+                      AND sentences.book_id = bookmarks.book_id
+                      AND sentences.chapter_id = bookmarks.chapter_id
                      WHERE bookmarks.book_id = ?1
                      ORDER BY bookmarks.created_at DESC",
                 )
@@ -715,6 +719,10 @@ impl SonelleStore {
                  FROM bookmarks
                  INNER JOIN books ON books.id = bookmarks.book_id
                  INNER JOIN chapters ON chapters.id = bookmarks.chapter_id
+                 INNER JOIN sentences
+                   ON sentences.id = bookmarks.sentence_id
+                  AND sentences.book_id = bookmarks.book_id
+                  AND sentences.chapter_id = bookmarks.chapter_id
                  ORDER BY bookmarks.created_at DESC",
             )
             .map_err(|_| "We couldn't read your bookmarks.".to_string())?;
@@ -733,6 +741,24 @@ impl SonelleStore {
         let transaction = connection
             .transaction()
             .map_err(|_| "We couldn't prepare that bookmark update.".to_string())?;
+        let (sentence_index, text) = transaction
+            .query_row(
+                "SELECT sentences.position, sentences.text
+                 FROM sentences
+                 INNER JOIN chapters ON chapters.id = sentences.chapter_id
+                 WHERE sentences.id = ?1
+                   AND sentences.chapter_id = ?2
+                   AND sentences.book_id = ?3
+                   AND chapters.book_id = ?3",
+                params![bookmark.sentence_id, bookmark.chapter_id, bookmark.book_id],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()
+            .map_err(|_| "We couldn't inspect that saved passage.".to_string())?
+            .ok_or_else(|| {
+                "That passage is no longer available. Open the book and choose another sentence."
+                    .to_string()
+            })?;
         let id = bookmark_id(
             &bookmark.book_id,
             &bookmark.chapter_id,
@@ -770,8 +796,8 @@ impl SonelleStore {
                     bookmark.book_id,
                     bookmark.chapter_id,
                     bookmark.sentence_id,
-                    bookmark.sentence_index,
-                    bookmark.text,
+                    sentence_index,
+                    text,
                     bookmark.note,
                     created_at
                 ],
@@ -1332,6 +1358,10 @@ impl SonelleStore {
                  FROM bookmarks
                  INNER JOIN books ON books.id = bookmarks.book_id
                  INNER JOIN chapters ON chapters.id = bookmarks.chapter_id
+                 INNER JOIN sentences
+                   ON sentences.id = bookmarks.sentence_id
+                  AND sentences.book_id = bookmarks.book_id
+                  AND sentences.chapter_id = bookmarks.chapter_id
                  WHERE bookmarks.id = ?1",
                 params![bookmark_id],
                 read_bookmark_row,
@@ -2311,8 +2341,8 @@ mod tests {
     fn persists_bookmarks_searches_sentences_and_exports_book_data() {
         let temp_dir = temp_store_dir();
         fs::create_dir_all(&temp_dir).expect("test store dir should be created");
-        let store = SonelleStore::open_at(temp_dir.join("sonelle.sqlite3"))
-            .expect("store should initialize");
+        let db_path = temp_dir.join("sonelle.sqlite3");
+        let store = SonelleStore::open_at(db_path.clone()).expect("store should initialize");
         store
             .save_imported_book(ImportedBook {
                 id: "book-search".to_string(),
@@ -2339,11 +2369,17 @@ mod tests {
                 book_id: "book-search".to_string(),
                 chapter_id: "book-search:chapter-1".to_string(),
                 sentence_id: "book-search:chapter-1:sentence-2".to_string(),
-                sentence_index: 1,
-                text: "The bookmark target appears here.".to_string(),
                 note: None,
             })
             .expect("bookmark should save");
+        let duplicate = store
+            .save_bookmark(SaveBookmarkRequest {
+                book_id: "book-search".to_string(),
+                chapter_id: "book-search:chapter-1".to_string(),
+                sentence_id: "book-search:chapter-1:sentence-2".to_string(),
+                note: None,
+            })
+            .expect("duplicate bookmark should update idempotently");
         let bookmarks = store
             .list_bookmarks(Some("book-search"))
             .expect("bookmarks should list");
@@ -2359,18 +2395,66 @@ mod tests {
             .expect("book should export");
 
         assert_eq!(bookmarks.len(), 1);
+        assert_eq!(duplicate.id, bookmark.id);
         assert_eq!(bookmarks[0].sentence_index, 1);
+        assert_eq!(bookmarks[0].text, "The bookmark target appears here.");
         assert!(results.iter().any(|result| result.kind == "sentence"));
         assert_eq!(exported.book.title, "Searchable Book");
         assert_eq!(exported.bookmarks.len(), 1);
 
-        store
+        drop(store);
+        let restarted = SonelleStore::open_at(db_path.clone()).expect("store should restart");
+        assert_eq!(
+            restarted
+                .list_bookmarks(Some("book-search"))
+                .expect("bookmark should survive restart")
+                .len(),
+            1
+        );
+        restarted
             .delete_bookmark(&bookmark.id)
             .expect("bookmark should delete");
-        assert!(store
+        assert!(restarted
             .list_bookmarks(Some("book-search"))
             .expect("bookmarks should list")
             .is_empty());
+
+        assert!(restarted
+            .save_bookmark(SaveBookmarkRequest {
+                book_id: "book-search".to_string(),
+                chapter_id: "book-search:chapter-1".to_string(),
+                sentence_id: "missing-sentence".to_string(),
+                note: None,
+            })
+            .expect_err("missing targets should fail safely")
+            .contains("no longer available"));
+
+        let stale = restarted
+            .save_bookmark(SaveBookmarkRequest {
+                book_id: "book-search".to_string(),
+                chapter_id: "book-search:chapter-1".to_string(),
+                sentence_id: "book-search:chapter-1:sentence-2".to_string(),
+                note: None,
+            })
+            .expect("bookmark should save again");
+        let connection = Connection::open(&db_path).expect("raw test connection should open");
+        connection
+            .execute_batch("PRAGMA foreign_keys = OFF;")
+            .expect("test should permit a stale bookmark");
+        connection
+            .execute(
+                "DELETE FROM sentences WHERE id = ?1",
+                params!["book-search:chapter-1:sentence-2"],
+            )
+            .expect("test should remove the bookmark target");
+        drop(connection);
+        assert!(restarted
+            .list_bookmarks(Some("book-search"))
+            .expect("stale bookmarks should be ignored")
+            .is_empty());
+        restarted
+            .delete_bookmark(&stale.id)
+            .expect("stale bookmark cleanup should remain safe");
         fs::remove_dir_all(temp_dir).ok();
     }
 
@@ -2480,8 +2564,6 @@ mod tests {
                     book_id: document.book.id.clone(),
                     chapter_id: largest_chapter.id.clone(),
                     sentence_id: target_sentence.id.clone(),
-                    sentence_index: target_sentence.index,
-                    text: target_sentence.text.clone(),
                     note: None,
                 })
                 .expect("bookmark should save");

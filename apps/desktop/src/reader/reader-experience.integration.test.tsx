@@ -17,8 +17,10 @@ import {
 } from "@sonelle/reader";
 import type { ReaderExperienceDependencies } from "./reader-dependencies";
 import type {
+  BookmarkStore,
   BookImportGateway,
   BookMetadataEditor,
+  LibraryBookmarkDto,
   LibrarySearch,
   LibrarySearchResultDto,
   SaveReadingPositionInput
@@ -362,6 +364,125 @@ describe("ReaderExperience integration", () => {
       })
     );
     await vi.waitFor(() => expect(pause).toHaveBeenCalled());
+
+    dispose();
+    container.remove();
+  });
+
+  it("adds, removes, and opens persisted Android bookmarks through the reader", async () => {
+    const bookId = "book-android-bookmarks";
+    const targetChapterId = `${bookId}-chapter-2`;
+    let saved: LibraryBookmarkDto[] = [
+      {
+        id: "bookmark-restart-target",
+        bookId,
+        bookTitle: "Pocket Bookmarks",
+        chapterId: targetChapterId,
+        chapterTitle: "Second chapter",
+        sentenceId: `${targetChapterId}-sentence-2`,
+        sentenceIndex: 1,
+        text: "The restored target.",
+        note: null,
+        createdAt: "2026-08-11T12:00:00Z"
+      }
+    ];
+    const bookmarkStore: BookmarkStore = {
+      async list(requestedBookId) {
+        return requestedBookId == null
+          ? saved
+          : saved.filter((bookmark) => bookmark.bookId === requestedBookId);
+      },
+      async save(input) {
+        const bookmark: LibraryBookmarkDto = {
+          ...input,
+          id: `bookmark-${input.sentenceId}`,
+          createdAt: "2026-08-11T13:00:00Z"
+        };
+        saved = [
+          bookmark,
+          ...saved.filter(
+            (candidate) =>
+              !(
+                candidate.bookId === input.bookId &&
+                candidate.chapterId === input.chapterId &&
+                candidate.sentenceId === input.sentenceId
+              )
+          )
+        ];
+        return bookmark;
+      },
+      async delete(bookmarkId) {
+        saved = saved.filter((bookmark) => bookmark.id !== bookmarkId);
+      }
+    };
+    const openBook = vi.fn(async (_bookId: string, chapterId?: string) => {
+      const document = createReaderDocument(bookId);
+      document.book.title = "Pocket Bookmarks";
+      document.chapters.push({
+        id: targetChapterId,
+        title: "Second chapter",
+        index: 1,
+        sentenceCount: 2,
+        sentences:
+          chapterId === targetChapterId
+            ? [
+                { id: `${targetChapterId}-sentence-1`, index: 0, text: "Before it." },
+                {
+                  id: `${targetChapterId}-sentence-2`,
+                  index: 1,
+                  text: "The restored target."
+                }
+              ]
+            : []
+      });
+      if (chapterId != null) document.activeChapterId = chapterId;
+      return document;
+    });
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      libraryBooks: [createLibraryBook(bookId, "Pocket Bookmarks", 0)],
+      openBook,
+      bookmarkStore
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    await vi.waitFor(() => expect(openBook).toHaveBeenCalledWith(bookId, undefined));
+
+    const add = await vi.waitFor(() => {
+      const button = container.querySelector<HTMLButtonElement>('[aria-label="Bookmark sentence"]');
+      expect(button).not.toBeNull();
+      return button;
+    });
+    add?.click();
+    await vi.waitFor(() => expect(saved).toHaveLength(2));
+    await vi.waitFor(() =>
+      expect(container.querySelector('[aria-label="Remove bookmark"]')).not.toBeNull()
+    );
+
+    container.querySelector<HTMLButtonElement>('[aria-label="Remove bookmark"]')?.click();
+    await vi.waitFor(() => expect(saved).toHaveLength(1));
+
+    const target = await vi.waitFor(() => {
+      const button = Array.from(
+        container.querySelectorAll<HTMLButtonElement>(".bookmark-card-button")
+      ).find((candidate) => candidate.textContent?.includes("The restored target."));
+      expect(button).not.toBeUndefined();
+      return button;
+    });
+    target?.click();
+
+    await vi.waitFor(() => expect(openBook).toHaveBeenLastCalledWith(bookId, targetChapterId));
+    await vi.waitFor(() =>
+      expect(container.querySelector(".sentence.active")?.textContent).toContain(
+        "The restored target."
+      )
+    );
 
     dispose();
     container.remove();
@@ -1290,6 +1411,7 @@ interface DependencySpies {
   saveReadingPosition?: (position: SaveReadingPositionInput) => Promise<void>;
   captureNarrationProjection?: (project: (event: ReaderNarrationProjectionEvent) => void) => void;
   captureBackground?: (listener: () => void) => void;
+  bookmarkStore?: BookmarkStore;
 }
 
 function createDependencies(spies: DependencySpies): ReaderExperienceDependencies {
@@ -1356,7 +1478,7 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
         spies.updateBookMetadata ??
         vi.fn().mockRejectedValue(new Error("No metadata edit requested"))
     },
-    bookmarkStore: {
+    bookmarkStore: spies.bookmarkStore ?? {
       list: vi.fn().mockResolvedValue([]),
       save: vi.fn().mockRejectedValue(new Error("No bookmark requested")),
       delete: vi.fn().mockResolvedValue(undefined)
