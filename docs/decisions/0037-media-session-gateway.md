@@ -33,6 +33,11 @@ An interruption pauses playback. Sonelle resumes afterward only when playback wa
 interruption and the platform explicitly permits automatic resumption. A user pause or stop clears
 that pending resumption.
 
+Disconnecting the active wired or Bluetooth output is not a resumable interruption. The platform
+adapter emits `output-disconnected`; the playback application pauses without changing the active
+sentence and clears any pending automatic resume. Reconnection never resumes narration on its own.
+Duplicate or delayed disconnect callbacks are idempotent once playback is paused.
+
 Desktop uses a no-op adapter, preserving existing behavior. Tests use a deterministic fake adapter
 that publishes snapshots and drives platform or headset controls without native media APIs. Android
 will provide the first real platform adapter behind the same interface.
@@ -61,6 +66,7 @@ will provide the first real platform adapter behind the same interface.
 ## Testing
 
 - The fake adapter drives play, pause, stop, headset seek, and interruption scenarios.
+- Output-disconnect coverage proves one pause, stable sentence selection, and no automatic resume.
 - Playback application tests assert published book and playback snapshots.
 - Reader-close and disposal tests assert platform-session clearing.
 - Existing narration and playback tests continue to verify highlighting, persistence, jumps, and

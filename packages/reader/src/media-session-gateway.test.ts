@@ -27,6 +27,7 @@ describe("MediaSessionGateway contract", () => {
     gateway.seek(1, "headset");
     gateway.startInterruption();
     gateway.endInterruption(true);
+    gateway.disconnectOutput();
     gateway.clear();
 
     expect(gateway.published).toEqual([snapshot("paused")]);
@@ -37,12 +38,13 @@ describe("MediaSessionGateway contract", () => {
       { type: "stop", source: "platform" },
       { type: "seek", sentenceOffset: 1, source: "headset" },
       { type: "interruption-started" },
-      { type: "interruption-ended", mayResume: true }
+      { type: "interruption-ended", mayResume: true },
+      { type: "output-disconnected" }
     ]);
 
     unsubscribe();
     gateway.play();
-    expect(intents).toHaveLength(6);
+    expect(intents).toHaveLength(7);
   });
 });
 

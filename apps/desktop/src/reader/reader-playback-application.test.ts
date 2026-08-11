@@ -95,6 +95,25 @@ describe("reader playback application", () => {
     harness.application.dispose();
   });
 
+  it("pauses once without advancing or auto-resuming when the active output disconnects", async () => {
+    const harness = createHarness();
+    const disconnect = harness.application.start();
+    harness.setPlayback({ activeSentenceIndex: 1, status: "playing" });
+
+    harness.mediaSession.disconnectOutput();
+    harness.mediaSession.disconnectOutput();
+
+    expect(harness.playback()).toEqual({ activeSentenceIndex: 1, status: "paused" });
+    await vi.waitFor(() => expect(harness.pause).toHaveBeenCalledOnce());
+
+    harness.mediaSession.endInterruption(true);
+    expect(harness.playback()).toEqual({ activeSentenceIndex: 1, status: "paused" });
+    expect(harness.requestPlayback).not.toHaveBeenCalled();
+
+    disconnect();
+    harness.application.dispose();
+  });
+
   it("waits for an in-flight pause before resuming narration", async () => {
     let finishPause: (() => void) | undefined;
     const harness = createHarness({
