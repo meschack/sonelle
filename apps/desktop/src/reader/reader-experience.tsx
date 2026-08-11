@@ -113,6 +113,7 @@ import { ReaderKeyboardShortcutReference } from "./reader-keyboard-shortcut-refe
 import { ReaderCommandPalette } from "./reader-command-palette";
 import { ReaderQuoteImageDialog } from "./reader-quote-image-dialog";
 import { FocusIcon } from "./reader-icons";
+import { MobileReaderShell } from "./mobile-reader-shell";
 import {
   renderedLibraryGridColumnCount,
   resolveLibraryGridNavigationIndex,
@@ -213,6 +214,16 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     readerPreferences.inspectorRailWidth
   );
   const [activeView, setActiveView] = createSignal<AppView>("reader");
+  const [mobileReaderShell, setMobileReaderShell] = createSignal(
+    dependencies.readerShellViewport.isMobile()
+  );
+  const [mobileToolsOpen, setMobileToolsOpen] = createSignal(false);
+  onCleanup(
+    dependencies.readerShellViewport.listen((mobile) => {
+      setMobileReaderShell(mobile);
+      if (!mobile) setMobileToolsOpen(false);
+    })
+  );
   const [focusLibrarySearchPending, setFocusLibrarySearchPending] = createSignal(false);
   const [shortcutReferenceOpen, setShortcutReferenceOpen] = createSignal(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = createSignal(false);
@@ -1479,6 +1490,126 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     }
   } satisfies ReaderContentInteractions;
 
+  const readerNavigation = () => (
+    <>
+      <ChapterNavigator
+        chapters={reader().chapters}
+        activeChapterId={reader().chapter.id}
+        progress={readerProgress()}
+        volume={reader().book.author || reader().book.title}
+        onOpenChapter={openChapter}
+      />
+      <ReaderContentsNavigator
+        items={reader().contents}
+        activeChapterId={reader().chapter.id}
+        onOpenLocation={navigationApplication.openLocation}
+      />
+    </>
+  );
+
+  const readerReadingColumn = () => (
+    <ReaderContentProvider interactions={readerContentInteractions}>
+      <div class="reader-layout">
+        <div class="audio-margin" aria-hidden="true">
+          <For each={visibleSentences()}>
+            {(sentence) => (
+              <span
+                classList={{
+                  marker: true,
+                  active: highlight().activeSentenceId === sentence.id,
+                  bookmarked: bookmarkedSentenceIds().has(sentence.id)
+                }}
+              />
+            )}
+          </For>
+        </div>
+
+        <article
+          class="page"
+          aria-label={`${reader().chapter.title} text`}
+          style={{ "font-size": `${readerContentFontSize()}px` }}
+        >
+          <h1 class="article-title">{reader().chapter.title}</h1>
+          <Show when={visibleSentenceRange().hiddenBefore > 0}>
+            <button
+              class="sentence-window-jump"
+              type="button"
+              onClick={() => selectSentence(visibleSentenceRange().start - 1)}
+            >
+              Previous {Math.min(renderedSentenceLead, visibleSentenceRange().hiddenBefore)}{" "}
+              sentences
+            </button>
+          </Show>
+          <For each={visibleParagraphs()}>
+            {(paragraph) => (
+              <ReaderParagraph
+                paragraph={paragraph}
+                visibleStartIndex={visibleSentenceRange().start}
+                visibleEndIndex={visibleSentenceRange().end}
+              />
+            )}
+          </For>
+          <Show when={visibleSentenceRange().hiddenAfter > 0}>
+            <button
+              class="sentence-window-jump"
+              type="button"
+              onClick={() => selectSentence(visibleSentenceRange().end)}
+            >
+              Next {Math.min(renderedSentenceTrail, visibleSentenceRange().hiddenAfter)} sentences
+            </button>
+          </Show>
+        </article>
+      </div>
+    </ReaderContentProvider>
+  );
+
+  const playbackRail = () => (
+    <PlaybackRail
+      bookTitle={reader().book.title}
+      author={reader().book.author}
+      coverImageSrc={reader().book.coverImageSrc}
+      chapterTitle={reader().chapter.title}
+      progress={readerProgress()}
+      sentenceCount={reader().sentences.length}
+      status={playback().status}
+      bookmarked={activeBookmark() != null}
+      volume={audioSettings().volume}
+      onPrevious={() => moveSentence(-1)}
+      onToggle={togglePlayback}
+      onNext={() => moveSentence(1)}
+      onToggleBookmark={() => void toggleActiveBookmark()}
+      onVolumeChange={updateVolume}
+      onToggleMute={toggleMute}
+    />
+  );
+
+  const readerFeedback = () => (
+    <Show
+      when={narrationNotice()}
+      fallback={
+        <Show
+          when={quoteImageNotice()}
+          fallback={
+            <Show when={showNarrationPreparation()}>
+              <ReaderToast tone="pending" message="Getting the next part ready to play." />
+            </Show>
+          }
+        >
+          {(notice) => (
+            <ReaderToast
+              title={notice().title}
+              tone={notice().tone}
+              message={notice().message}
+              onDismiss={() => setQuoteImageNotice(null)}
+            />
+          )}
+        </Show>
+      }
+    >
+      {(notice) => <ReaderToast message={notice()} onDismiss={() => setNarrationNotice(null)} />}
+    </Show>
+  );
+
   const subscriptions = [
     eventDispatcher.subscribe("ReaderOpened", (event) =>
       libraryApplication.refreshBookmarks(event.payload.bookId)
@@ -1487,6 +1618,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       batch(() => {
         setActiveView("library");
         setDistractionFree(false);
+        setMobileToolsOpen(false);
         sendLibraryRailEvent({ type: "library-opened" });
       });
     }),
@@ -1513,12 +1645,16 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         "--bookmark-highlight-ink": readableInkForColor(bookmarkHighlightColor())
       }}
     >
-      <ProductBar
-        showQuoteImageAction={activeView() === "reader"}
-        canSaveQuoteImage={reader().sentences.length > 0 && quoteImageNotice()?.tone !== "pending"}
-        onSaveQuoteImage={() => setQuoteImageDialogOpen(true)}
-        onOpenShortcutReference={() => setShortcutReferenceOpen(true)}
-      />
+      <Show when={activeView() !== "reader" || !mobileReaderShell()}>
+        <ProductBar
+          showQuoteImageAction={activeView() === "reader"}
+          canSaveQuoteImage={
+            reader().sentences.length > 0 && quoteImageNotice()?.tone !== "pending"
+          }
+          onSaveQuoteImage={() => setQuoteImageDialogOpen(true)}
+          onOpenShortcutReference={() => setShortcutReferenceOpen(true)}
+        />
+      </Show>
       <Show when={activeView() === "reader" && distractionFree()}>
         <button
           class="distraction-free-exit"
@@ -1555,155 +1691,73 @@ export function ReaderExperience(props: ReaderExperienceProps) {
           }}
         />
       </Show>
-      <LibraryRail model={libraryRailModel} />
-      <SidebarResizeHandle
-        sidebar="library"
-        edge="right"
-        width={libraryRailWidth()}
-        defaultWidth={sidebarDefaultWidths.library}
-        getBounds={() => getSidebarBounds("library")}
-        onWidthChange={updateLibraryRailWidth}
-      />
+      <Show when={activeView() !== "reader" || !mobileReaderShell()}>
+        <LibraryRail model={libraryRailModel} />
+        <SidebarResizeHandle
+          sidebar="library"
+          edge="right"
+          width={libraryRailWidth()}
+          defaultWidth={sidebarDefaultWidths.library}
+          getBounds={() => getSidebarBounds("library")}
+          onWidthChange={updateLibraryRailWidth}
+        />
+      </Show>
 
       <Show
         when={activeView() === "reader"}
         fallback={<LibraryWorkspace model={libraryWorkspaceModel} />}
       >
-        <section class="reader-surface" aria-label="Reader">
-          <ReaderTopAppBar
-            chapterTitle={reader().chapter.title}
-            activeChapterId={reader().chapter.id}
-            chapters={reader().chapters}
-            sentenceCount={reader().sentences.length}
-            onOpenSearch={() => setInspectorTab("search")}
-            onOpenSettings={() => setInspectorTab("settings")}
-            onEnterDistractionFree={toggleDistractionFree}
-          />
-
-          <ChapterNavigator
-            chapters={reader().chapters}
-            activeChapterId={reader().chapter.id}
-            progress={readerProgress()}
-            volume={reader().book.author || reader().book.title}
-            onOpenChapter={openChapter}
-          />
-
-          <ReaderContentsNavigator
-            items={reader().contents}
-            activeChapterId={reader().chapter.id}
-            onOpenLocation={navigationApplication.openLocation}
-          />
-
-          <ReaderContentProvider interactions={readerContentInteractions}>
-            <div class="reader-layout">
-              <div class="audio-margin" aria-hidden="true">
-                <For each={visibleSentences()}>
-                  {(sentence) => (
-                    <span
-                      classList={{
-                        marker: true,
-                        active: highlight().activeSentenceId === sentence.id,
-                        bookmarked: bookmarkedSentenceIds().has(sentence.id)
-                      }}
-                    />
-                  )}
-                </For>
-              </div>
-
-              <article
-                class="page"
-                aria-label={`${reader().chapter.title} text`}
-                style={{ "font-size": `${readerContentFontSize()}px` }}
-              >
-                <h1 class="article-title">{reader().chapter.title}</h1>
-                <Show when={visibleSentenceRange().hiddenBefore > 0}>
-                  <button
-                    class="sentence-window-jump"
-                    type="button"
-                    onClick={() => selectSentence(visibleSentenceRange().start - 1)}
-                  >
-                    Previous {Math.min(renderedSentenceLead, visibleSentenceRange().hiddenBefore)}{" "}
-                    sentences
-                  </button>
-                </Show>
-                <For each={visibleParagraphs()}>
-                  {(paragraph) => (
-                    <ReaderParagraph
-                      paragraph={paragraph}
-                      visibleStartIndex={visibleSentenceRange().start}
-                      visibleEndIndex={visibleSentenceRange().end}
-                    />
-                  )}
-                </For>
-                <Show when={visibleSentenceRange().hiddenAfter > 0}>
-                  <button
-                    class="sentence-window-jump"
-                    type="button"
-                    onClick={() => selectSentence(visibleSentenceRange().end)}
-                  >
-                    Next {Math.min(renderedSentenceTrail, visibleSentenceRange().hiddenAfter)}{" "}
-                    sentences
-                  </button>
-                </Show>
-              </article>
-            </div>
-          </ReaderContentProvider>
-        </section>
-
-        <ReaderInspector model={inspectorModel} />
-        <SidebarResizeHandle
-          sidebar="inspector"
-          edge="left"
-          width={inspectorRailWidth()}
-          defaultWidth={sidebarDefaultWidths.inspector}
-          getBounds={() => getSidebarBounds("inspector")}
-          onWidthChange={updateInspectorRailWidth}
-        />
-
         <Show
-          when={narrationNotice()}
+          when={mobileReaderShell()}
           fallback={
-            <Show
-              when={quoteImageNotice()}
-              fallback={
-                <Show when={showNarrationPreparation()}>
-                  <ReaderToast tone="pending" message="Getting the next part ready to play." />
-                </Show>
-              }
-            >
-              {(notice) => (
-                <ReaderToast
-                  title={notice().title}
-                  tone={notice().tone}
-                  message={notice().message}
-                  onDismiss={() => setQuoteImageNotice(null)}
+            <>
+              <section class="reader-surface" aria-label="Reader">
+                <ReaderTopAppBar
+                  chapterTitle={reader().chapter.title}
+                  activeChapterId={reader().chapter.id}
+                  chapters={reader().chapters}
+                  sentenceCount={reader().sentences.length}
+                  onOpenSearch={() => setInspectorTab("search")}
+                  onOpenSettings={() => setInspectorTab("settings")}
+                  onEnterDistractionFree={toggleDistractionFree}
                 />
-              )}
-            </Show>
+                {readerNavigation()}
+                {readerReadingColumn()}
+              </section>
+              <ReaderInspector model={inspectorModel} />
+              <SidebarResizeHandle
+                sidebar="inspector"
+                edge="left"
+                width={inspectorRailWidth()}
+                defaultWidth={sidebarDefaultWidths.inspector}
+                getBounds={() => getSidebarBounds("inspector")}
+                onWidthChange={updateInspectorRailWidth}
+              />
+              {playbackRail()}
+            </>
           }
         >
-          {(notice) => (
-            <ReaderToast message={notice()} onDismiss={() => setNarrationNotice(null)} />
-          )}
+          <MobileReaderShell
+            bookTitle={reader().book.title}
+            chapterTitle={reader().chapter.title}
+            navigation={readerNavigation()}
+            content={readerReadingColumn()}
+            tools={<ReaderInspector model={inspectorModel} />}
+            playback={playbackRail()}
+            toolsOpen={mobileToolsOpen()}
+            onBackToLibrary={() => openAppView("library")}
+            onOpenSearch={() => {
+              setInspectorTab("search");
+              setMobileToolsOpen(true);
+            }}
+            onOpenTools={() => {
+              setInspectorTab("settings");
+              setMobileToolsOpen(true);
+            }}
+            onCloseTools={() => setMobileToolsOpen(false)}
+          />
         </Show>
-
-        <PlaybackRail
-          bookTitle={reader().book.title}
-          author={reader().book.author}
-          coverImageSrc={reader().book.coverImageSrc}
-          chapterTitle={reader().chapter.title}
-          progress={readerProgress()}
-          sentenceCount={reader().sentences.length}
-          status={playback().status}
-          bookmarked={activeBookmark() != null}
-          volume={audioSettings().volume}
-          onPrevious={() => moveSentence(-1)}
-          onToggle={togglePlayback}
-          onNext={() => moveSentence(1)}
-          onToggleBookmark={() => void toggleActiveBookmark()}
-          onVolumeChange={updateVolume}
-          onToggleMute={toggleMute}
-        />
+        {readerFeedback()}
       </Show>
     </main>
   );
