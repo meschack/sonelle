@@ -14,6 +14,7 @@ import {
   SpeakerIcon,
   SettingsIcon
 } from "./reader-icons";
+import { containMobileDialogFocus } from "./mobile-dialog-focus";
 
 interface ProductBarProps {
   showQuoteImageAction: boolean;
@@ -236,6 +237,10 @@ export function ReaderContentsNavigator(props: ReaderContentsNavigatorProps) {
             role="dialog"
             aria-modal="true"
             aria-label="Table of contents"
+            tabindex="-1"
+            onKeyDown={(event) =>
+              containMobileDialogFocus(event, event.currentTarget, closeContents)
+            }
           >
             <header>
               <div>

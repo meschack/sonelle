@@ -406,6 +406,11 @@ describe("ReaderExperience integration", () => {
     });
     expect(librarySheet?.textContent).toContain("Another Book");
     expect(librarySheet?.textContent).toContain("40% read");
+    expect(
+      container
+        .querySelector('[data-mobile-library-book="mobile-second"]')
+        ?.getAttribute("aria-label")
+    ).toContain("Another Book, Library Author, 40% read");
     expect(document.activeElement?.textContent).toContain("Back to reading");
 
     container.querySelector<HTMLElement>(".mobile-reader-sheet-backdrop")?.click();

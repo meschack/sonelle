@@ -35,11 +35,21 @@ the controls affordance into a recovery link; the Reading tools sheet remains th
 voice, speed, sleep, and offline preparation controls. The dock does not prepare audio, persist
 position, or interpret engine callbacks.
 
+The dock exposes one named narration group and transport group. Its visible playback label describes
+current truth without becoming a live region. Only preparation and actionable attention messages use
+polite/status or alert announcements, so sentence highlighting and ordinary playback transitions do
+not flood accessibility services.
+
 The EPUB contents navigator remains owned by shared reader chrome. On mobile it uses the same
 touch-safe sheet language as the Library while preserving publisher hierarchy and anchor targets.
 Both sheets push a temporary history entry, close on Android Back or their scrim, move focus into the
 sheet on open, and restore focus to their trigger on dismissal. None of those presentation actions
 changes the active sentence or scroll container.
+
+Library, tools, and contents dialogs share `containMobileDialogFocus`. It keeps Tab and Shift+Tab
+inside the active modal, closes on Escape, and leaves Back/history ownership with each surface.
+Dialogs expose labelled headings; Library rows summarize book identity and progress as one control.
+Focus containment owns no navigation or application state.
 
 The contextual tools sheet composes the existing Word, Search, Notes, and Tools inspector rather than
 forking mobile-only use cases. Tapping a word on a phone opens its insight in that sheet; the anchored
@@ -74,6 +84,8 @@ chapter, content, tool, and playback actions remain owned by their existing appl
 - mobile narration controls invoke the shared playback application; desktop keeps its existing rail
 - safe-area padding adds breathing room to system insets rather than replacing it
 - narrow and large-text layouts wrap or scroll; essential controls never shrink below 48 pixels
+- an open mobile modal contains keyboard focus and restores it to the invoking control on close
+- narration announcements are reserved for preparation and actionable failures
 - tools are temporary chrome; closing them leaves the reading column and position unchanged
 
 ## Tests
@@ -99,3 +111,8 @@ The mobile layout contract pins representative portrait/narrow, large-text, and 
 rules: edge-to-edge viewport support, 48-pixel targets, safe-area coverage, ordered scroll regions,
 and the wrapped narrow dock. Rendered device QA remains the final check for manufacturer-specific
 system bars and font scaling.
+
+Focus tests cover forward and reverse wrapping plus Escape. Component and composed-reader coverage
+prove labelled dialogs, focus entry/restoration, summarized Library controls, named narration
+transport, and deliberately sparse preparation/failure live regions. TalkBack remains the final
+device check for service-specific reading order and speech behavior.
