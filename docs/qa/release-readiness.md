@@ -44,3 +44,9 @@ Run the local Kokoro/Supertonic QA path before treating the hybrid narration rou
 hands-on testing:
 
 - [Hybrid Narration Local QA - 2026-07-14](hybrid-narration-local-qa-2026-07-14.md)
+
+## Android Architecture Evidence
+
+After both baseline devices complete the benchmark contract, combine their exact-build results with
+the [Android core-flow evidence report](android-core-flow-report.md). Pending checks, mismatched
+builds, or failures without focused follow-up issues are not release evidence.
