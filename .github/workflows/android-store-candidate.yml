@@ -63,7 +63,7 @@ jobs:
           test "$(gh issue view 133 --json state --jq .state)" = "CLOSED"
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: lts/*
 
