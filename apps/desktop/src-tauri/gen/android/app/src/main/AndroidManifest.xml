@@ -32,7 +32,7 @@
                 <data android:mimeType="application/epub+zip" />
                 <data android:pathPattern=".*\\.epub" />
             </intent-filter>
-            
+
             <!-- tauri-file-associations. AUTO-GENERATED. DO NOT REMOVE. -->
         </activity>
 
