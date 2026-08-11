@@ -16,6 +16,7 @@
       "@sonelle/domain": ["./packages/domain/src/index.ts"],
       "@sonelle/text": ["./packages/text/src/index.ts"],
       "@sonelle/reader": ["./packages/reader/src/index.ts"],
+      "@sonelle/reader/testing": ["./packages/reader/src/media-session-fakes.ts"],
       "@sonelle/library": ["./packages/library/src/index.ts"],
       "@sonelle/audio": ["./packages/audio/src/index.ts"],
       "@sonelle/audio/compatibility": ["./packages/audio/src/narration-compatibility-api.ts"],

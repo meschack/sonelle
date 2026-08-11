@@ -29,6 +29,7 @@ export default defineConfig({
       "@sonelle/audio/testing": resolve(root, "packages/audio/src/narration-fakes.ts"),
       "@sonelle/domain": resolve(root, "packages/domain/src/index.ts"),
       "@sonelle/text": resolve(root, "packages/text/src/index.ts"),
+      "@sonelle/reader/testing": resolve(root, "packages/reader/src/media-session-fakes.ts"),
       "@sonelle/reader": resolve(root, "packages/reader/src/index.ts"),
       "@sonelle/library": resolve(root, "packages/library/src/index.ts"),
       "@sonelle/audio": resolve(root, "packages/audio/src/index.ts"),

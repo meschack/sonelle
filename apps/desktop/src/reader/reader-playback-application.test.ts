@@ -3,6 +3,7 @@ import { DEFAULT_AUDIO_SETTINGS } from "@sonelle/audio";
 import type { NarrationGateway } from "@sonelle/audio/narration";
 import { createDomainEvent, createDomainEventDispatcher } from "@sonelle/domain";
 import { createPlaybackState, type ReaderPlaybackState } from "@sonelle/reader";
+import { FakeMediaSessionGateway } from "@sonelle/reader/testing";
 import type { SaveReadingPositionInput } from "../library/library-contracts";
 import {
   createReaderPlaybackApplication,
@@ -38,6 +39,95 @@ describe("reader playback application", () => {
       sentenceIndex: 1
     });
     harness.application.dispose();
+  });
+
+  it("publishes the active book and playback state to the platform session", () => {
+    const harness = createHarness();
+    harness.setPlayback({ activeSentenceIndex: 1, status: "playing" });
+
+    harness.application.playbackChanged();
+
+    expect(harness.mediaSession.published[harness.mediaSession.published.length - 1]).toEqual({
+      book: {
+        id: harness.reader().book.id,
+        title: harness.reader().book.title,
+        author: harness.reader().book.author,
+        coverImageSrc: harness.reader().book.coverImageSrc
+      },
+      chapter: {
+        id: harness.reader().chapter.id,
+        title: harness.reader().chapter.title
+      },
+      activeSentence: {
+        id: harness.reader().sentences[1].id,
+        index: 1,
+        count: harness.reader().sentences.length
+      },
+      playbackStatus: "playing"
+    });
+    harness.application.dispose();
+  });
+
+  it("accepts play, pause, stop, and headset seek intents through the platform session", async () => {
+    const harness = createHarness();
+    const disconnect = harness.application.start();
+
+    harness.mediaSession.play("headset");
+    expect(harness.playback().status).toBe("playing");
+    harness.application.playbackChanged();
+    expect(harness.requestPlayback).toHaveBeenCalledWith(harness.reader().sentences[0].id);
+
+    harness.mediaSession.seek(1, "headset");
+    await vi.waitFor(() => expect(harness.playback().activeSentenceIndex).toBe(1));
+    await vi.waitFor(() =>
+      expect(harness.requestPlayback).toHaveBeenLastCalledWith(harness.reader().sentences[1].id)
+    );
+
+    harness.mediaSession.pause("headset");
+    expect(harness.playback().status).toBe("paused");
+    expect(harness.pause).toHaveBeenCalled();
+
+    harness.mediaSession.play();
+    harness.mediaSession.stop();
+    expect(harness.playback().status).toBe("paused");
+    expect(harness.reset).toHaveBeenCalled();
+    disconnect();
+    harness.application.dispose();
+  });
+
+  it("resumes only when the platform permits an interrupted session to continue", () => {
+    const harness = createHarness();
+    const disconnect = harness.application.start();
+    harness.setPlayback({ activeSentenceIndex: 1, status: "playing" });
+
+    harness.mediaSession.startInterruption();
+    expect(harness.playback().status).toBe("paused");
+    harness.mediaSession.endInterruption(true);
+    expect(harness.playback().status).toBe("playing");
+
+    harness.mediaSession.startInterruption();
+    harness.mediaSession.endInterruption(false);
+    expect(harness.playback().status).toBe("paused");
+    disconnect();
+    harness.application.dispose();
+  });
+
+  it("clears platform state when the reader closes and when playback is disposed", async () => {
+    const harness = createHarness();
+    const disconnect = harness.application.start();
+
+    await harness.dispatcher.dispatch(
+      createDomainEvent("ReaderClosed", {
+        bookId: harness.reader().book.id,
+        chapterId: harness.reader().chapter.id,
+        sentenceId: harness.reader().sentences[0].id
+      })
+    );
+    expect(harness.mediaSession.clearCount).toBe(1);
+
+    disconnect();
+    harness.application.dispose();
+    expect(harness.mediaSession.clearCount).toBe(2);
   });
 
   it("resumes narration at the selected sentence after a jump while playing", async () => {
@@ -197,6 +287,7 @@ function createHarness(
   });
   const advanceChapter = vi.fn().mockResolvedValue(undefined);
   const dispatcher = createDomainEventDispatcher();
+  const mediaSession = new FakeMediaSessionGateway();
   const narration = {
     prepare: vi.fn().mockResolvedValue(undefined),
     readiness: vi.fn(() => "ready" as const),
@@ -213,6 +304,7 @@ function createHarness(
   application = createReaderPlaybackApplication(
     {
       narration,
+      mediaSession,
       eventDispatcher: dispatcher,
       positions: { save: savePosition },
       preparesAcrossChapters: true,
@@ -262,6 +354,7 @@ function createHarness(
     requestPlayback: narration.start,
     operations,
     advanceChapter,
-    dispatcher
+    dispatcher,
+    mediaSession
   };
 }

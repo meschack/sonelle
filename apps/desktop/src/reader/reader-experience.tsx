@@ -365,6 +365,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const playbackApplication = createReaderPlaybackApplication(
     {
       narration: narrationGateway,
+      mediaSession: dependencies.mediaSession,
       eventDispatcher,
       positions: dependencies.readingPositionStore,
       preparesAcrossChapters: narrationService.capabilities.preparesAcrossChapters,

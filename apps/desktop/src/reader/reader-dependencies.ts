@@ -1,4 +1,5 @@
 import { createDomainEventDispatcher, type DomainEventDispatcher } from "@sonelle/domain";
+import { createNoopMediaSessionGateway, type MediaSessionGateway } from "@sonelle/reader";
 import {
   activateAudioSettingsForLanguage,
   activateHybridAudioSettingsForLanguage,
@@ -136,6 +137,7 @@ export interface ReaderExperienceDependencies {
   externalLinkOpener: ExternalLinkOpener;
   fontCatalog: SystemFontCatalog;
   librarySearch: LibrarySearch;
+  mediaSession: MediaSessionGateway;
   narration: ReaderNarrationService;
   quoteImageExporter: QuoteImageExporter;
   readerPreferencesRepository: ReaderPreferencesRepository;
@@ -181,6 +183,7 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
     externalLinkOpener: createExternalLinkOpener(),
     fontCatalog: createSystemFontCatalog(),
     librarySearch: createLibrarySearch(),
+    mediaSession: createNoopMediaSessionGateway(),
     narration: {
       capabilities: {
         offlineLibrary: usesLanguagePacks ? "language-pack" : "individual-voice",

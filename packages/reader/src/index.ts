@@ -1,5 +1,14 @@
 import type { DomainEvent, SentenceRef } from "@sonelle/domain";
 
+export {
+  createNoopMediaSessionGateway,
+  type MediaSessionGateway,
+  type MediaSessionIntent,
+  type MediaSessionIntentSource,
+  type MediaSessionPlaybackStatus,
+  type MediaSessionSnapshot
+} from "./media-session-gateway";
+
 export type PlaybackStatus = "idle" | "playing" | "paused" | "ended";
 export type ReaderToolTab = "word" | "search" | "bookmarks" | "settings";
 export type ReaderLibraryFilterPreference = "all" | "in-progress" | "bookmarked";
