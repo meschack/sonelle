@@ -2,7 +2,8 @@ use std::{collections::HashMap, path::Path};
 
 use crate::{
     epub_import::{
-        import_epub_file, ImportError, ImportedBook, ImportedCover, ImportedLink, ImportedReference,
+        import_epub_file, ImportError, ImportedBook, ImportedCover, ImportedLink,
+        ImportedNavigationItem, ImportedReference,
     },
     text::segment_normalized_paragraphs,
 };
@@ -15,7 +16,17 @@ pub struct PreparedBookImport {
     pub language: Option<String>,
     pub cover_image: Option<ImportedCover>,
     pub source_path: String,
+    pub navigation: Vec<PreparedNavigationItem>,
     pub chapters: Vec<PreparedChapterImport>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreparedNavigationItem {
+    pub label: String,
+    pub depth: usize,
+    pub target_chapter_id: Option<String>,
+    pub target_sentence_index: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -96,6 +107,7 @@ pub fn prepare_imported_book(book: ImportedBook) -> PreparedBookImport {
             )
         })
         .collect::<HashMap<_, _>>();
+    let navigation = prepare_navigation(&book.navigation, &prepared_chapter_texts);
     PreparedBookImport {
         id: book.id,
         title: book.title,
@@ -103,6 +115,7 @@ pub fn prepare_imported_book(book: ImportedBook) -> PreparedBookImport {
         language: book.language,
         cover_image: book.cover_image,
         source_path: book.source_path,
+        navigation,
         chapters: book
             .chapters
             .into_iter()
@@ -145,6 +158,32 @@ pub fn prepare_imported_book(book: ImportedBook) -> PreparedBookImport {
     }
 }
 
+fn prepare_navigation(
+    items: &[ImportedNavigationItem],
+    prepared_chapters: &HashMap<
+        String,
+        (Vec<PreparedSentenceImport>, Vec<PreparedParagraphImport>),
+    >,
+) -> Vec<PreparedNavigationItem> {
+    items
+        .iter()
+        .map(|item| PreparedNavigationItem {
+            label: item.label.clone(),
+            depth: item.depth,
+            target_chapter_id: item.target_chapter_id.clone(),
+            target_sentence_index: item.target_chapter_id.as_ref().map(|chapter_id| {
+                target_sentence_index(
+                    prepared_chapters
+                        .get(chapter_id)
+                        .map(|(sentences, _)| sentences.as_slice())
+                        .unwrap_or_default(),
+                    item.target_text.as_deref(),
+                )
+            }),
+        })
+        .collect()
+}
+
 fn prepare_links(
     body: &str,
     links: &[ImportedLink],
@@ -171,23 +210,31 @@ fn prepare_links(
                 href: link.href.clone(),
                 target_chapter_id: link.target_chapter_id.clone(),
                 target_sentence_index: link.target_chapter_id.as_ref().map(|chapter_id| {
-                    let target_sentences = prepared_chapters
-                        .get(chapter_id)
-                        .map(|(sentences, _)| sentences.as_slice())
-                        .unwrap_or_default();
-                    link.target_text
-                        .as_deref()
-                        .and_then(|target| {
-                            target_sentences.iter().find(|sentence| {
-                                sentence.text.contains(target) || target.contains(&sentence.text)
-                            })
-                        })
-                        .map(|sentence| sentence.index)
-                        .unwrap_or(0)
+                    target_sentence_index(
+                        prepared_chapters
+                            .get(chapter_id)
+                            .map(|(sentences, _)| sentences.as_slice())
+                            .unwrap_or_default(),
+                        link.target_text.as_deref(),
+                    )
                 }),
             })
         })
         .collect()
+}
+
+fn target_sentence_index(
+    target_sentences: &[PreparedSentenceImport],
+    target_text: Option<&str>,
+) -> usize {
+    target_text
+        .and_then(|target| {
+            target_sentences
+                .iter()
+                .find(|sentence| sentence.text.contains(target) || target.contains(&sentence.text))
+        })
+        .map(|sentence| sentence.index)
+        .unwrap_or(0)
 }
 
 fn sentence_ranges<'a>(
@@ -283,7 +330,9 @@ impl From<ImportedBook> for PreparedBookImport {
 
 #[cfg(test)]
 mod tests {
-    use crate::epub_import::{ImportedBook, ImportedChapter, ImportedLink, ImportedReference};
+    use crate::epub_import::{
+        ImportedBook, ImportedChapter, ImportedLink, ImportedNavigationItem, ImportedReference,
+    };
 
     use super::prepare_imported_book;
 
@@ -296,6 +345,26 @@ mod tests {
             language: Some("en".to_string()),
             cover_image: None,
             source_path: "/tmp/book.epub".to_string(),
+            navigation: vec![
+                ImportedNavigationItem {
+                    label: "Chapter 2".to_string(),
+                    depth: 0,
+                    target_chapter_id: Some("chapter-2".to_string()),
+                    target_text: None,
+                },
+                ImportedNavigationItem {
+                    label: "Target section".to_string(),
+                    depth: 1,
+                    target_chapter_id: Some("chapter-2".to_string()),
+                    target_text: Some("Target section.".to_string()),
+                },
+                ImportedNavigationItem {
+                    label: "Lost appendix".to_string(),
+                    depth: 0,
+                    target_chapter_id: None,
+                    target_text: None,
+                },
+            ],
             chapters: vec![
                 ImportedChapter {
                     id: "chapter-1".to_string(),
@@ -357,5 +426,10 @@ mod tests {
             Some("chapter-2")
         );
         assert_eq!(prepared.chapters[0].links[1].target_sentence_index, Some(1));
+        assert_eq!(prepared.navigation[0].target_sentence_index, Some(0));
+        assert_eq!(prepared.navigation[1].depth, 1);
+        assert_eq!(prepared.navigation[1].target_sentence_index, Some(1));
+        assert_eq!(prepared.navigation[2].target_chapter_id, None);
+        assert_eq!(prepared.navigation[2].target_sentence_index, None);
     }
 }

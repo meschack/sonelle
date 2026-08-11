@@ -53,6 +53,11 @@ position before pausing playback. On a cold start, the library application opens
 latest persisted reading activity; native storage remains the authority for its chapter and sentence
 fallback.
 
+The responsive reader exposes the stored EPUB contents through a temporary touch-safe panel. Its
+entries preserve nesting through indentation and route valid chapter or anchor selections through
+the shared navigation application. Closing the panel returns to the unchanged reader; unavailable
+publisher targets are shown disabled rather than guessed.
+
 ## Domain Events
 
 Library workflows complete their core operation and dispatch the resulting event. `ReaderOpened`
@@ -79,3 +84,5 @@ chapter, link and list presentation, stable sentence range, and bounded mounted 
 tests commit both small and structurally complex fixtures before reopening their reader documents.
 Lifecycle tests cover background flushing and most-recent-book restoration, while the shared
 scheduler tests bound write frequency during narration.
+Contents tests cover nested labels, anchor-level navigation, panel dismissal, and unavailable
+targets across native import, storage, projection, and the composed reader.

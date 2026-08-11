@@ -995,6 +995,114 @@ describe("ReaderExperience integration", () => {
     container.remove();
   });
 
+  it("navigates nested EPUB contents targets and keeps broken entries safe", async () => {
+    const openBook = vi.fn(async (_bookId: string, chapterId?: string) => {
+      const document = createReaderDocument("book-mobile-contents");
+      document.navigation = [
+        {
+          label: "Part One",
+          depth: 0,
+          targetChapterId: "book-mobile-contents-chapter",
+          targetSentenceIndex: 0
+        },
+        {
+          label: "The inner destination",
+          depth: 1,
+          targetChapterId: "book-mobile-contents-target",
+          targetSentenceIndex: 2
+        },
+        {
+          label: "Lost appendix",
+          depth: 0,
+          targetChapterId: null,
+          targetSentenceIndex: null
+        }
+      ];
+      document.chapters.push({
+        id: "book-mobile-contents-target",
+        title: "Target chapter",
+        index: 1,
+        sentenceCount: 3,
+        sentences:
+          chapterId === "book-mobile-contents-target"
+            ? [
+                { id: "target-opening", index: 0, text: "Opening." },
+                { id: "target-middle", index: 1, text: "Middle." },
+                { id: "target-destination", index: 2, text: "Anchor destination." }
+              ]
+            : []
+      });
+      if (chapterId != null) document.activeChapterId = chapterId;
+      return document;
+    });
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      libraryBooks: [createLibraryBook("book-mobile-contents", "Contents Book", 0)],
+      openBook
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    const browse = await vi.waitFor(() => {
+      const button = Array.from(container.querySelectorAll("button")).find(
+        (candidate) => candidate.textContent?.trim() === "Browse contents"
+      );
+      expect(button).not.toBeUndefined();
+      return button;
+    });
+    browse?.click();
+
+    const nested = await vi.waitFor(() => {
+      const button = Array.from(
+        container.querySelectorAll<HTMLButtonElement>(".contents-entry")
+      ).find((candidate) => candidate.textContent?.includes("The inner destination"));
+      expect(button?.style.paddingLeft).toBe("38px");
+      return button;
+    });
+    const broken = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".contents-entry")
+    ).find((candidate) => candidate.textContent?.includes("Lost appendix"));
+    expect(broken?.disabled).toBe(true);
+    nested?.click();
+
+    await vi.waitFor(() =>
+      expect(openBook).toHaveBeenLastCalledWith(
+        "book-mobile-contents",
+        "book-mobile-contents-target"
+      )
+    );
+    await vi.waitFor(() => expect(container.textContent).toContain("Anchor destination."));
+    expect(container.querySelector('[aria-label="Table of contents"]')).toBeNull();
+
+    browse?.click();
+    const back = await vi.waitFor(() => {
+      const button = container.querySelector<HTMLButtonElement>('[aria-label="Back to reading"]');
+      expect(button).not.toBeNull();
+      return button;
+    });
+    back?.click();
+    await vi.waitFor(() =>
+      expect(container.querySelector('[aria-label="Table of contents"]')).toBeNull()
+    );
+    expect(container.textContent).toContain("Anchor destination.");
+
+    browse?.click();
+    await vi.waitFor(() =>
+      expect(container.querySelector('[aria-label="Table of contents"]')).not.toBeNull()
+    );
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    expect(container.querySelector('[aria-label="Table of contents"]')).toBeNull();
+    expect(container.textContent).toContain("Anchor destination.");
+
+    dispose();
+    container.remove();
+  });
+
   it("exports selected neighboring sentences from beside the local storage status", async () => {
     const exportQuoteImage = vi.fn().mockResolvedValue("sonelle-passage.png");
     const dependencies = createDependencies({

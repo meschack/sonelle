@@ -16,6 +16,9 @@ Chapter records persist EPUB references, links, and paragraph presentation metad
 projections. Links retain their sentence-relative UTF-16 range so the webview can render them without
 altering the sentence text used by narration, search, and reading progress. Presentation records keep
 structural kind, indentation, marker, and emphasis separate from normalized chapter text.
+Book records persist the lightweight contents projection separately, including label, depth, chapter
+target, and optional sentence target. Existing libraries migrate with an empty projection and fall
+back to their stored chapter order.
 
 `SonelleStore` exposes library use cases to thin Tauri commands. Transport models live in
 `storage/model.rs`. Domain event dispatch stays outside native storage.
@@ -55,6 +58,7 @@ in-process dispatcher after their core storage operation succeeds.
 - initialization removes the discontinued `domain_events` table from existing libraries
 - opening a persisted book never depends on the continued presence of its managed EPUB source
 - restored reading positions always address the active stored chapter and a bounded sentence index
+- unresolved contents entries cannot manufacture a chapter or sentence destination
 - unmanaged desktop source paths retain their existing behavior and are not polled for health
 - migrations preserve existing local libraries, including the intentional `.readex` compatibility path
 

@@ -41,7 +41,13 @@ import { reportNarrationError, toFriendlyNarrationError } from "../audio/narrati
 import { reportAppError } from "../platform/error-reporting";
 import { toFriendlyLibraryError } from "../library/library-errors";
 import type { LibraryBookmarkDto, LibrarySearchResultDto } from "../library/library-contracts";
-import { ChapterNavigator, PlaybackRail, ProductBar, ReaderTopAppBar } from "./reader-chrome";
+import {
+  ChapterNavigator,
+  PlaybackRail,
+  ProductBar,
+  ReaderContentsNavigator,
+  ReaderTopAppBar
+} from "./reader-chrome";
 import {
   ReaderContentProvider,
   ReaderParagraph,
@@ -1580,6 +1586,12 @@ export function ReaderExperience(props: ReaderExperienceProps) {
             progress={readerProgress()}
             volume={reader().book.author || reader().book.title}
             onOpenChapter={openChapter}
+          />
+
+          <ReaderContentsNavigator
+            items={reader().contents}
+            activeChapterId={reader().chapter.id}
+            onOpenLocation={navigationApplication.openLocation}
           />
 
           <ReaderContentProvider interactions={readerContentInteractions}>

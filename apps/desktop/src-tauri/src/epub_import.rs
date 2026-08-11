@@ -36,7 +36,16 @@ pub struct ImportedBook {
     pub language: Option<String>,
     pub cover_image: Option<ImportedCover>,
     pub source_path: String,
+    pub navigation: Vec<ImportedNavigationItem>,
     pub chapters: Vec<ImportedChapter>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportedNavigationItem {
+    pub label: String,
+    pub depth: usize,
+    pub target_chapter_id: Option<String>,
+    pub target_text: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -157,6 +166,7 @@ pub fn import_epub_file(path: &Path) -> Result<ImportedBook, ImportError> {
     let opf = read_zip_text(&mut archive, &opf_path).ok_or(ImportError::MissingPackage)?;
     let package = parse_package(&opf, &opf_path).ok_or(ImportError::MissingPackage)?;
     let navigation_titles = read_navigation_titles(&mut archive, &package);
+    let navigation_items = read_navigation_items(&mut archive, &package);
     let cover_image = read_cover_image(&mut archive, &package);
     let mut readable_documents = package
         .manifest
@@ -247,6 +257,11 @@ pub fn import_epub_file(path: &Path) -> Result<ImportedBook, ImportError> {
         language: package.language,
         cover_image,
         source_path: path.to_string_lossy().to_string(),
+        navigation: resolve_navigation_items(
+            navigation_items,
+            &readable_documents,
+            &chapter_ids_by_path,
+        ),
         chapters,
     })
 }
@@ -493,6 +508,129 @@ fn read_navigation_titles<R: Read + Seek>(
     }
 
     titles
+}
+
+#[derive(Debug)]
+struct ParsedNavigationItem {
+    label: String,
+    depth: usize,
+    target_path: String,
+    fragment: Option<String>,
+}
+
+fn read_navigation_items<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    package: &PackageDocument,
+) -> Vec<ParsedNavigationItem> {
+    if let Some(nav_path) = &package.nav_path {
+        if let Some(nav_xml) = read_zip_text(archive, nav_path) {
+            let items = parse_epub3_navigation(&nav_xml, nav_path);
+            if !items.is_empty() {
+                return items;
+            }
+        }
+    }
+
+    package
+        .ncx_path
+        .as_ref()
+        .and_then(|ncx_path| {
+            read_zip_text(archive, ncx_path).map(|ncx_xml| parse_ncx_navigation(&ncx_xml, ncx_path))
+        })
+        .unwrap_or_default()
+}
+
+fn parse_epub3_navigation(xml: &str, nav_path: &str) -> Vec<ParsedNavigationItem> {
+    let Ok(document) = parse_epub_xml(xml) else {
+        return Vec::new();
+    };
+    let Some(toc_nav) = document
+        .descendants()
+        .find(|node| node.tag_name().name() == "nav" && has_epub_type(node, "toc"))
+    else {
+        return Vec::new();
+    };
+    let nav_base_dir = epub_parent(nav_path);
+
+    toc_nav
+        .descendants()
+        .filter(|node| node.tag_name().name() == "a")
+        .filter_map(|node| {
+            let href = node.attribute("href")?.trim();
+            let label = normalize_reader_text(&node_text(node));
+            if href.is_empty() || href.contains(':') || label.is_empty() {
+                return None;
+            }
+            let (path, fragment) = href.split_once('#').unwrap_or((href, ""));
+            Some(ParsedNavigationItem {
+                label,
+                depth: node
+                    .ancestors()
+                    .take_while(|ancestor| *ancestor != toc_nav)
+                    .filter(|ancestor| ancestor.tag_name().name() == "li")
+                    .count()
+                    .saturating_sub(1),
+                target_path: normalize_epub_path(&nav_base_dir, path),
+                fragment: (!fragment.is_empty()).then(|| percent_decode_path(fragment)),
+            })
+        })
+        .collect()
+}
+
+fn parse_ncx_navigation(xml: &str, ncx_path: &str) -> Vec<ParsedNavigationItem> {
+    let Ok(document) = parse_epub_xml(xml) else {
+        return Vec::new();
+    };
+    let ncx_base_dir = epub_parent(ncx_path);
+
+    document
+        .descendants()
+        .filter(|node| node.tag_name().name() == "navPoint")
+        .filter_map(|node| {
+            let href = node
+                .children()
+                .find(|child| child.tag_name().name() == "content")?
+                .attribute("src")?
+                .trim();
+            let label = node
+                .children()
+                .find(|child| child.tag_name().name() == "navLabel")
+                .map(node_text)
+                .map(|value| normalize_reader_text(&value))?;
+            if href.is_empty() || href.contains(':') || label.is_empty() {
+                return None;
+            }
+            let (path, fragment) = href.split_once('#').unwrap_or((href, ""));
+            Some(ParsedNavigationItem {
+                label,
+                depth: node
+                    .ancestors()
+                    .filter(|ancestor| ancestor.tag_name().name() == "navPoint")
+                    .count()
+                    .saturating_sub(1),
+                target_path: normalize_epub_path(&ncx_base_dir, path),
+                fragment: (!fragment.is_empty()).then(|| percent_decode_path(fragment)),
+            })
+        })
+        .collect()
+}
+
+fn resolve_navigation_items(
+    items: Vec<ParsedNavigationItem>,
+    readable_documents: &HashMap<String, String>,
+    chapter_ids_by_path: &HashMap<String, String>,
+) -> Vec<ImportedNavigationItem> {
+    items
+        .into_iter()
+        .map(|item| ImportedNavigationItem {
+            label: item.label,
+            depth: item.depth,
+            target_chapter_id: chapter_ids_by_path.get(&item.target_path).cloned(),
+            target_text: item.fragment.as_deref().and_then(|fragment| {
+                target_text_for_fragment(readable_documents, &item.target_path, fragment)
+            }),
+        })
+        .collect()
 }
 
 fn merge_navigation_titles(target: &mut HashMap<String, String>, source: HashMap<String, String>) {
@@ -1071,21 +1209,9 @@ fn resolve_internal_link(
         normalize_epub_path(&epub_parent(chapter_path), path)
     };
     let target_chapter_id = chapter_ids_by_path.get(&target_path)?.clone();
-    let target_text = if fragment.is_empty() {
-        None
-    } else {
-        let target_xml = readable_documents.get(&target_path)?;
-        let document = parse_epub_xml(target_xml).ok()?;
-        let target_id = percent_decode_path(fragment);
-        let target = document
-            .descendants()
-            .find(|node| node.attribute("id") == Some(target_id.as_str()))?;
-        let heading = target
-            .descendants()
-            .find(|node| matches!(node.tag_name().name(), "h1" | "h2" | "h3" | "h4"));
-        let text = normalize_reader_text(&node_text(heading.unwrap_or(target)));
-        (!text.is_empty()).then_some(text)
-    };
+    let target_text = (!fragment.is_empty())
+        .then(|| percent_decode_path(fragment))
+        .and_then(|fragment| target_text_for_fragment(readable_documents, &target_path, &fragment));
     let label = normalize_reader_text(&node_text(anchor));
     (!label.is_empty()).then_some(ResolvedLink {
         label,
@@ -1093,6 +1219,23 @@ fn resolve_internal_link(
         target_chapter_id: Some(target_chapter_id),
         target_text,
     })
+}
+
+fn target_text_for_fragment(
+    readable_documents: &HashMap<String, String>,
+    target_path: &str,
+    fragment: &str,
+) -> Option<String> {
+    let target_xml = readable_documents.get(target_path)?;
+    let document = parse_epub_xml(target_xml).ok()?;
+    let target = document
+        .descendants()
+        .find(|node| node.attribute("id") == Some(fragment))?;
+    let heading = target
+        .descendants()
+        .find(|node| matches!(node.tag_name().name(), "h1" | "h2" | "h3" | "h4"));
+    let text = normalize_reader_text(&node_text(heading.unwrap_or(target)));
+    (!text.is_empty()).then_some(text)
 }
 
 struct ResolvedReference {
@@ -1400,8 +1543,8 @@ mod tests {
 
     use super::{
         extract_chapter_heading, extract_chapter_text, find_package_path, import_epub_file,
-        normalize_epub_path, parse_epub3_nav_titles, parse_ncx_titles, parse_package,
-        read_epub_language, EpubStyles,
+        normalize_epub_path, parse_epub3_nav_titles, parse_epub3_navigation, parse_ncx_navigation,
+        parse_ncx_titles, parse_package, read_epub_language, EpubStyles,
     };
     use crate::{library_import::prepare_epub_import, storage::SonelleStore};
 
@@ -1437,6 +1580,46 @@ mod tests {
             find_package_path(container).as_deref(),
             Some("OPS/content.opf")
         );
+    }
+
+    #[test]
+    fn preserves_nested_epub3_contents_entries_and_anchor_targets() {
+        let entries = parse_epub3_navigation(
+            r#"<html xmlns:epub="http://www.idpf.org/2007/ops">
+              <body><nav epub:type="toc"><ol>
+                <li><a href="../text/part.xhtml">Part One</a><ol>
+                  <li><a href="../text/chapter.xhtml#middle">A deeper chapter</a></li>
+                </ol></li>
+                <li><a href="../missing.xhtml">Missing section</a></li>
+              </ol></nav></body>
+            </html>"#,
+            "OPS/nav/contents.xhtml",
+        );
+
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0].label, "Part One");
+        assert_eq!(entries[0].depth, 0);
+        assert_eq!(entries[1].depth, 1);
+        assert_eq!(entries[1].target_path, "OPS/text/chapter.xhtml");
+        assert_eq!(entries[1].fragment.as_deref(), Some("middle"));
+        assert_eq!(entries[2].target_path, "OPS/missing.xhtml");
+    }
+
+    #[test]
+    fn preserves_ncx_contents_hierarchy_as_a_fallback() {
+        let entries = parse_ncx_navigation(
+            r#"<ncx><navMap>
+              <navPoint><navLabel><text>Part</text></navLabel><content src="part.xhtml" />
+                <navPoint><navLabel><text>Chapter</text></navLabel><content src="chapter.xhtml#start" /></navPoint>
+              </navPoint>
+            </navMap></ncx>"#,
+            "OPS/toc.ncx",
+        );
+
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].depth, 0);
+        assert_eq!(entries[1].depth, 1);
+        assert_eq!(entries[1].fragment.as_deref(), Some("start"));
     }
 
     #[test]
@@ -1653,8 +1836,9 @@ mod tests {
                       <body>
                         <nav epub:type="toc">
                           <ol>
-                            <li><a href="../Text/intro.htm">Opening From Nav</a></li>
-                            <li><a href="../Text/encoded%20chapter.xhtml#part">Encoded Path</a></li>
+                            <li><a href="../Text/intro.htm">Opening From Nav</a><ol>
+                              <li><a href="../Text/encoded%20chapter.xhtml#part">Encoded Path</a></li>
+                            </ol></li>
                           </ol>
                         </nav>
                       </body>
@@ -1674,7 +1858,7 @@ mod tests {
                 ),
                 (
                     "OPS/Text/encoded chapter.xhtml",
-                    r#"<html><body><p>Second readable chapter.</p></body></html>"#,
+                    r#"<html><body><p id="part">Second readable chapter.</p></body></html>"#,
                 ),
             ],
         );
@@ -1690,6 +1874,16 @@ mod tests {
         assert_eq!(book.chapters[0].body, "Hello reader.");
         assert_eq!(book.chapters[1].title, "Encoded Path");
         assert_eq!(book.chapters[1].body, "Second readable chapter.");
+        assert_eq!(book.navigation.len(), 2);
+        assert_eq!(book.navigation[1].depth, 1);
+        assert_eq!(
+            book.navigation[1].target_chapter_id.as_deref(),
+            Some(book.chapters[1].id.as_str())
+        );
+        assert_eq!(
+            book.navigation[1].target_text.as_deref(),
+            Some("Second readable chapter.")
+        );
 
         fs::remove_dir_all(temp_dir).ok();
     }

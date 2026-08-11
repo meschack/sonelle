@@ -51,6 +51,20 @@ describe("fixture reader view", () => {
         coverImageSrc: "data:image/png;base64,Y292ZXI="
       },
       activeChapterId: "chapter-1",
+      navigation: [
+        {
+          label: "One",
+          depth: 0,
+          targetChapterId: "chapter-1",
+          targetSentenceIndex: 0
+        },
+        {
+          label: "A nested anchor",
+          depth: 1,
+          targetChapterId: "chapter-1",
+          targetSentenceIndex: 0
+        }
+      ],
       chapters: [
         {
           id: "chapter-1",
@@ -96,6 +110,20 @@ describe("fixture reader view", () => {
         title: "One",
         index: 0,
         sentenceCount: 1
+      }
+    ]);
+    expect(reader.contents).toEqual([
+      {
+        label: "One",
+        depth: 0,
+        targetChapterId: "chapter-1",
+        targetSentenceIndex: 0
+      },
+      {
+        label: "A nested anchor",
+        depth: 1,
+        targetChapterId: "chapter-1",
+        targetSentenceIndex: 0
       }
     ]);
     expect(tokenizeReaderText(reader.sentences[0]?.text ?? "").map((token) => token.text)).toEqual([

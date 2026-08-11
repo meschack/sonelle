@@ -138,20 +138,26 @@ impl SonelleStore {
             .map_err(|_| "We couldn't inspect the local library.".to_string())?;
         let mut staged_cover = self.stage_cover(&book.id, book.cover_image.as_ref())?;
         let cover_image_src = staged_cover.as_ref().map(StagedCover::source_path);
+        let navigation_json = serde_json::to_string(&book.navigation)
+            .map_err(|_| "We couldn't save that book's contents.".to_string())?;
         let transaction = connection
             .transaction()
             .map_err(|_| "We couldn't save that book.".to_string())?;
 
         transaction
             .execute(
-                "INSERT INTO books (id, title, author, language, cover_image_src, source_path, imported_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                "INSERT INTO books (
+                    id, title, author, language, cover_image_src, source_path, imported_at,
+                    navigation_json
+                 )
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
                  ON CONFLICT(id) DO UPDATE SET
                    title = excluded.title,
                    author = excluded.author,
                    language = excluded.language,
                    cover_image_src = excluded.cover_image_src,
-                   source_path = excluded.source_path",
+                   source_path = excluded.source_path,
+                   navigation_json = excluded.navigation_json",
                 params![
                     book.id,
                     book.title,
@@ -159,7 +165,8 @@ impl SonelleStore {
                     book.language,
                     cover_image_src,
                     book.source_path,
-                    imported_at
+                    imported_at,
+                    navigation_json
                 ],
             )
             .map_err(|_| "We couldn't save that book.".to_string())?;
@@ -459,6 +466,7 @@ impl SonelleStore {
     ) -> Result<ReaderDocumentView, String> {
         let connection = self.connect()?;
         let book = self.read_book(&connection, book_id)?;
+        let navigation = self.read_navigation(&connection, book_id)?;
         let mut chapters = self.read_chapter_summaries(&connection, book_id)?;
         let position = self.read_position(&connection, book_id)?;
         let active_chapter_id = resolve_active_chapter_id(
@@ -484,6 +492,7 @@ impl SonelleStore {
         Ok(ReaderDocumentView {
             book,
             active_chapter_id,
+            navigation,
             chapters,
             position,
         })
@@ -492,6 +501,7 @@ impl SonelleStore {
     fn open_book_for_export(&self, book_id: &str) -> Result<ReaderDocumentView, String> {
         let connection = self.connect()?;
         let book = self.read_book(&connection, book_id)?;
+        let navigation = self.read_navigation(&connection, book_id)?;
         let chapters = self.read_chapters_with_sentences(&connection, book_id)?;
         let position = self.read_position(&connection, book_id)?;
         let active_chapter_id = resolve_active_chapter_id(
@@ -503,6 +513,7 @@ impl SonelleStore {
         Ok(ReaderDocumentView {
             book,
             active_chapter_id,
+            navigation,
             chapters,
             position,
         })
@@ -857,7 +868,8 @@ impl SonelleStore {
                     source_path TEXT NOT NULL,
                     imported_at TEXT NOT NULL,
                     chapter_count INTEGER NOT NULL DEFAULT 0,
-                    sentence_count INTEGER NOT NULL DEFAULT 0
+                    sentence_count INTEGER NOT NULL DEFAULT 0,
+                    navigation_json TEXT NOT NULL DEFAULT '[]'
                 );
 
                 CREATE TABLE IF NOT EXISTS chapters (
@@ -958,6 +970,12 @@ impl SonelleStore {
 
         ensure_column(&connection, "books", "cover_image_src", "TEXT")?;
         ensure_column(&connection, "books", "language", "TEXT")?;
+        ensure_column(
+            &connection,
+            "books",
+            "navigation_json",
+            "TEXT NOT NULL DEFAULT '[]'",
+        )?;
         let added_book_chapter_count = ensure_column(
             &connection,
             "books",
@@ -1065,6 +1083,22 @@ impl SonelleStore {
             )
             .optional()
             .map_err(|_| "We couldn't restore your reading place.".to_string())
+    }
+
+    fn read_navigation(
+        &self,
+        connection: &Connection,
+        book_id: &str,
+    ) -> Result<Vec<ReaderNavigationItemView>, String> {
+        let navigation_json = connection
+            .query_row(
+                "SELECT navigation_json FROM books WHERE id = ?1",
+                params![book_id],
+                |row| row.get::<_, String>(0),
+            )
+            .map_err(|_| "We couldn't read that book's contents.".to_string())?;
+        serde_json::from_str(&navigation_json)
+            .map_err(|_| "We couldn't read that book's contents.".to_string())
     }
 
     fn read_chapter_summaries(
@@ -1650,7 +1684,7 @@ mod tests {
     };
     use crate::epub_import::{
         import_epub_file, ImportedBook, ImportedChapter, ImportedCover, ImportedLink,
-        ImportedParagraphPresentation, ImportedReference,
+        ImportedNavigationItem, ImportedParagraphPresentation, ImportedReference,
     };
     use rusqlite::{params, Connection};
     use zip::{write::SimpleFileOptions, ZipWriter};
@@ -1685,6 +1719,12 @@ mod tests {
                 language: Some("en".to_string()),
                 cover_image: None,
                 source_path: source_path.to_string_lossy().into_owned(),
+                navigation: vec![ImportedNavigationItem {
+                    label: "Stored destination".to_string(),
+                    depth: 1,
+                    target_chapter_id: Some("persistent-book:chapter-1".to_string()),
+                    target_text: Some("This text survives".to_string()),
+                }],
                 chapters: vec![ImportedChapter {
                     id: "persistent-book:chapter-1".to_string(),
                     title: "Stored Chapter".to_string(),
@@ -1704,6 +1744,12 @@ mod tests {
 
         fs::write(&source_path, b"not an EPUB").expect("source should become damaged");
         let restarted = SonelleStore::open_at(db_path.clone()).expect("cold store should reopen");
+        let reopened = restarted
+            .open_book("persistent-book", None)
+            .expect("stored navigation should reopen");
+        assert_eq!(reopened.navigation[0].label, "Stored destination");
+        assert_eq!(reopened.navigation[0].depth, 1);
+        assert_eq!(reopened.navigation[0].target_sentence_index, Some(0));
         let damaged = restarted
             .list_books()
             .expect("library should survive restart");
@@ -1750,6 +1796,7 @@ mod tests {
                 language: Some("fr-FR".to_string()),
                 cover_image: None,
                 source_path: "/tmp/test.epub".to_string(),
+                navigation: Vec::new(),
                 chapters: vec![ImportedChapter {
                     id: "book-test:chapter-1".to_string(),
                     title: "Chapter One".to_string(),
@@ -1840,6 +1887,7 @@ mod tests {
                 language: Some("en".to_string()),
                 cover_image: None,
                 source_path: "/tmp/progress.epub".to_string(),
+                navigation: Vec::new(),
                 chapters: vec![
                     ImportedChapter {
                         id: "progress-book:chapter-1".to_string(),
@@ -1919,6 +1967,7 @@ mod tests {
                     bytes: cover_bytes.clone(),
                 }),
                 source_path: "/tmp/cover.epub".to_string(),
+                navigation: Vec::new(),
                 chapters: vec![ImportedChapter {
                     id: "book-cover:chapter-1".to_string(),
                     title: "Chapter One".to_string(),
@@ -1964,6 +2013,7 @@ mod tests {
                 language: Some("en".to_string()),
                 cover_image: None,
                 source_path: "/tmp/editable.epub".to_string(),
+                navigation: Vec::new(),
                 chapters: vec![ImportedChapter {
                     id: "editable-book:chapter-1".to_string(),
                     title: "Chapter One".to_string(),
@@ -2054,6 +2104,7 @@ mod tests {
                 language: None,
                 cover_image: None,
                 source_path: "/tmp/counts.epub".to_string(),
+                navigation: Vec::new(),
                 chapters: vec![
                     ImportedChapter {
                         id: "book-counts:chapter-1".to_string(),
@@ -2101,6 +2152,7 @@ mod tests {
                 language: None,
                 cover_image: None,
                 source_path: "/tmp/active.epub".to_string(),
+                navigation: Vec::new(),
                 chapters: vec![
                     ImportedChapter {
                         id: "book-active:chapter-1".to_string(),
@@ -2220,6 +2272,7 @@ mod tests {
                 language: None,
                 cover_image: None,
                 source_path: "/tmp/paragraphs.epub".to_string(),
+                navigation: Vec::new(),
                 chapters: vec![ImportedChapter {
                     id: "book-paragraphs:chapter-1".to_string(),
                     title: "Chapter One".to_string(),
@@ -2268,6 +2321,7 @@ mod tests {
                 language: None,
                 cover_image: None,
                 source_path: "/tmp/search.epub".to_string(),
+                navigation: Vec::new(),
                 chapters: vec![ImportedChapter {
                     id: "book-search:chapter-1".to_string(),
                     title: "Chapter One".to_string(),
@@ -2614,6 +2668,7 @@ mod tests {
             language: None,
             cover_image: None,
             source_path: "synthetic://large-book".to_string(),
+            navigation: Vec::new(),
             chapters: (0..14)
                 .map(|chapter_index| {
                     let sentence_count = if chapter_index == 6 { 2_000 } else { 600 };

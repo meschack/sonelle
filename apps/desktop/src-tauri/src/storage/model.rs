@@ -48,8 +48,18 @@ impl LibrarySourceStatusView {
 pub struct ReaderDocumentView {
     pub book: ReaderBookView,
     pub active_chapter_id: Option<String>,
+    pub navigation: Vec<ReaderNavigationItemView>,
     pub chapters: Vec<ReaderChapterView>,
     pub position: Option<ReadingPositionView>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReaderNavigationItemView {
+    pub label: String,
+    pub depth: usize,
+    pub target_chapter_id: Option<String>,
+    pub target_sentence_index: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize)]
