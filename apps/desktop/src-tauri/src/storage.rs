@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fs, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -18,6 +22,33 @@ pub use model::*;
 pub struct SonelleStore {
     db_path: PathBuf,
     covers_dir: PathBuf,
+    managed_sources_dir: PathBuf,
+}
+
+struct StorePaths {
+    db_path: PathBuf,
+    covers_dir: PathBuf,
+    managed_sources_dir: PathBuf,
+}
+
+impl StorePaths {
+    fn from_app_data_dir(app_data_dir: &Path) -> Self {
+        Self {
+            db_path: app_data_dir.join("sonelle.sqlite3"),
+            covers_dir: app_data_dir.join("covers"),
+            managed_sources_dir: app_data_dir.join("import-sources"),
+        }
+    }
+
+    #[cfg(test)]
+    fn from_database_path(db_path: PathBuf) -> Self {
+        let app_data_dir = db_path.parent().unwrap_or_else(|| Path::new("."));
+        Self {
+            covers_dir: app_data_dir.join("covers"),
+            managed_sources_dir: app_data_dir.join("import-sources"),
+            db_path,
+        }
+    }
 }
 
 struct StagedCover {
@@ -67,9 +98,11 @@ impl SonelleStore {
             .map_err(|_| "We couldn't open the local library folder.".to_string())?;
         fs::create_dir_all(&app_dir)
             .map_err(|_| "We couldn't prepare the local library folder.".to_string())?;
+        let paths = StorePaths::from_app_data_dir(&app_dir);
         let store = Self {
-            db_path: app_dir.join("sonelle.sqlite3"),
-            covers_dir: app_dir.join("covers"),
+            db_path: paths.db_path,
+            covers_dir: paths.covers_dir,
+            managed_sources_dir: paths.managed_sources_dir,
         };
 
         store.init()?;
@@ -78,13 +111,11 @@ impl SonelleStore {
 
     #[cfg(test)]
     pub(crate) fn open_at(db_path: PathBuf) -> Result<Self, String> {
-        let covers_dir = db_path
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."))
-            .join("covers");
+        let paths = StorePaths::from_database_path(db_path);
         let store = Self {
-            db_path,
-            covers_dir,
+            db_path: paths.db_path,
+            covers_dir: paths.covers_dir,
+            managed_sources_dir: paths.managed_sources_dir,
         };
         store.init()?;
         Ok(store)
@@ -279,6 +310,7 @@ impl SonelleStore {
                     books.imported_at,
                     books.chapter_count,
                     books.sentence_count,
+                    books.source_path,
                     reading_positions.chapter_id,
                     CASE
                       WHEN reading_positions.chapter_id IS NULL THEN 0
@@ -312,8 +344,9 @@ impl SonelleStore {
                     imported_at: row.get(4)?,
                     chapter_count: row.get(5)?,
                     sentence_count: row.get(6)?,
-                    last_chapter_id: row.get(7)?,
-                    completed_sentence_count: row.get(8)?,
+                    source_status: self.managed_source_status(&row.get::<_, String>(7)?),
+                    last_chapter_id: row.get(8)?,
+                    completed_sentence_count: row.get(9)?,
                 })
             })
             .map_err(|_| "We couldn't read your library.".to_string())?
@@ -321,6 +354,26 @@ impl SonelleStore {
             .map_err(|_| "We couldn't read your library.".to_string())?;
 
         Ok(books)
+    }
+
+    fn managed_source_status(&self, source: &str) -> LibrarySourceStatusView {
+        let source = Path::new(source);
+        if !source.starts_with(&self.managed_sources_dir) {
+            return LibrarySourceStatusView::ready();
+        }
+
+        let file = match fs::File::open(source) {
+            Ok(file) => file,
+            Err(_) => return LibrarySourceStatusView::missing(),
+        };
+        let mut archive = match zip::ZipArchive::new(file) {
+            Ok(archive) => archive,
+            Err(_) => return LibrarySourceStatusView::damaged(),
+        };
+        if archive.by_name("META-INF/container.xml").is_err() {
+            return LibrarySourceStatusView::damaged();
+        }
+        LibrarySourceStatusView::ready()
     }
 
     pub fn update_book_metadata(
@@ -1562,6 +1615,7 @@ mod tests {
     use std::{
         collections::HashMap,
         env, fs,
+        io::Write,
         path::{Path, PathBuf},
         time::{Duration, Instant},
     };
@@ -1569,14 +1623,97 @@ mod tests {
     use chrono::Utc;
 
     use super::{
-        BookExportView, LibrarySearchRequest, ReaderChapterView, ReaderDocumentView,
-        SaveBookmarkRequest, SaveReadingPositionRequest, SonelleStore, UpdateBookMetadataRequest,
+        BookExportView, LibrarySearchRequest, LibrarySourceStatusView, ReaderChapterView,
+        ReaderDocumentView, SaveBookmarkRequest, SaveReadingPositionRequest, SonelleStore,
+        StorePaths, UpdateBookMetadataRequest,
     };
     use crate::epub_import::{
         import_epub_file, ImportedBook, ImportedChapter, ImportedCover, ImportedLink,
         ImportedParagraphPresentation, ImportedReference,
     };
     use rusqlite::{params, Connection};
+    use zip::{write::SimpleFileOptions, ZipWriter};
+
+    #[test]
+    fn derives_every_mobile_store_path_from_the_application_data_directory() {
+        let app_data_dir = Path::new("/data/user/0/app.sonelle.reader/files");
+        let paths = StorePaths::from_app_data_dir(app_data_dir);
+
+        assert_eq!(paths.db_path, app_data_dir.join("sonelle.sqlite3"));
+        assert_eq!(paths.covers_dir, app_data_dir.join("covers"));
+        assert_eq!(
+            paths.managed_sources_dir,
+            app_data_dir.join("import-sources")
+        );
+    }
+
+    #[test]
+    fn cold_restart_reopens_stored_content_and_reports_managed_source_damage() {
+        let temp_dir = temp_store_dir();
+        let managed_sources_dir = temp_dir.join("import-sources");
+        fs::create_dir_all(&managed_sources_dir).expect("managed source dir should be created");
+        let source_path = managed_sources_dir.join("persistent-book.epub");
+        write_minimal_epub_container(&source_path);
+        let db_path = temp_dir.join("sonelle.sqlite3");
+        let store = SonelleStore::open_at(db_path.clone()).expect("mobile store should initialize");
+        store
+            .save_imported_book(ImportedBook {
+                id: "persistent-book".to_string(),
+                title: "Persistent Book".to_string(),
+                author: "Durable Writer".to_string(),
+                language: Some("en".to_string()),
+                cover_image: None,
+                source_path: source_path.to_string_lossy().into_owned(),
+                chapters: vec![ImportedChapter {
+                    id: "persistent-book:chapter-1".to_string(),
+                    title: "Stored Chapter".to_string(),
+                    index: 0,
+                    body: "This text survives without its EPUB source.".to_string(),
+                    references: Vec::new(),
+                    links: Vec::new(),
+                    presentations: Vec::new(),
+                }],
+            })
+            .expect("book should persist");
+        assert!(matches!(
+            store.list_books().expect("library should list")[0].source_status,
+            LibrarySourceStatusView::Ready
+        ));
+        drop(store);
+
+        fs::write(&source_path, b"not an EPUB").expect("source should become damaged");
+        let restarted = SonelleStore::open_at(db_path.clone()).expect("cold store should reopen");
+        let damaged = restarted
+            .list_books()
+            .expect("library should survive restart");
+        assert!(matches!(
+            &damaged[0].source_status,
+            LibrarySourceStatusView::NeedsAttention(message) if message.contains("Reimport")
+        ));
+        assert_eq!(
+            serde_json::to_value(&damaged[0].source_status)
+                .expect("source status should cross the command boundary")["status"],
+            "needs-attention"
+        );
+        let document = restarted
+            .open_book("persistent-book", None)
+            .expect("stored chapters should open without reparsing the source");
+        assert_eq!(document.book.title, "Persistent Book");
+        assert_eq!(document.chapters[0].title, "Stored Chapter");
+        assert_eq!(
+            document.chapters[0].sentences[0].text,
+            "This text survives without its EPUB source."
+        );
+
+        fs::remove_file(&source_path).expect("source should be removable");
+        let missing = restarted.list_books().expect("library should still list");
+        assert!(matches!(
+            &missing[0].source_status,
+            LibrarySourceStatusView::NeedsAttention(message) if message.contains("missing")
+        ));
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
 
     #[test]
     fn saves_books_and_restores_reading_position() {
@@ -2454,6 +2591,18 @@ mod tests {
             "sonelle-store-test-{}",
             Utc::now().timestamp_nanos_opt().unwrap_or_default()
         ))
+    }
+
+    fn write_minimal_epub_container(path: &Path) {
+        let file = fs::File::create(path).expect("EPUB source should be created");
+        let mut writer = ZipWriter::new(file);
+        writer
+            .start_file("META-INF/container.xml", SimpleFileOptions::default())
+            .expect("EPUB container entry should start");
+        writer
+            .write_all(b"<container />")
+            .expect("EPUB container entry should be written");
+        writer.finish().expect("EPUB source should finish");
     }
 
     fn configured_qa_epub_paths() -> Vec<PathBuf> {

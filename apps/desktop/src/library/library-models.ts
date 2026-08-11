@@ -6,6 +6,7 @@ export interface LibraryBookSummary {
   importedAt: string;
   chapterCount: number;
   sentenceCount: number;
+  sourceStatus?: { status: "ready" } | { status: "needs-attention"; message: string };
   lastChapterId: string | null;
   completedSentenceCount: number;
 }
