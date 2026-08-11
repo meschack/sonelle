@@ -91,9 +91,35 @@ export function createReaderPlaybackApplication(
   let chapterTransitionRun = 0;
   let chapterTransitionTimer: ReturnType<typeof setTimeout> | undefined;
   let resumeAfterInterruption = false;
+  let narrationControlRun = 0;
+  let pendingNarrationControls = 0;
+  let narrationControlSettled = Promise.resolve();
+
+  const settleNarrationControl = (control: () => Promise<void>): Promise<void> => {
+    narrationControlRun += 1;
+    pendingNarrationControls += 1;
+    narrationControlSettled = narrationControlSettled
+      .then(control)
+      .catch(dependencies.reportEventError)
+      .finally(() => {
+        pendingNarrationControls -= 1;
+      });
+    return narrationControlSettled;
+  };
+
+  const startNarration = (sentenceId: string) => {
+    const run = ++narrationControlRun;
+    if (pendingNarrationControls === 0) {
+      dependencies.narration.start(sentenceId);
+      return;
+    }
+    void narrationControlSettled.then(() => {
+      if (run === narrationControlRun) dependencies.narration.start(sentenceId);
+    });
+  };
 
   const pauseNarration = () => {
-    void dependencies.narration.pause().catch(dependencies.reportEventError);
+    void settleNarrationControl(() => dependencies.narration.pause());
   };
 
   const cancelChapterTransition = () => {
@@ -187,7 +213,7 @@ export function createReaderPlaybackApplication(
       case "stop":
         resumeAfterInterruption = false;
         cancelChapterTransition();
-        void dependencies.narration.stop().catch(dependencies.reportEventError);
+        void settleNarrationControl(() => dependencies.narration.stop());
         options.projectAudible(false);
         options.projectPlayback(pausePlayback);
         return;
@@ -218,7 +244,8 @@ export function createReaderPlaybackApplication(
           dependencies.mediaSession.clear();
         }),
         dependencies.eventDispatcher.subscribe("NarrationSettingsChanged", (event) => {
-          if (isUserVoiceChange(event)) void dependencies.narration.stop();
+          if (isUserVoiceChange(event))
+            void settleNarrationControl(() => dependencies.narration.stop());
         }),
         dependencies.eventDispatcher.subscribe("NarrationSettingsChanged", (event) => {
           if (isUserVoiceChange(event)) options.projectNotice(null);
@@ -243,7 +270,7 @@ export function createReaderPlaybackApplication(
         return () => undefined;
       }
 
-      dependencies.narration.start(sentence.id);
+      startNarration(sentence.id);
       return () => {
         if (!sessionProjectedPlaybackChange) pauseNarration();
       };
@@ -378,16 +405,20 @@ export function createReaderPlaybackApplication(
     async stop() {
       cancelChapterTransition();
       positionScheduler.flush();
-      await positionSaveSettled;
-      await dependencies.narration.pause().catch(dependencies.reportEventError);
+      const pauseSettled = settleNarrationControl(async () => {
+        await positionSaveSettled;
+        await dependencies.narration.pause();
+      });
       options.projectAudible(false);
       options.projectPlayback(pausePlayback);
+      await pauseSettled;
     },
     jumpStatus() {
       const status = options.currentPlayback().status;
       return status === "ended" ? "paused" : status;
     },
     dispose() {
+      narrationControlRun += 1;
       cancelChapterTransition();
       positionScheduler.flush();
       dependencies.mediaSession.clear();
