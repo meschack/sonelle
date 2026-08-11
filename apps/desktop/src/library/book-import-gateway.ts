@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, type OpenDialogOptions } from "@tauri-apps/plugin-dialog";
-import { isTauriRuntime } from "../platform/tauri-runtime";
+import { isAndroidRuntime, isTauriRuntime } from "../platform/tauri-runtime";
 import {
   createDesktopMediaSourceGateway,
   type MediaSourceGateway
@@ -112,10 +112,6 @@ function singleSelection(selected: string | string[] | null): string | null {
 function isPickerCancellation(error: unknown): boolean {
   const message = typeof error === "string" ? error : error instanceof Error ? error.message : "";
   return message.toLocaleLowerCase().includes("picker cancelled");
-}
-
-function isAndroidRuntime(): boolean {
-  return typeof navigator !== "undefined" && /\bandroid\b/i.test(navigator.userAgent);
 }
 
 const unavailableBookImportGateway: BookImportGateway = {

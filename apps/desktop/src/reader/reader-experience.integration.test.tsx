@@ -255,6 +255,53 @@ describe("ReaderExperience integration", () => {
     container.remove();
   });
 
+  it("opens a structurally rich imported book through the bounded shared reader", async () => {
+    const importedBook = createLibraryBook("android-import", "Pocket Structure", 0);
+    const openBook = vi.fn(async () => createStructuredReaderDocument());
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      libraryBooks: [importedBook],
+      openBook
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+    await vi.waitFor(() => expect(openBook).toHaveBeenCalledWith("android-import", undefined));
+
+    dispatchShortcut("L", { shiftKey: true });
+    const card = await vi.waitFor(() => {
+      const element = container.querySelector<HTMLButtonElement>(
+        '[data-library-book-card="android-import"]'
+      );
+      expect(element).not.toBeNull();
+      return element;
+    });
+    openBook.mockClear();
+    card?.click();
+
+    await vi.waitFor(() => expect(openBook).toHaveBeenCalledWith("android-import", undefined));
+    await vi.waitFor(() =>
+      expect(container.querySelector(".article-title")?.textContent).toBe("A Structured Beginning")
+    );
+    expect(container.querySelectorAll(".sentence")).toHaveLength(49);
+    expect(container.querySelector('.reader-paragraph[data-structure="ordered"]')).not.toBeNull();
+    expect(container.querySelector('.reader-paragraph[data-structure="unordered"]')).not.toBeNull();
+    expect(container.querySelector(".reader-paragraph.emphasized")?.textContent).toContain(
+      "Quoted thought"
+    );
+    expect(container.querySelector(".reader-link")?.textContent).toBe("Library");
+    expect(container.querySelector(".sentence-window-jump")?.textContent).toContain(
+      "Next 48 sentences"
+    );
+
+    dispose();
+    container.remove();
+  });
+
   it("searches across imported books and opens a sentence result in context", async () => {
     const openBook = vi.fn(async (bookId: string) => createReaderDocument(bookId));
     const searchLibrary = vi.fn<LibrarySearch["search"]>().mockResolvedValue([
@@ -1232,6 +1279,64 @@ function createReaderDocument(bookId: string): ReaderDocumentDto {
         index: 0,
         sentenceCount: 1,
         sentences: [{ id: `${bookId}-sentence`, index: 0, text: "Opened from the Library." }]
+      }
+    ],
+    position: null
+  };
+}
+
+function createStructuredReaderDocument(): ReaderDocumentDto {
+  const sentences = Array.from({ length: 120 }, (_, index) => ({
+    id: `android-import:chapter-1:sentence-${index + 1}`,
+    index,
+    text:
+      index === 0
+        ? "Visit Library."
+        : index === 1
+          ? "Another item."
+          : index === 2
+            ? "Quoted thought."
+            : `Reading sentence ${index + 1}.`
+  }));
+  return {
+    book: {
+      id: "android-import",
+      title: "Pocket Structure",
+      author: "Mobile Reader",
+      language: "en",
+      coverImageSrc: "https://asset.localhost/covers/android-import.png"
+    },
+    activeChapterId: "android-import:chapter-1",
+    chapters: [
+      {
+        id: "android-import:chapter-1",
+        title: "A Structured Beginning",
+        index: 0,
+        sentenceCount: sentences.length,
+        sentences,
+        paragraphs: sentences.map((sentence) => ({
+          id: `android-import:chapter-1:paragraph-${sentence.index + 1}`,
+          index: sentence.index,
+          startSentenceIndex: sentence.index,
+          sentenceCount: 1
+        })),
+        presentations: [
+          { index: 0, kind: "ordered", indentLevel: 1, marker: "1", emphasized: false },
+          { index: 1, kind: "unordered", indentLevel: 1, marker: null, emphasized: false },
+          { index: 2, kind: "quote", indentLevel: 0, marker: null, emphasized: true }
+        ],
+        links: [
+          {
+            id: "android-import:chapter-1:link-1",
+            sentenceId: sentences[0].id,
+            sentenceIndex: 0,
+            offset: 6,
+            length: 7,
+            href: "https://example.com/library",
+            targetChapterId: null,
+            targetSentenceIndex: null
+          }
+        ]
       }
     ],
     position: null
