@@ -81,7 +81,7 @@ import { createLibrarySearch } from "../library/library-search";
 import { createReadingPositionStore } from "../library/reading-position-store";
 import { isTauriRuntime } from "../platform/tauri-runtime";
 import { createSystemFontCatalog, type SystemFontCatalog } from "../platform/system-font-catalog";
-import { createDesktopMediaSourceGateway } from "../platform/media-source-gateway";
+import { createPlatformMediaSourceGateway } from "../platform/media-source-gateway";
 import { createQuoteImageExporter, type QuoteImageExporter } from "./reader-quote-image";
 import {
   createReaderPreferencesRepository,
@@ -150,7 +150,7 @@ export interface ReaderExperienceDependencies {
 
 export function createReaderExperienceDependencies(): ReaderExperienceDependencies {
   const eventDispatcher = createDomainEventDispatcher();
-  const mediaSources = createDesktopMediaSourceGateway();
+  const mediaSources = createPlatformMediaSourceGateway();
   const htmlAudioPlayer = createHtmlAudioPlayer();
   const narrationRepository = createPrefetchingNarrationGateway(
     createNarrationRepository(mediaSources)

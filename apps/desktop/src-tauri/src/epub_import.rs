@@ -1890,6 +1890,20 @@ mod tests {
             "PART I\n\nContinue to Part Two\n\nFirst listed topic.\n\nNested topic.\n\nSecond listed topic."
         );
 
+        let store = SonelleStore::open_at(temp_dir.join("sonelle.sqlite3"))
+            .expect("mobile library should initialize");
+        let document = store
+            .save_imported_book(book)
+            .expect("complex EPUB should commit to the mobile library");
+
+        assert_eq!(document.chapters.len(), 2);
+        assert_eq!(document.chapters[0].presentations.len(), 5);
+        assert_eq!(document.chapters[0].presentations[2].kind, "ordered");
+        assert_eq!(
+            document.chapters[0].links[1].target_chapter_id,
+            Some(document.chapters[1].id.clone())
+        );
+
         fs::remove_dir_all(temp_dir).ok();
     }
 

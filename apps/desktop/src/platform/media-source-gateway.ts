@@ -1,4 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { isAndroidRuntime } from "./tauri-runtime";
 
 export type MediaSourceKind = "book-cover" | "prepared-narration";
 
@@ -16,8 +17,24 @@ export interface MediaSourceGateway {
 
 type ConvertLocalSource = (path: string, protocol?: string) => string;
 
+export function createPlatformMediaSourceGateway(): MediaSourceGateway {
+  return isAndroidRuntime() ? createAndroidMediaSourceGateway() : createDesktopMediaSourceGateway();
+}
+
 export function createDesktopMediaSourceGateway(
   convertLocalSource: ConvertLocalSource = convertFileSrc
+): MediaSourceGateway {
+  return createLocalMediaSourceGateway((source) => convertLocalSource(source, "asset"));
+}
+
+export function createAndroidMediaSourceGateway(
+  convertLocalSource: (path: string) => string = convertFileSrc
+): MediaSourceGateway {
+  return createLocalMediaSourceGateway(convertLocalSource);
+}
+
+function createLocalMediaSourceGateway(
+  convertLocalSource: (path: string) => string
 ): MediaSourceGateway {
   return {
     resolve({ source }) {
@@ -26,7 +43,7 @@ export function createDesktopMediaSourceGateway(
       if (/^[a-z][a-z\d+.-]*:/iu.test(source)) return { status: "available", url: source };
 
       try {
-        const url = convertLocalSource(source, "asset");
+        const url = convertLocalSource(source);
         return url.trim().length > 0 ? { status: "available", url } : { status: "invalid" };
       } catch {
         return { status: "invalid" };

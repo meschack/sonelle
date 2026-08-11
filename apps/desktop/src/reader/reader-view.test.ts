@@ -88,6 +88,7 @@ describe("fixture reader view", () => {
     expect(reader.source).toBe("library");
     expect(reader.book.title).toBe("Imported");
     expect(reader.book.coverImageSrc).toBe("data:image/png;base64,Y292ZXI=");
+    expect(reader.sentences[0]?.id).toBe("sentence-1");
     expect(reader.totalSentenceCount).toBe(1);
     expect(reader.chapters).toEqual([
       {

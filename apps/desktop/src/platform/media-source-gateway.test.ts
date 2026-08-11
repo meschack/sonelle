@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createAndroidMediaSourceGateway,
   createDesktopMediaSourceGateway,
   createFakeMediaSourceGateway
 } from "./media-source-gateway";
@@ -24,6 +25,21 @@ describe("MediaSourceGateway", () => {
       gateway.resolve({ kind: "prepared-narration", source: "asset://localhost/audio.wav" })
     ).toEqual({ status: "available", url: "asset://localhost/audio.wav" });
     expect(convertLocalSource).not.toHaveBeenCalled();
+  });
+
+  it("lets the Android webview resolve managed files without a desktop protocol argument", () => {
+    const convertLocalSource = vi.fn(
+      (path: string) => `https://asset.localhost/${encodeURIComponent(path)}`
+    );
+    const gateway = createAndroidMediaSourceGateway(convertLocalSource);
+
+    expect(
+      gateway.resolve({ kind: "book-cover", source: "/data/sonelle/covers/book.png" })
+    ).toEqual({
+      status: "available",
+      url: "https://asset.localhost/%2Fdata%2Fsonelle%2Fcovers%2Fbook.png"
+    });
+    expect(convertLocalSource).toHaveBeenCalledWith("/data/sonelle/covers/book.png");
   });
 
   it("reports missing and invalid desktop media without leaking converter failures", () => {

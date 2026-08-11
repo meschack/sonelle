@@ -29,7 +29,9 @@ Rendered paragraphs receive layout data directly and obtain reading interactions
 `ReaderContentProvider`. The provider owns no state or services; it only exposes reader-content
 actions and projections for the current reader tree. Active-sentence membership uses Solid's
 selector primitive so a narration step invalidates the previous and next sentence consumers rather
-than every visible sentence.
+than every visible sentence. Imported Android books enter this same reader projection: persisted
+sentence identifiers, paragraphs, lists, links, and lightweight presentation metadata are not
+reconstructed by a mobile-only UI.
 
 The window key listener delegates interpretation to `resolveReaderKeyboardShortcut`. The
 composition root only routes semantic commands into existing workflows; it does not duplicate
@@ -66,3 +68,6 @@ Pure reader behavior is tested in `apps/desktop/src/reader/*.test.ts`. Workflow 
 repositories and the real dispatcher to prove that producers publish facts and listeners react
 without mocking Tauri globals. `reader-experience.integration.test.tsx` characterizes navigation
 across every inspector surface through the composed reader shell.
+An imported-book tracer opens a structurally rich document from the Library and verifies its first
+chapter, link and list presentation, stable sentence range, and bounded mounted content. Native EPUB
+tests commit both small and structurally complex fixtures before reopening their reader documents.
