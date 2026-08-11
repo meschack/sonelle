@@ -21,7 +21,7 @@ export interface SentenceNarrationRequest extends SentenceRef {
   voiceId: string;
 }
 
-export interface NarrationGateway {
+export interface LegacyNarrationGateway {
   prepareSentenceAudio(request: SentenceNarrationRequest): Promise<SentenceNarration>;
   playPreparedSentenceAudio(
     request: SentenceNarrationRequest,
@@ -30,7 +30,7 @@ export interface NarrationGateway {
   stopPreparedSentenceAudio(): Promise<void>;
 }
 
-export interface PrefetchingNarrationGateway extends NarrationGateway {
+export interface LegacyPrefetchingNarrationGateway extends LegacyNarrationGateway {
   prefetchSentenceAudio(request: SentenceNarrationRequest): Promise<void>;
   clearPrefetchedNarrations(): void;
 }

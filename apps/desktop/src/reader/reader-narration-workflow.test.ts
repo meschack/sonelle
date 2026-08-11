@@ -8,9 +8,68 @@ import {
 } from "@sonelle/domain";
 import { buildFixtureReaderView } from "./reader-view";
 import type { ReaderNarrationPrefetchWorkflow } from "./reader-narration-prefetch-workflow";
-import { createReaderNarrationWorkflow } from "./reader-narration-workflow";
+import { createDesktopNarrationGateway } from "./reader-narration-workflow";
 
-describe("reader narration workflow", () => {
+describe("desktop narration gateway", () => {
+  it("prepares through the desktop session and reuses it when playback starts", async () => {
+    const dispatcher = createDomainEventDispatcher();
+    const reader = buildFixtureReaderView();
+    const sentenceId = reader.sentences[0].id;
+    const session = fakeSession(async () => undefined);
+    session.prepare.mockImplementation(async () => {
+      await dispatcher.dispatch(
+        createDomainEvent("NarrationPreparationStarted", {
+          bookId: reader.book.id,
+          chapterId: reader.chapter.id,
+          sentenceId,
+          passageId: "passage-1"
+        })
+      );
+      await dispatcher.dispatch(
+        createDomainEvent("PassageNarrationReady", {
+          bookId: reader.book.id,
+          chapterId: reader.chapter.id,
+          passageId: "passage-1",
+          firstSentenceId: sentenceId,
+          lastSentenceId: sentenceId,
+          voiceId: "kokoro:af-heart",
+          engineId: "kokoro",
+          source: "prepared"
+        })
+      );
+    });
+    const gateway = createDesktopNarrationGateway(
+      {
+        eventDispatcher: dispatcher,
+        prefetchWorkflow: fakePrefetchWorkflow(),
+        routingMode: "hybrid-v1",
+        session
+      },
+      {
+        currentReader: () => reader,
+        currentSettings: settings,
+        engineInstallations: () => ({ kokoro: { modelRevision: "kokoro-test" } }),
+        projectPlayback: vi.fn(),
+        projectPreparing: vi.fn(),
+        projectAudible: vi.fn(),
+        projectNotice: vi.fn(),
+        reportError: vi.fn()
+      }
+    );
+    const observed: string[] = [];
+    gateway.subscribe((event) => observed.push(event.name));
+    const disconnect = gateway.connect();
+
+    await gateway.prepare(sentenceId);
+    gateway.start(sentenceId);
+    await vi.waitFor(() => expect(session.play).toHaveBeenCalledOnce());
+
+    expect(gateway.readiness()).toBe("ready");
+    expect(session.open).toHaveBeenCalledOnce();
+    expect(observed).toEqual(["NarrationPreparationStarted", "PassageNarrationReady"]);
+    disconnect();
+  });
+
   it("runs playback and publishes lifecycle facts through one application interface", async () => {
     const dispatcher = createDomainEventDispatcher();
     const events: AnyDomainEvent[] = [];
@@ -68,7 +127,7 @@ describe("reader narration workflow", () => {
     const prefetch = fakePrefetchWorkflow();
     const projectPreparing = vi.fn();
     const projectAudible = vi.fn();
-    const workflow = createReaderNarrationWorkflow(
+    const gateway = createDesktopNarrationGateway(
       {
         eventDispatcher: dispatcher,
         prefetchWorkflow: prefetch,
@@ -86,9 +145,9 @@ describe("reader narration workflow", () => {
         reportError: vi.fn()
       }
     );
-    const stop = workflow.start();
+    const stop = gateway.connect();
 
-    workflow.requestPlayback(reader.sentences[0].id);
+    gateway.start(reader.sentences[0].id);
     await vi.waitFor(() => expect(session.play).toHaveBeenCalledOnce());
     await vi.waitFor(() => expect(projections).toContain("NarrationPlaybackEnded"));
     await vi.waitFor(() => expect(events).toHaveLength(6));
@@ -102,7 +161,7 @@ describe("reader narration workflow", () => {
       "NarrationPlaybackEnded"
     ]);
     expect(session.open).toHaveBeenCalledOnce();
-    await workflow.reset();
+    await gateway.stop();
     await vi.waitFor(() => expect(events[events.length - 1]?.name).toBe("NarrationResetRequested"));
     expect(prefetch.reset).toHaveBeenCalledOnce();
     expect(session.close).toHaveBeenCalledOnce();
@@ -121,7 +180,7 @@ describe("reader narration workflow", () => {
     const reader = buildFixtureReaderView();
     const projectPreparing = vi.fn();
     const projectAudible = vi.fn();
-    const workflow = createReaderNarrationWorkflow(
+    const gateway = createDesktopNarrationGateway(
       {
         eventDispatcher: dispatcher,
         prefetchWorkflow: fakePrefetchWorkflow(),
@@ -139,7 +198,7 @@ describe("reader narration workflow", () => {
         reportError: vi.fn()
       }
     );
-    const stop = workflow.start();
+    const stop = gateway.connect();
     const base = {
       bookId: reader.book.id,
       chapterId: reader.chapter.id,
@@ -175,6 +234,7 @@ const settings = (): AudioSettings => ({
 function fakeSession(onPlay: (sentenceId: string) => Promise<void>) {
   return {
     open: vi.fn(),
+    prepare: vi.fn(async () => undefined),
     play: vi.fn(onPlay),
     pause: vi.fn(async () => undefined),
     moveTo: vi.fn(async () => undefined),

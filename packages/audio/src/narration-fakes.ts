@@ -7,10 +7,16 @@ import type {
   PreparedNarration
 } from "./narration-contracts";
 import type {
-  NarrationGateway,
+  LegacyNarrationGateway,
   SentenceNarration,
   SentenceNarrationRequest
 } from "./legacy-narration";
+import { createDomainEvent, type EntityId } from "@sonelle/domain";
+import type {
+  NarrationGateway,
+  NarrationGatewayEvent,
+  NarrationReadiness
+} from "./narration-gateway";
 import { createNarrationAssetIdentity } from "./narration-identity";
 import { assertPreparedNarration } from "./narration-manifest";
 
@@ -30,7 +36,7 @@ export class FakeSentenceBatchNarrationAdapter implements NarrationPreparationAd
   }
 }
 
-export class FakeNarrationGateway implements NarrationGateway {
+export class FakeLegacyNarrationGateway implements LegacyNarrationGateway {
   private readonly prepared = new Map<string, SentenceNarration>();
 
   async prepareSentenceAudio(request: SentenceNarrationRequest): Promise<SentenceNarration> {
@@ -63,6 +69,181 @@ export class FakeNarrationGateway implements NarrationGateway {
   async playPreparedSentenceAudio(): Promise<void> {}
 
   async stopPreparedSentenceAudio(): Promise<void> {}
+}
+
+export interface FakeNarrationGatewayOptions {
+  bookId?: EntityId;
+  chapterId?: EntityId;
+  voiceId?: string;
+}
+
+/** Deterministic lifecycle adapter for reader and platform contract tests. */
+export class FakeNarrationGateway implements NarrationGateway {
+  private readonly listeners = new Set<(event: NarrationGatewayEvent) => void>();
+  private readonly bookId: EntityId;
+  private readonly chapterId: EntityId;
+  private readonly voiceId: string;
+  private state: NarrationReadiness = "idle";
+  private activeSentenceId: EntityId | null = null;
+  private lastSentenceId: EntityId | null = null;
+  private run = 0;
+
+  constructor(options: FakeNarrationGatewayOptions = {}) {
+    this.bookId = options.bookId ?? "book";
+    this.chapterId = options.chapterId ?? "chapter";
+    this.voiceId = options.voiceId ?? "fake:reader";
+  }
+
+  async prepare(sentenceId: EntityId): Promise<void> {
+    await this.prepareFor(sentenceId);
+  }
+
+  private async prepareFor(
+    sentenceId: EntityId,
+    isCurrent: () => boolean = () => true
+  ): Promise<boolean> {
+    this.state = "preparing";
+    this.emit(
+      createDomainEvent("NarrationPreparationStarted", {
+        ...this.sentenceRef(sentenceId),
+        passageId: this.passageId(sentenceId)
+      })
+    );
+    await Promise.resolve();
+    if (!isCurrent()) return false;
+    this.state = "ready";
+    this.emit(
+      createDomainEvent("PassageNarrationReady", {
+        bookId: this.bookId,
+        chapterId: this.chapterId,
+        passageId: this.passageId(sentenceId),
+        firstSentenceId: sentenceId,
+        lastSentenceId: sentenceId,
+        voiceId: this.voiceId,
+        engineId: "fake",
+        source: "prepared"
+      })
+    );
+    return true;
+  }
+
+  readiness(): NarrationReadiness {
+    return this.state;
+  }
+
+  start(sentenceId: EntityId): void {
+    const previous = this.activeSentenceId;
+    const run = ++this.run;
+    if (previous != null) this.emitInterruption(previous);
+    this.activeSentenceId = sentenceId;
+    this.lastSentenceId = sentenceId;
+    void this.prepareFor(sentenceId, () => run === this.run).then((ready) => {
+      if (!ready || this.activeSentenceId !== sentenceId) return;
+      this.emit(
+        createDomainEvent("NarrationSentenceEntered", {
+          ...this.sentenceRef(sentenceId),
+          passageId: this.passageId(sentenceId)
+        })
+      );
+    });
+  }
+
+  async pause(): Promise<void> {
+    const sentenceId = this.activeSentenceId;
+    this.activeSentenceId = null;
+    this.run += 1;
+    if (sentenceId == null) return;
+    this.emit(
+      createDomainEvent("NarrationPlaybackPaused", {
+        ...this.sentenceRef(sentenceId),
+        passageId: this.passageId(sentenceId)
+      })
+    );
+  }
+
+  resume(): void {
+    if (this.lastSentenceId != null) this.start(this.lastSentenceId);
+  }
+
+  async stop(): Promise<void> {
+    const sentenceId = this.activeSentenceId;
+    this.activeSentenceId = null;
+    this.run += 1;
+    this.state = "idle";
+    if (sentenceId != null) this.emitInterruption(sentenceId);
+  }
+
+  setOutput(): void {}
+
+  prepareUpcoming(): void {}
+
+  subscribe(listener: (event: NarrationGatewayEvent) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  connect(): () => void {
+    return () => undefined;
+  }
+
+  complete(): void {
+    const sentenceId = this.activeSentenceId;
+    if (sentenceId == null) return;
+    this.activeSentenceId = null;
+    this.run += 1;
+    this.emit(
+      createDomainEvent("NarrationPlaybackEnded", {
+        bookId: this.bookId,
+        chapterId: this.chapterId,
+        passageId: this.passageId(sentenceId),
+        lastSentenceId: sentenceId
+      })
+    );
+  }
+
+  fail(reason = "Narration needs attention."): void {
+    const sentenceId = this.activeSentenceId ?? this.lastSentenceId;
+    if (sentenceId == null) return;
+    this.activeSentenceId = null;
+    this.run += 1;
+    this.state = "needs-attention";
+    this.emit(
+      createDomainEvent("NarrationPlaybackFailed", {
+        ...this.sentenceRef(sentenceId),
+        passageId: this.passageId(sentenceId),
+        reason
+      })
+    );
+  }
+
+  interrupt(): void {
+    const sentenceId = this.activeSentenceId;
+    if (sentenceId == null) return;
+    this.activeSentenceId = null;
+    this.run += 1;
+    this.emitInterruption(sentenceId);
+  }
+
+  private sentenceRef(sentenceId: EntityId) {
+    return { bookId: this.bookId, chapterId: this.chapterId, sentenceId };
+  }
+
+  private passageId(sentenceId: EntityId): EntityId {
+    return `${this.chapterId}:${sentenceId}:passage`;
+  }
+
+  private emitInterruption(sentenceId: EntityId) {
+    this.emit(
+      createDomainEvent("NarrationPlaybackInterrupted", {
+        ...this.sentenceRef(sentenceId),
+        passageId: this.passageId(sentenceId)
+      })
+    );
+  }
+
+  private emit(event: NarrationGatewayEvent) {
+    this.listeners.forEach((listener) => listener(event));
+  }
 }
 
 class DeterministicNarrationAdapter implements NarrationPreparationAdapter {

@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_AUDIO_SETTINGS } from "@sonelle/audio";
+import type { NarrationGateway } from "@sonelle/audio/narration";
 import { createDomainEvent, createDomainEventDispatcher } from "@sonelle/domain";
 import { createPlaybackState, type ReaderPlaybackState } from "@sonelle/reader";
 import type { SaveReadingPositionInput } from "../library/library-contracts";
-import type { ReaderNarrationWorkflow } from "./reader-narration-workflow";
 import {
   createReaderPlaybackApplication,
   type ReaderPlaybackApplication
@@ -198,13 +198,17 @@ function createHarness(
   const advanceChapter = vi.fn().mockResolvedValue(undefined);
   const dispatcher = createDomainEventDispatcher();
   const narration = {
-    requestPlayback: vi.fn((sentenceId: string) => void operations.push(`play:${sentenceId}`)),
+    prepare: vi.fn().mockResolvedValue(undefined),
+    readiness: vi.fn(() => "ready" as const),
+    start: vi.fn((sentenceId: string) => void operations.push(`play:${sentenceId}`)),
     pause: vi.fn().mockResolvedValue(undefined),
+    resume: vi.fn(),
     setOutput: vi.fn(),
-    prefetchUpcoming: vi.fn(),
-    reset,
-    start: vi.fn(() => () => undefined)
-  } satisfies ReaderNarrationWorkflow;
+    prepareUpcoming: vi.fn(),
+    stop: reset,
+    subscribe: vi.fn(() => () => undefined),
+    connect: vi.fn(() => () => undefined)
+  } satisfies NarrationGateway;
   let application!: ReaderPlaybackApplication;
   application = createReaderPlaybackApplication(
     {
@@ -255,7 +259,7 @@ function createHarness(
     savePosition,
     pause: narration.pause,
     reset,
-    requestPlayback: narration.requestPlayback,
+    requestPlayback: narration.start,
     operations,
     advanceChapter,
     dispatcher

@@ -9,6 +9,12 @@ export type {
   PreparedNarration
 } from "./narration-contracts";
 export { digestNarrationPassageText } from "./narration-identity";
+export type {
+  NarrationGateway,
+  NarrationGatewayEvent,
+  NarrationReadiness,
+  UpcomingNarrationTarget
+} from "./narration-gateway";
 export {
   prepareNarrationBook,
   type NarrationBookPreparationInput,

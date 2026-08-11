@@ -4,13 +4,13 @@ import {
   type AudioSettings
 } from "@sonelle/audio";
 import { createDomainEvent, type DomainEventDispatcher } from "@sonelle/domain";
+import type { NarrationGateway } from "@sonelle/audio/narration";
 import type { AudioSettingsRepository } from "../audio/audio-settings-repository";
-import type { ReaderNarrationWorkflow } from "./reader-narration-workflow";
 
 interface ReaderNarrationSettingsDependencies {
   eventDispatcher: DomainEventDispatcher;
   repository: Pick<AudioSettingsRepository, "load" | "save">;
-  narration: Pick<ReaderNarrationWorkflow, "setOutput">;
+  narration: Pick<NarrationGateway, "setOutput">;
   activateSettings(settings: AudioSettings, language: string | null): AudioSettings;
   reportEventError(error: unknown): void;
 }

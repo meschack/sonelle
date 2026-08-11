@@ -106,7 +106,8 @@ export type NarrationPlaybackProjectionEvent =
   | DomainEvent<"NarrationSentenceEntered">
   | DomainEvent<"NarrationPlaybackPaused">
   | DomainEvent<"NarrationPlaybackEnded">
-  | DomainEvent<"NarrationPlaybackFailed">;
+  | DomainEvent<"NarrationPlaybackFailed">
+  | DomainEvent<"NarrationPlaybackInterrupted">;
 
 export function highlightSentence(sentenceId: string | null): HighlightState {
   return { activeSentenceId: sentenceId };
@@ -341,6 +342,7 @@ export function projectNarrationEventToPlayback(
       };
     }
     case "NarrationPlaybackFailed":
+    case "NarrationPlaybackInterrupted":
       return pausePlayback(state);
   }
 }

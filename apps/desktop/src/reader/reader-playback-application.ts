@@ -1,4 +1,5 @@
 import type { AudioSettings } from "@sonelle/audio";
+import type { NarrationGateway } from "@sonelle/audio/narration";
 import type { DomainEvent, DomainEventDispatcher } from "@sonelle/domain";
 import {
   createReadingPositionScheduler,
@@ -13,13 +14,12 @@ import {
 } from "@sonelle/reader";
 import type { ReadingPositionStore, SaveReadingPositionInput } from "../library/library-contracts";
 import { nextReaderChapter } from "./reader-chapter-flow";
-import type { ReaderNarrationWorkflow } from "./reader-narration-workflow";
 import type { ReaderView } from "./reader-view";
 
 type PositionSaveIntent = "immediate" | "playback";
 
 interface ReaderPlaybackApplicationDependencies {
-  narration: ReaderNarrationWorkflow;
+  narration: NarrationGateway;
   eventDispatcher: DomainEventDispatcher;
   positions: ReadingPositionStore;
   preparesAcrossChapters: boolean;
@@ -125,7 +125,7 @@ export function createReaderPlaybackApplication(
     options.projectAudible(false);
     options.projectJump(() => (shouldResume ? { ...next, status: "playing" } : next));
     void dependencies.narration
-      .reset()
+      .stop()
       .then(() => {
         const activeReader = options.currentReader();
         const activePlayback = options.currentPlayback();
@@ -140,7 +140,7 @@ export function createReaderPlaybackApplication(
         ) {
           return;
         }
-        dependencies.narration.requestPlayback(sentence.id);
+        dependencies.narration.start(sentence.id);
       })
       .catch(dependencies.reportEventError);
   };
@@ -153,7 +153,7 @@ export function createReaderPlaybackApplication(
     start() {
       const subscriptions = [
         dependencies.eventDispatcher.subscribe("NarrationSettingsChanged", (event) => {
-          if (isUserVoiceChange(event)) void dependencies.narration.reset();
+          if (isUserVoiceChange(event)) void dependencies.narration.stop();
         }),
         dependencies.eventDispatcher.subscribe("NarrationSettingsChanged", (event) => {
           if (isUserVoiceChange(event)) options.projectNotice(null);
@@ -177,7 +177,7 @@ export function createReaderPlaybackApplication(
         return () => undefined;
       }
 
-      dependencies.narration.requestPlayback(sentence.id);
+      dependencies.narration.start(sentence.id);
       return () => {
         if (!sessionProjectedPlaybackChange) pauseNarration();
       };
@@ -220,7 +220,7 @@ export function createReaderPlaybackApplication(
 
       const nextChapter = nextReaderChapter(reader.chapters, reader.chapter.id);
       if (nextChapter == null || nextChapter.sentenceCount <= 0) return;
-      dependencies.narration.prefetchUpcoming({
+      dependencies.narration.prepareUpcoming({
         bookId: reader.book.id,
         chapterId: reader.chapter.id,
         nextChapterId: nextChapter.id,
@@ -286,7 +286,7 @@ export function createReaderPlaybackApplication(
       await positionSaveSettled;
       nextPositionSaveIntent = "immediate";
       options.clearSentenceElements();
-      await dependencies.narration.reset().catch(dependencies.reportEventError);
+      await dependencies.narration.stop().catch(dependencies.reportEventError);
       options.projectReaderActivation(
         nextReader,
         selectPlaybackSentence(

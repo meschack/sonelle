@@ -10,6 +10,7 @@ import {
 import {
   createNarrationSession as createManifestNarrationSession,
   prepareNarrationBook,
+  type NarrationGateway,
   type NarrationBookPreparationProgress,
   type NarrationRoutingMode,
   type NarrationPreparationAdapter
@@ -17,7 +18,7 @@ import {
 import {
   createPrefetchingNarrationGateway,
   PiperCompatibilityAdapter,
-  type PrefetchingNarrationGateway
+  type LegacyPrefetchingNarrationGateway
 } from "@sonelle/audio/compatibility";
 import {
   createAudioCacheRepository,
@@ -84,9 +85,8 @@ import {
   type ReaderPreferencesRepository
 } from "./reader-preferences-repository";
 import {
-  createReaderNarrationWorkflow,
-  type ReaderNarrationWorkflow,
-  type ReaderNarrationWorkflowOptions
+  createDesktopNarrationGateway,
+  type DesktopNarrationGatewayOptions
 } from "./reader-narration-workflow";
 import { createReaderNarrationPrefetchWorkflow } from "./reader-narration-prefetch-workflow";
 import { buildReaderViewFromDocument } from "./reader-view";
@@ -105,9 +105,9 @@ export interface ReaderNarrationService {
   activateSettings(settings: AudioSettings, language: string | null): AudioSettings;
   voices(language: string | null): readonly NarrationVoice[];
   observeEngineInstallation(installation: EngineInstallationState): void;
-  createWorkflow(
-    options: Omit<ReaderNarrationWorkflowOptions, "engineInstallations">
-  ): ReaderNarrationWorkflow;
+  createGateway(
+    options: Omit<DesktopNarrationGatewayOptions, "engineInstallations">
+  ): NarrationGateway;
   bookIdentity(document: ReaderDocumentDto, voiceId: string): ReaderBookNarrationIdentity | null;
   prepareBook(
     document: ReaderDocumentDto,
@@ -199,7 +199,7 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
       observeEngineInstallation(installation) {
         engineInstallations[installation.engineId] = installation;
       },
-      createWorkflow(options) {
+      createGateway(options) {
         const session = createManifestNarrationSession({
           adapter: narrationPreparationAdapter,
           player: createHtmlManifestNarrationPlayer(htmlAudioPlayer),
@@ -214,7 +214,7 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
           routingMode: narrationSessionRoutingMode,
           engineInstallations: () => engineInstallations
         });
-        return createReaderNarrationWorkflow(
+        return createDesktopNarrationGateway(
           {
             eventDispatcher,
             prefetchWorkflow,
@@ -277,7 +277,7 @@ export function resolveDevelopmentNarrationSessionRoutingMode(mode: unknown): Na
 
 export function createNarrationPreparationAdapterForMode(
   routingMode: NarrationRoutingMode,
-  narrationRepository: PrefetchingNarrationGateway,
+  narrationRepository: LegacyPrefetchingNarrationGateway,
   options: {
     nativeRuntime?: boolean;
     createNativeAdapter?: () => NarrationPreparationAdapter;

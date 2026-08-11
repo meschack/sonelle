@@ -22,6 +22,7 @@ export interface NarrationSessionChapter {
 
 export interface NarrationSession {
   open(chapter: NarrationSessionChapter): void;
+  prepare(sentenceId: EntityId): Promise<void>;
   play(sentenceId: EntityId): Promise<void>;
   pause(): Promise<void>;
   moveTo(sentenceId: EntityId): Promise<void>;
@@ -95,15 +96,13 @@ export function createNarrationSession(options: NarrationSessionOptions): Narrat
     const passage = currentChapter.passageBySentenceId.get(sentenceId);
     if (passage == null) throw new Error("Sentence does not belong to the open narration chapter.");
 
+    active = { passageId: passage.id, sentenceId };
     const run = ++generation;
-    const preparedPassage = preparePassage(currentChapter, passage);
-    await publish(
-      createDomainEvent("NarrationPreparationStarted", {
-        bookId: passage.bookId,
-        chapterId: passage.chapterId,
-        passageId: passage.id,
-        sentenceId
-      })
+    const preparedPassage = prepareAndReport(
+      currentChapter,
+      passage,
+      sentenceId,
+      () => run === generation
     );
     prefetchUpcomingPassages(currentChapter, passage);
     let prepared: PreparedNarration;
@@ -129,19 +128,6 @@ export function createNarrationSession(options: NarrationSessionOptions): Narrat
     const firstSentenceId = passage.sentences[0]?.id;
     const lastSentenceId = passage.sentences[passage.sentences.length - 1]?.id;
     if (firstSentenceId == null || lastSentenceId == null) return;
-
-    await publish(
-      createDomainEvent("PassageNarrationReady", {
-        bookId: passage.bookId,
-        chapterId: passage.chapterId,
-        passageId: passage.id,
-        firstSentenceId,
-        lastSentenceId,
-        voiceId: prepared.voiceId,
-        engineId: prepared.engineId,
-        source: prepared.cached ? "cache" : "prepared"
-      })
-    );
 
     prefetchUpcomingPassages(currentChapter, passage);
 
@@ -233,6 +219,15 @@ export function createNarrationSession(options: NarrationSessionOptions): Narrat
       };
     },
 
+    async prepare(sentenceId) {
+      const currentChapter = requireOpenChapter(chapter);
+      const passage = currentChapter.passageBySentenceId.get(sentenceId);
+      if (passage == null)
+        throw new Error("Sentence does not belong to the open narration chapter.");
+      await prepareAndReport(currentChapter, passage, sentenceId);
+      prefetchUpcomingPassages(currentChapter, passage);
+    },
+
     play(sentenceId) {
       closeActive();
       return startAt(sentenceId);
@@ -291,6 +286,41 @@ export function createNarrationSession(options: NarrationSessionOptions): Narrat
         preparationControllers.delete(controller);
       });
     preparedPassages.set(passage.id, prepared);
+    return prepared;
+  }
+
+  async function prepareAndReport(
+    currentChapter: OpenChapter,
+    passage: NarrationPassage,
+    sentenceId: EntityId,
+    isCurrent: () => boolean = () => true
+  ): Promise<PreparedNarration> {
+    const preparedPassage = preparePassage(currentChapter, passage);
+    await publish(
+      createDomainEvent("NarrationPreparationStarted", {
+        bookId: passage.bookId,
+        chapterId: passage.chapterId,
+        passageId: passage.id,
+        sentenceId
+      })
+    );
+    const prepared = await preparedPassage;
+    const firstSentenceId = passage.sentences[0]?.id;
+    const lastSentenceId = passage.sentences[passage.sentences.length - 1]?.id;
+    if (isCurrent() && firstSentenceId != null && lastSentenceId != null) {
+      await publish(
+        createDomainEvent("PassageNarrationReady", {
+          bookId: passage.bookId,
+          chapterId: passage.chapterId,
+          passageId: passage.id,
+          firstSentenceId,
+          lastSentenceId,
+          voiceId: prepared.voiceId,
+          engineId: prepared.engineId,
+          source: prepared.cached ? "cache" : "prepared"
+        })
+      );
+    }
     return prepared;
   }
 

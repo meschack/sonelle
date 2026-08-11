@@ -4,7 +4,7 @@ import {
   createDomainEventDispatcher,
   type AnyDomainEvent
 } from "@sonelle/domain";
-import type { ReaderNarrationWorkflow } from "./reader-narration-workflow";
+import type { NarrationGateway } from "@sonelle/audio/narration";
 import { createReaderOfflineNarrationApplication } from "./reader-offline-narration-application";
 
 describe("reader offline narration application", () => {
@@ -44,14 +44,7 @@ describe("reader offline narration application", () => {
       voiceId: "voice-1",
       voicePreferences: { en: "voice-1" }
     };
-    const narration = {
-      requestPlayback: vi.fn(),
-      pause: vi.fn().mockResolvedValue(undefined),
-      setOutput,
-      prefetchUpcoming: vi.fn(),
-      reset,
-      start: vi.fn(() => () => undefined)
-    } satisfies ReaderNarrationWorkflow;
+    const narration = fakeNarrationGateway({ setOutput, stop: reset });
     const application = createReaderOfflineNarrationApplication(
       {
         audioCache: {
@@ -142,14 +135,7 @@ describe("reader offline narration application", () => {
       progress: readyEngines.has(engineId) ? 100 : null,
       message: readyEngines.has(engineId) ? "Ready" : "Download narration files"
     });
-    const narration = {
-      requestPlayback: vi.fn(),
-      pause: vi.fn().mockResolvedValue(undefined),
-      setOutput: vi.fn(),
-      prefetchUpcoming: vi.fn(),
-      reset: vi.fn().mockResolvedValue(undefined),
-      start: vi.fn(() => () => undefined)
-    } satisfies ReaderNarrationWorkflow;
+    const narration = fakeNarrationGateway();
     const application = createReaderOfflineNarrationApplication(
       {
         audioCache: {
@@ -215,14 +201,7 @@ describe("reader offline narration application", () => {
     );
     const projectAudioCache = vi.fn();
     const dispatcher = createDomainEventDispatcher();
-    const narration = {
-      requestPlayback: vi.fn(),
-      pause: vi.fn().mockResolvedValue(undefined),
-      setOutput: vi.fn(),
-      prefetchUpcoming: vi.fn(),
-      reset: vi.fn().mockResolvedValue(undefined),
-      start: vi.fn(() => () => undefined)
-    } satisfies ReaderNarrationWorkflow;
+    const narration = fakeNarrationGateway();
     const application = createReaderOfflineNarrationApplication(
       {
         audioCache: {
@@ -302,3 +281,19 @@ describe("reader offline narration application", () => {
     stop();
   });
 });
+
+function fakeNarrationGateway(overrides: Partial<NarrationGateway> = {}): NarrationGateway {
+  return {
+    prepare: vi.fn().mockResolvedValue(undefined),
+    readiness: () => "ready",
+    start: vi.fn(),
+    pause: vi.fn().mockResolvedValue(undefined),
+    resume: vi.fn(),
+    stop: vi.fn().mockResolvedValue(undefined),
+    setOutput: vi.fn(),
+    prepareUpcoming: vi.fn(),
+    subscribe: vi.fn(() => () => undefined),
+    connect: vi.fn(() => () => undefined),
+    ...overrides
+  };
+}

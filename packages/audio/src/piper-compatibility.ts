@@ -1,4 +1,4 @@
-import type { NarrationGateway, SentenceNarrationRequest } from "./legacy-narration";
+import type { LegacyNarrationGateway, SentenceNarrationRequest } from "./legacy-narration";
 import type {
   NarrationPreparationAdapter,
   NarrationPreparationRequest,
@@ -9,7 +9,7 @@ import { assertPreparedNarration } from "./narration-manifest";
 const compatibilitySampleRate = 1_000;
 
 export class PiperCompatibilityAdapter implements NarrationPreparationAdapter {
-  constructor(private readonly gateway: NarrationGateway) {}
+  constructor(private readonly gateway: LegacyNarrationGateway) {}
 
   async prepare(
     request: NarrationPreparationRequest,

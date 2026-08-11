@@ -8,6 +8,7 @@ import {
   type AudioSettings
 } from "@sonelle/audio";
 import { createDomainEvent, createDomainEventDispatcher } from "@sonelle/domain";
+import type { NarrationGateway } from "@sonelle/audio/narration";
 import { createSavedDictionary } from "@sonelle/learning";
 import { createReaderPreferences, type ReaderPreferences } from "@sonelle/reader";
 import type { ReaderExperienceDependencies } from "./reader-dependencies";
@@ -19,7 +20,6 @@ import type {
 } from "../library/library-contracts";
 import type { LibraryBookSummary, ReaderDocumentDto } from "../library/library-models";
 import { ReaderExperience } from "./reader-experience";
-import type { ReaderNarrationWorkflow } from "./reader-narration-workflow";
 import { buildFixtureReaderView } from "./reader-view";
 
 beforeAll(() => {
@@ -1075,14 +1075,18 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
     progress: 100,
     message: "Ready"
   };
-  const narrationWorkflow = {
-    requestPlayback: spies.requestPlayback ?? vi.fn(),
+  const narrationGateway = {
+    prepare: vi.fn().mockResolvedValue(undefined),
+    readiness: () => "ready" as const,
+    start: spies.requestPlayback ?? vi.fn(),
     pause: spies.pause,
+    resume: vi.fn(),
     setOutput: vi.fn(),
-    prefetchUpcoming: vi.fn(),
-    reset: vi.fn().mockResolvedValue(undefined),
-    start: vi.fn(() => spies.stopNarration)
-  } satisfies ReaderNarrationWorkflow;
+    prepareUpcoming: vi.fn(),
+    stop: vi.fn().mockResolvedValue(undefined),
+    subscribe: vi.fn(() => () => undefined),
+    connect: vi.fn(() => spies.stopNarration)
+  } satisfies NarrationGateway;
 
   return {
     appWindow: {
@@ -1164,7 +1168,7 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       activateSettings: (settings) => settings,
       voices: () => SUPPORTED_NARRATION_VOICES,
       observeEngineInstallation: vi.fn(),
-      createWorkflow: () => narrationWorkflow,
+      createGateway: () => narrationGateway,
       bookIdentity: () => ({ voiceId: "voice-1", modelRevision: "test-revision" }),
       prepareBook: vi.fn().mockResolvedValue({ sentenceCount: 0 })
     },
