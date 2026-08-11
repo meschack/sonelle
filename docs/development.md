@@ -25,11 +25,42 @@ If installing dependencies piecemeal, the direct errors seen on this machine wer
 sudo apt install libdbus-1-dev libglib2.0-dev libgtk-3-dev pkg-config
 ```
 
+### Android requirements
+
+The tracked Tauri Android project requires:
+
+- JDK 17 or newer
+- Android SDK platform and build tools 36
+- Android platform tools
+- Android NDK `27.1.12297006` (r27b)
+- Rust targets for Android arm64, armv7, x86, and x86_64
+
+Install the SDK packages with Android's command-line tools:
+
+```bash
+sdkmanager \
+  "platform-tools" \
+  "platforms;android-36" \
+  "build-tools;36.1.0" \
+  "ndk;27.1.12297006"
+
+rustup target add \
+  aarch64-linux-android \
+  armv7-linux-androideabi \
+  i686-linux-android \
+  x86_64-linux-android
+```
+
+Set `ANDROID_HOME` to the SDK directory and either set `JAVA_HOME` or ensure the selected `java`
+belongs to the intended JDK. The Gradle wrapper is checked in and downloads its pinned distribution
+on the first build.
+
 ## Commands
 
 ```bash
 pnpm install
 pnpm dev:desktop
+pnpm dev:android
 pnpm dev:web
 pnpm dev:stop
 pnpm typecheck
@@ -43,6 +74,44 @@ pnpm perf:large-books
 cargo check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
+
+## Android emulator
+
+The Android target is already initialized in `apps/desktop/src-tauri/gen/android`; do not run
+`tauri android init` after cloning. Create an x86_64 AVD if one is not already available:
+
+```bash
+sdkmanager "system-images;android-35;default;x86_64"
+echo no | avdmanager create avd \
+  --force \
+  --name Parcel_API_35 \
+  --package "system-images;android-35;default;x86_64" \
+  --device pixel_7
+```
+
+Start it and wait for Android to finish booting:
+
+```bash
+emulator -avd Parcel_API_35 -no-audio -no-boot-anim -gpu host
+adb wait-for-device
+adb shell getprop sys.boot_completed
+```
+
+Launch Sonelle from the repository root. Pass the AVD name, not the `emulator-5554` ADB serial.
+The host address must be reachable from the emulator so its WebView can load Vite:
+
+```bash
+pnpm dev:android Parcel_API_35 --host <host-lan-ip> --no-watch --exit-on-panic
+```
+
+The first run downloads the pinned Gradle distribution and Android dependencies. Later runs reuse
+those caches. The current Android proof deliberately boots the existing fixture reader without a
+mobile redesign. Desktop narration runtimes are excluded from the Android target because the mobile
+runtime and accepted model pack belong to the later narration slices. Android document selection,
+background audio, platform controls, and physical-device performance are also not proved by this
+emulator loop. On Linux hosts without usable GPU passthrough, replace `-gpu host` with
+`-gpu swiftshader_indirect`; software rendering can make WebView attachment and screenshots time
+out under load, so it is useful for compatibility checks but not performance evidence.
 
 ## TUI
 
