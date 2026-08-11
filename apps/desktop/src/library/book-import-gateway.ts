@@ -17,7 +17,11 @@ export function createBookImportGateway(
   if (isAndroidRuntime()) {
     return createAndroidBookImportGateway({
       choose: (options) => open(options),
-      probe: (source) => invoke("probe_book_import_source", { source })
+      probe: (source) => invoke("probe_book_import_source", { source }),
+      async importDocument(source) {
+        const document = await invoke<ReaderDocumentDto>("import_epub", { path: source });
+        return resolveDocumentAssets(document, mediaSources);
+      }
     });
   }
 
@@ -35,6 +39,7 @@ export function createBookImportGateway(
 interface AndroidBookImportDependencies {
   choose(options: OpenDialogOptions): Promise<string | string[] | null>;
   probe(source: string): Promise<void>;
+  importDocument(source: string): Promise<ReaderDocumentDto>;
 }
 
 const androidEpubPickerOptions: OpenDialogOptions = {
@@ -53,6 +58,10 @@ export function createAndroidBookImportGateway(
 ): BookImportGateway {
   return {
     async importBook(request) {
+      if (request.kind === "provided" && !isAndroidDocumentSource(request.source)) {
+        return imported(await dependencies.importDocument(request.source));
+      }
+
       let source: string | null;
       try {
         source =
@@ -76,6 +85,10 @@ export function createAndroidBookImportGateway(
       return { status: "source-selected", source };
     }
   };
+}
+
+function isAndroidDocumentSource(source: string): boolean {
+  return source.toLocaleLowerCase().startsWith("content://");
 }
 
 async function resolveDesktopSource(request: BookImportRequest): Promise<string | null> {
