@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "collectsUserData": false,
+  "sharesUserData": false,
+  "accountCreation": false,
+  "privacyPolicy": "https://sonelle.vercel.app/privacy.html",
+  "localData": [
+    "imported books",
+    "reading progress",
+    "bookmarks and saved passages",
+    "prepared narration",
+    "bounded error diagnostics"
+  ],
+  "networkUse": [
+    "user-requested offline voice downloads",
+    "user-opened external links",
+    "optional device voice only after its network requirement is disclosed"
+  ],
+  "reviewStatus": "pending-final-signed-candidate"
+}

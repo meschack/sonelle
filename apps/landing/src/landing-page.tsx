@@ -324,6 +324,7 @@ function Footer() {
           <nav aria-label="Footer navigation">
             <a href={SOURCE_URL}>GitHub</a>
             <a href={RELEASES_URL}>Releases</a>
+            <a href="/privacy.html">Privacy</a>
             <a href={`${SOURCE_URL}/blob/main/LICENSE`}>License</a>
           </nav>
         </div>

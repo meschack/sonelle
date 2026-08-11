@@ -1,0 +1,17 @@
+{
+  "locale": "en-US",
+  "applicationId": "app.sonelle.reader",
+  "category": "BOOKS_AND_REFERENCE",
+  "title": "Sonelle",
+  "shortDescription": "Read EPUB books with private, offline narration that stays with the page.",
+  "fullDescription": "Sonelle is a local-first EPUB reader built for reading and listening together. Import your own books, follow narration sentence by sentence, search your library, save passages, and return to the exact place where you stopped.\n\nYour books, bookmarks, reading progress, and prepared narration stay on your device. Offline voice files are installed only when you ask for them, verified before use, and can be removed without deleting your library.\n\nSonelle keeps audio in service of the text: a clean mobile reader, sentence-level highlighting, explicit playback controls, and no account required.",
+  "storeIcon": "apps/desktop/src-tauri/icons/icon.png",
+  "privacyPolicy": "https://sonelle.vercel.app/privacy.html",
+  "phoneScreenshots": {
+    "required": 2,
+    "status": "pending-physical-device-capture"
+  },
+  "featureGraphic": {
+    "status": "pending-final-art-direction"
+  }
+}

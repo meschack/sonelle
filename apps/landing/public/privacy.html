@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>Privacy · Sonelle</title>
+    <style>
+      @font-face {
+        font-family: Satoshi;
+        src: url("/fonts/satoshi/Satoshi-Variable.woff2") format("woff2");
+        font-weight: 300 900;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: SpaceMono;
+        src: url("/fonts/space-mono/SpaceMonoNerdFontPropo-Regular.woff2") format("woff2");
+        font-display: swap;
+      }
+      :root {
+        color: #242625;
+        background: #fcf9f8;
+        font-family: Satoshi, ui-sans-serif, system-ui, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      a {
+        color: #153f34;
+        text-underline-offset: 4px;
+      }
+      header,
+      main,
+      footer {
+        width: min(100% - 40px, 940px);
+        margin-inline: auto;
+      }
+      header {
+        min-height: 88px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid #c9d0cc;
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        color: #153f34;
+        font-size: 21px;
+        font-weight: 750;
+        text-decoration: none;
+      }
+      .brand img {
+        width: 30px;
+        height: 30px;
+      }
+      .back {
+        font-size: 14px;
+        font-weight: 650;
+      }
+      main {
+        padding: 96px 0 120px;
+      }
+      .eyebrow,
+      .number {
+        font-family: SpaceMono, monospace;
+        color: #275e4f;
+        font-size: 12px;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+      h1 {
+        max-width: 760px;
+        margin: 18px 0 28px;
+        color: #153f34;
+        font-size: clamp(52px, 9vw, 108px);
+        line-height: 0.88;
+        letter-spacing: -0.065em;
+      }
+      .lede {
+        max-width: 680px;
+        margin: 0 0 88px;
+        color: #4e5753;
+        font-size: clamp(20px, 3vw, 28px);
+        line-height: 1.4;
+      }
+      .policy {
+        border-top: 1px solid #c9d0cc;
+      }
+      section {
+        display: grid;
+        grid-template-columns: 90px 1fr;
+        gap: 28px;
+        padding: 34px 0 40px;
+        border-bottom: 1px solid #dddeda;
+      }
+      h2 {
+        margin: 0 0 12px;
+        color: #153f34;
+        font-size: 25px;
+        letter-spacing: -0.025em;
+      }
+      p,
+      li {
+        color: #4e5753;
+        font-size: 17px;
+        line-height: 1.68;
+      }
+      p {
+        margin: 0 0 14px;
+      }
+      ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+      footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 32px 0 48px;
+        border-top: 1px solid #c9d0cc;
+        color: #666d69;
+        font-size: 14px;
+      }
+      :focus-visible {
+        outline: 3px solid #f2c94c;
+        outline-offset: 4px;
+      }
+      @media (max-width: 640px) {
+        main {
+          padding-top: 64px;
+        }
+        section {
+          grid-template-columns: 1fr;
+          gap: 12px;
+        }
+        .lede {
+          margin-bottom: 60px;
+        }
+        footer {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/"><img src="/brand/sonelle-logo.svg" alt="" />Sonelle</a>
+      <a class="back" href="/">Back to Sonelle</a>
+    </header>
+    <main>
+      <div class="eyebrow">Privacy policy · effective August 11, 2026</div>
+      <h1>Local means local.</h1>
+      <p class="lede">
+        Your library is intimate. Sonelle is built so reading it does not require handing it over.
+      </p>
+      <div class="policy">
+        <section>
+          <div class="number">01</div>
+          <div>
+            <h2>What stays on your device</h2>
+            <p>
+              Sonelle stores imported books, reading progress, bookmarks, saved passages, prepared
+              narration, preferences, and bounded error diagnostics in its local application data.
+            </p>
+            <p>
+              <strong>Sonelle does not upload your books or reading activity.</strong> There is no
+              Sonelle account, advertising profile, analytics feed, or automatic crash-report
+              upload.
+            </p>
+          </div>
+        </section>
+        <section>
+          <div class="number">02</div>
+          <div>
+            <h2>When Sonelle uses the network</h2>
+            <p>
+              <strong>Offline voice files</strong> are downloaded only after you choose to install
+              them. The file host receives ordinary connection information such as an IP address;
+              Sonelle does not send your book text with that download.
+            </p>
+            <p>
+              Links inside a book open in your system browser only after you activate them. The
+              destination then applies its own privacy policy.
+            </p>
+          </div>
+        </section>
+        <section>
+          <div class="number">03</div>
+          <div>
+            <h2>Voice choices</h2>
+            <p>
+              Sonelle's standard offline narration processes book text on your device after its
+              voice files are installed. Prepared audio remains local.
+            </p>
+            <p>
+              <strong>Device-provided voices</strong> are separate and optional. Before Sonelle uses
+              one, it tells you whether the selected Android speech engine requires a network
+              connection. A network voice may send the text being spoken to that engine's provider
+              under the provider's terms.
+            </p>
+          </div>
+        </section>
+        <section>
+          <div class="number">04</div>
+          <div>
+            <h2>Diagnostics and sharing</h2>
+            <p>
+              Error diagnostics are written locally and are never uploaded automatically. If you
+              choose to share a report, review it first. GitHub issues are public, so do not include
+              books, device identifiers, or personal information.
+            </p>
+          </div>
+        </section>
+        <section>
+          <div class="number">05</div>
+          <div>
+            <h2>Control and deletion</h2>
+            <p>
+              You can remove downloaded voice files without deleting books or progress.
+              <strong>Delete Sonelle's local data</strong> through Android system settings, or
+              uninstall Sonelle, to remove its application data from the device. Backups controlled
+              by your operating system follow the settings of that service.
+            </p>
+          </div>
+        </section>
+        <section>
+          <div class="number">06</div>
+          <div>
+            <h2>Changes and contact</h2>
+            <p>
+              This policy changes when Sonelle's real data behavior changes, not as decorative legal
+              confetti. The effective date above will be updated and material changes will be called
+              out with the release.
+            </p>
+            <p>
+              Questions and corrections can be raised in the
+              <a href="https://github.com/Meschack/sonelle/issues">Sonelle issue tracker</a>.
+            </p>
+          </div>
+        </section>
+      </div>
+    </main>
+    <footer>
+      <span>Sonelle · Your private reading desk</span
+      ><a href="https://github.com/Meschack/sonelle">Source on GitHub</a>
+    </footer>
+  </body>
+</html>

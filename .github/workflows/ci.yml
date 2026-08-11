@@ -82,6 +82,9 @@ jobs:
       - name: Audit Android release licenses
         run: pnpm audit:android-release
 
+      - name: Validate Android store metadata
+        run: pnpm validate:android-store
+
       - name: Lint native shell
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 

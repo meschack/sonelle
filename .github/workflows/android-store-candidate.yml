@@ -1,0 +1,167 @@
+name: Android Store Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Full commit SHA already merged into main
+        required: true
+        type: string
+      version_name:
+        description: Semantic release version, without a v prefix
+        required: true
+        type: string
+      version_code:
+        description: New monotonically increasing Play version code
+        required: true
+        type: string
+
+concurrency:
+  group: android-store-candidate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  build:
+    name: Build signed Android App Bundle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment: android-store-candidate
+
+    steps:
+      - name: Validate immutable release inputs
+        env:
+          REVISION: ${{ inputs.revision }}
+          VERSION_CODE: ${{ inputs.version_code }}
+          VERSION_NAME: ${{ inputs.version_name }}
+        run: |
+          [[ "$REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+          [[ "$VERSION_CODE" =~ ^[1-9][0-9]*$ ]]
+          test "$VERSION_CODE" -le 2100000000
+
+      - name: Checkout requested revision
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.revision }}
+
+      - name: Require a revision already merged into main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main
+          test "$(git rev-parse HEAD)" = "${{ inputs.revision }}"
+
+      - name: Require completed Android proof and compliance review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh issue view 132 --json state --jq .state)" = "CLOSED"
+          test "$(gh issue view 133 --json state --jq .state)" = "CLOSED"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Cache Rust builds
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.1.0" \
+            "ndk;27.1.12297006"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify release disclosures and store metadata
+        run: |
+          pnpm audit:android-release
+          pnpm validate:android-store
+
+      - name: Configure Play upload signing
+        env:
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_KEY_BASE64: ${{ secrets.ANDROID_UPLOAD_KEY_BASE64 }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+        run: |
+          test -n "$ANDROID_UPLOAD_KEY_ALIAS"
+          test -n "$ANDROID_UPLOAD_KEY_BASE64"
+          test -n "$ANDROID_UPLOAD_KEY_PASSWORD"
+          test -n "$ANDROID_UPLOAD_STORE_PASSWORD"
+          echo "$ANDROID_UPLOAD_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/sonelle-upload.jks"
+          {
+            echo "keyAlias=$ANDROID_UPLOAD_KEY_ALIAS"
+            echo "keyPassword=$ANDROID_UPLOAD_KEY_PASSWORD"
+            echo "storePassword=$ANDROID_UPLOAD_STORE_PASSWORD"
+            echo "storeFile=$RUNNER_TEMP/sonelle-upload.jks"
+          } > apps/desktop/src-tauri/gen/android/keystore.properties
+
+      - name: Create store version configuration
+        env:
+          VERSION_CODE: ${{ inputs.version_code }}
+          VERSION_NAME: ${{ inputs.version_name }}
+        run: |
+          node -e 'const fs=require("node:fs"); fs.writeFileSync(process.argv[1], JSON.stringify({version:process.env.VERSION_NAME,bundle:{android:{versionCode:Number(process.env.VERSION_CODE)}}}));' "$RUNNER_TEMP/android-store.conf.json"
+
+      - name: Build signed store AAB
+        env:
+          SONELLE_BUILD_COMMIT: ${{ inputs.revision }}
+        run: |
+          export NDK_HOME="$ANDROID_HOME/ndk/27.1.12297006"
+          pnpm --filter @sonelle/desktop tauri android build \
+            --aab \
+            --ci \
+            --config "$RUNNER_TEMP/android-store.conf.json"
+
+      - name: Verify and collect store candidate
+        run: |
+          AAB_PATH=$(find apps/desktop/src-tauri/gen/android/app/build/outputs/bundle -type f -name '*release*.aab' -print -quit)
+          test -n "$AAB_PATH"
+          jarsigner -verify -strict "$AAB_PATH"
+          unzip -l "$AAB_PATH" | grep -q 'base/manifest/AndroidManifest.xml'
+          mkdir -p artifacts/android-store
+          cp "$AAB_PATH" artifacts/android-store/sonelle-${{ inputs.version_name }}-${{ inputs.version_code }}.aab
+          sha256sum artifacts/android-store/*.aab > artifacts/android-store/SHA256SUMS
+
+      - name: Upload store candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: sonelle-android-store-${{ inputs.version_name }}-${{ inputs.version_code }}
+          retention-days: 30
+          if-no-files-found: error
+          path: artifacts/android-store/*
+
+      - name: Remove upload signing material
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/sonelle-upload.jks"
+          rm -f "$RUNNER_TEMP/android-store.conf.json"
+          rm -f apps/desktop/src-tauri/gen/android/keystore.properties
