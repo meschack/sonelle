@@ -114,6 +114,7 @@ import { ReaderCommandPalette } from "./reader-command-palette";
 import { ReaderQuoteImageDialog } from "./reader-quote-image-dialog";
 import { FocusIcon } from "./reader-icons";
 import { MobileReaderShell } from "./mobile-reader-shell";
+import { MobileNarrationDock } from "./mobile-narration-dock";
 import {
   renderedLibraryGridColumnCount,
   resolveLibraryGridNavigationIndex,
@@ -1586,6 +1587,25 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     />
   );
 
+  const mobileNarrationDock = () => (
+    <MobileNarrationDock
+      chapterTitle={reader().chapter.title}
+      progress={readerProgress()}
+      sentenceCount={reader().sentences.length}
+      status={playback().status}
+      preparing={showNarrationPreparation()}
+      notice={narrationNotice()}
+      onPrevious={() => moveSentence(-1)}
+      onToggle={togglePlayback}
+      onNext={() => moveSentence(1)}
+      onStop={() => void stopReaderPlayback()}
+      onOpenControls={() => {
+        setInspectorTab("settings");
+        setMobileToolsOpen(true);
+      }}
+    />
+  );
+
   const readerFeedback = () => (
     <Show
       when={narrationNotice()}
@@ -1746,7 +1766,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
             navigation={readerNavigation()}
             content={readerReadingColumn()}
             tools={<ReaderInspector model={inspectorModel} />}
-            playback={playbackRail()}
+            playback={mobileNarrationDock()}
             libraryBooks={libraryBooks()}
             activeBookId={reader().book.id}
             toolsOpen={mobileToolsOpen()}
