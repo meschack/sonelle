@@ -4,7 +4,8 @@
 
 - selecting phone or desktop reader composition at the application boundary
 - the phone reader's compact header and explicit navigation, content, tools, and playback slots
-- touch-first Library and reading-tools sheets, including focus restoration and Back behavior
+- touch-first Library and contextual reading-tools sheets, including focus restoration and Back
+  behavior
 
 ## Refuses To Own
 
@@ -32,6 +33,14 @@ Both sheets push a temporary history entry, close on Android Back or their scrim
 sheet on open, and restore focus to their trigger on dismissal. None of those presentation actions
 changes the active sentence or scroll container.
 
+The contextual tools sheet composes the existing Word, Search, Notes, and Tools inspector rather than
+forking mobile-only use cases. Tapping a word on a phone opens its insight in that sheet; the anchored
+desktop popover is intentionally suppressed there. Search and saved-passage selections still use the
+reader navigation application. Changing tabs or dismissing the sheet never requests a narration
+pause, changes the active sentence on its own, or recreates the reader document. Empty searches,
+missing saved passages, dictionary lookup progress, unavailable definitions, and lookup failures keep
+the humane state language owned by the shared inspector.
+
 The visual direction is Sonelle's quiet reading desk reduced to one column: Satoshi carries controls,
 SpaceMono Nerd Font Propo labels the current book, the existing green and paper palette stays intact,
 and a fixed four-slot frame replaces the desktop rails rather than compressing them onto a phone.
@@ -57,3 +66,8 @@ scrim and Back history, verifies focus and chapter stability, then switches book
 selects a nested target and exercises close action, scrim, Back, and focus restoration. Rendered
 browser QA uses phone and desktop viewports when the in-app browser is available; Android packaging
 verifies the same composition is compiled into the mobile application.
+
+The contextual-tools tracer taps a reader word, resolves its intended definition, changes to Search
+and Notes, opens the exact sentence from each result, and dismisses through the scrim. It holds the
+reading scroll offset constant and proves no narration pause was requested throughout. The shell
+component separately covers system Back and focus restoration for the tools sheet.

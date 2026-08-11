@@ -309,6 +309,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       projectSavedDictionary: setSavedDictionary,
       openWordInspector() {
         setInspectorTab("word");
+        if (mobileReaderShell()) setMobileToolsOpen(true);
       }
     }
   );
@@ -1455,6 +1456,8 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     isActiveSentence,
     isBookmarkedSentence: (sentenceId) => bookmarkedSentenceIds().has(sentenceId),
     isSearchHit: (sentenceId) => readerSearchHitIds().has(sentenceId),
+    inspectWordsOnTap: mobileReaderShell,
+    showWordPopover: () => !mobileReaderShell(),
     selectedWord,
     activeWordInsight,
     registerSentence(sentenceId, element) {

@@ -16,6 +16,7 @@ import {
   type ReaderPreferences
 } from "@sonelle/reader";
 import type { ReaderExperienceDependencies } from "./reader-dependencies";
+import type { DictionaryRepository } from "../learning/dictionary-repository";
 import type {
   BookmarkStore,
   BookImportGateway,
@@ -419,6 +420,130 @@ describe("ReaderExperience integration", () => {
       expect(container.querySelector('[role="dialog"][aria-label="Library"]')).toBeNull()
     );
     expect(container.querySelector(".mobile-reader-title")?.textContent).toContain("Another Book");
+
+    dispose();
+    container.remove();
+  });
+
+  it("keeps mobile word, search, and bookmark tools contextual without interrupting reading", async () => {
+    const bookId = "mobile-insights";
+    const pause = vi.fn().mockResolvedValue(undefined);
+    const lookupWord = vi.fn<DictionaryRepository["lookupWord"]>().mockResolvedValue({
+      key: "opened",
+      surface: "Opened",
+      word: "opened",
+      phonetic: "/ˈoʊpənd/",
+      audioUrl: null,
+      meanings: [
+        {
+          partOfSpeech: "verb",
+          definitions: [
+            {
+              definition: "Made available for reading.",
+              example: null,
+              synonyms: [],
+              antonyms: []
+            }
+          ]
+        }
+      ],
+      sourceUrl: "https://dictionary.test/opened",
+      fetchedAt: "2026-08-11T00:00:00.000Z"
+    });
+    const bookmark: LibraryBookmarkDto = {
+      id: "mobile-insight-bookmark",
+      bookId,
+      bookTitle: "Pocket Insights",
+      chapterId: `${bookId}-chapter`,
+      chapterTitle: "Chapter 1",
+      sentenceId: `${bookId}-sentence`,
+      sentenceIndex: 0,
+      text: "Opened from the Library.",
+      note: null,
+      createdAt: "2026-08-11T00:00:00.000Z"
+    };
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause,
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      libraryBooks: [createLibraryBook(bookId, "Pocket Insights", 0)],
+      openBook: vi.fn(async () => createReaderDocument(bookId)),
+      bookmarkStore: {
+        list: vi.fn().mockResolvedValue([bookmark]),
+        save: vi.fn().mockResolvedValue(bookmark),
+        delete: vi.fn().mockResolvedValue(undefined)
+      },
+      lookupWord,
+      mobileReaderShell: true
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    const readingSurface = await vi.waitFor(() => {
+      const element = container.querySelector<HTMLElement>(".mobile-reader-content-slot");
+      expect(element).not.toBeNull();
+      return element;
+    });
+    if (readingSurface == null) throw new Error("Mobile reading surface was not rendered");
+    readingSurface.scrollTop = 64;
+    const word = await vi.waitFor(() => {
+      const element = container.querySelector<HTMLElement>('[aria-label="Tap to inspect Opened"]');
+      expect(element).not.toBeNull();
+      return element;
+    });
+    if (word == null) throw new Error("Tappable reader word was not rendered");
+    word.click();
+
+    await vi.waitFor(() => expect(lookupWord).toHaveBeenCalledWith("Opened", "en"));
+    const tools = await vi.waitFor(() => {
+      const element = container.querySelector<HTMLElement>(
+        '[role="dialog"][aria-label="Reading tools"]'
+      );
+      expect(element).not.toBeNull();
+      return element;
+    });
+    expect(tools?.textContent).toContain("Made available for reading.");
+    expect(container.querySelector(".word-popover")).toBeNull();
+    expect(readingSurface.scrollTop).toBe(64);
+    expect(pause).not.toHaveBeenCalled();
+
+    clickInspectorTab(container, "Search");
+    const search = container.querySelector<HTMLInputElement>(
+      'input[aria-label="Search this chapter"]'
+    );
+    if (search == null) throw new Error("Mobile chapter search was not rendered");
+    search.value = "Library";
+    search.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    const searchResult = await vi.waitFor(() => {
+      const button = container.querySelector<HTMLButtonElement>(".result-list button");
+      expect(button).not.toBeNull();
+      return button;
+    });
+    searchResult?.click();
+    expect(container.querySelector(".sentence.active")?.textContent).toContain(
+      "Opened from the Library."
+    );
+
+    clickInspectorTab(container, "Notes");
+    const savedPassage = await vi.waitFor(() => {
+      const button = container.querySelector<HTMLButtonElement>(".bookmark-card-button");
+      expect(button?.textContent).toContain("Opened from the Library.");
+      return button;
+    });
+    savedPassage?.click();
+    expect(readingSurface.scrollTop).toBe(64);
+    expect(pause).not.toHaveBeenCalled();
+
+    container.querySelector<HTMLElement>(".mobile-reader-tools-backdrop")?.click();
+    await vi.waitFor(() =>
+      expect(container.querySelector('[role="dialog"][aria-label="Reading tools"]')).toBeNull()
+    );
+    await vi.waitFor(() => expect(document.activeElement).toBe(word));
+    expect(readingSurface.scrollTop).toBe(64);
+    expect(pause).not.toHaveBeenCalled();
 
     dispose();
     container.remove();
@@ -1563,6 +1688,7 @@ interface DependencySpies {
   captureBackground?: (listener: () => void) => void;
   bookmarkStore?: BookmarkStore;
   mobileReaderShell?: boolean;
+  lookupWord?: DictionaryRepository["lookupWord"];
 }
 
 function createDependencies(spies: DependencySpies): ReaderExperienceDependencies {
@@ -1635,7 +1761,7 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       delete: vi.fn().mockResolvedValue(undefined)
     },
     dictionaryRepository: {
-      lookupWord: vi.fn().mockResolvedValue(null),
+      lookupWord: spies.lookupWord ?? vi.fn().mockResolvedValue(null),
       loadSavedDictionary: createSavedDictionary,
       saveSavedDictionary: vi.fn()
     },

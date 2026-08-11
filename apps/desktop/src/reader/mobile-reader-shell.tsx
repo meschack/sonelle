@@ -1,4 +1,4 @@
-import { createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js";
 import type { LibraryBookSummary } from "../library/library-models";
 import { LibraryIcon, SearchIcon, SettingsIcon } from "./reader-icons";
 
@@ -24,6 +24,10 @@ export function MobileReaderShell(props: MobileReaderShellProps) {
   const historyMarker = "mobile-reader-library";
   let libraryTrigger: HTMLButtonElement | undefined;
   let libraryClose: HTMLButtonElement | undefined;
+  let toolsClose: HTMLButtonElement | undefined;
+  let toolsReturnFocus: HTMLElement | null = null;
+  let toolsHistoryActive = false;
+  let toolsWereOpen = false;
 
   const restoreLibraryFocus = () => queueMicrotask(() => libraryTrigger?.focus());
   const openLibrary = () => {
@@ -45,12 +49,44 @@ export function MobileReaderShell(props: MobileReaderShellProps) {
     }
     void props.onOpenBook(bookId).finally(closeLibrary);
   };
+  const restoreToolsFocus = () =>
+    queueMicrotask(() => {
+      if (toolsReturnFocus?.isConnected) toolsReturnFocus.focus();
+      toolsReturnFocus = null;
+    });
+
+  createEffect(() => {
+    const open = props.toolsOpen;
+    if (open === toolsWereOpen) return;
+    toolsWereOpen = open;
+
+    if (open) {
+      toolsReturnFocus =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      window.history.pushState({ sonelleSurface: "mobile-reader-tools" }, "");
+      toolsHistoryActive = true;
+      queueMicrotask(() => toolsClose?.focus());
+      return;
+    }
+
+    restoreToolsFocus();
+    if (toolsHistoryActive && window.history.state?.sonelleSurface === "mobile-reader-tools") {
+      toolsHistoryActive = false;
+      window.history.back();
+    }
+  });
 
   onMount(() => {
     const closeFromBackNavigation = () => {
-      if (!libraryOpen()) return;
-      setLibraryOpen(false);
-      restoreLibraryFocus();
+      if (libraryOpen()) {
+        setLibraryOpen(false);
+        restoreLibraryFocus();
+      }
+      if (props.toolsOpen && toolsHistoryActive) {
+        toolsHistoryActive = false;
+        props.onCloseTools();
+        restoreToolsFocus();
+      }
     };
     window.addEventListener("popstate", closeFromBackNavigation);
     onCleanup(() => window.removeEventListener("popstate", closeFromBackNavigation));
@@ -172,7 +208,13 @@ export function MobileReaderShell(props: MobileReaderShellProps) {
       </Show>
 
       <Show when={props.toolsOpen}>
-        <div class="mobile-reader-tools-backdrop" role="presentation">
+        <div
+          class="mobile-reader-tools-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) props.onCloseTools();
+          }}
+        >
           <section
             class="mobile-reader-tools-sheet"
             role="dialog"
@@ -184,7 +226,7 @@ export function MobileReaderShell(props: MobileReaderShellProps) {
                 <span>Current book</span>
                 <strong>Reading tools</strong>
               </div>
-              <button type="button" onClick={props.onCloseTools}>
+              <button ref={toolsClose} type="button" onClick={props.onCloseTools}>
                 Back to reading
               </button>
             </header>

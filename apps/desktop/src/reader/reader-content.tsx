@@ -89,6 +89,8 @@ export interface ReaderContentInteractions {
   isActiveSentence: (sentenceId: string) => boolean;
   isBookmarkedSentence: (sentenceId: string) => boolean;
   isSearchHit: (sentenceId: string) => boolean;
+  inspectWordsOnTap: () => boolean;
+  showWordPopover: () => boolean;
   selectedWord: () => SelectedWord | null;
   activeWordInsight: () => WordInsight | null;
   registerSentence: (sentenceId: string, element: HTMLElement) => void;
@@ -201,6 +203,8 @@ export function ReaderParagraph(props: ReaderParagraphProps) {
                             ? interactions.activeWordInsight()
                             : null
                         }
+                        inspectOnTap={interactions.inspectWordsOnTap()}
+                        showPopover={interactions.showWordPopover()}
                         onSelect={interactions.selectWord}
                         onClear={interactions.clearWord}
                         onSave={interactions.saveWord}
@@ -353,6 +357,8 @@ interface SentenceTokenProps {
   sentence: ReaderSentenceView;
   selected: boolean;
   insight: WordInsight | null;
+  inspectOnTap: boolean;
+  showPopover: boolean;
   onSelect: (
     sentence: ReaderSentenceView,
     token: Extract<ReaderTextToken, { kind: "word" }>
@@ -383,14 +389,19 @@ function SentenceToken(props: SentenceTokenProps) {
       }}
       role="button"
       tabIndex={0}
-      aria-label={`Right click to inspect ${token.text}`}
+      aria-label={`${props.inspectOnTap ? "Tap" : "Right click"} to inspect ${token.text}`}
+      onClick={(event) => {
+        if (!props.inspectOnTap) return;
+        tokenElement?.focus();
+        inspectWord(event);
+      }}
       onContextMenu={inspectWord}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") inspectWord(event);
       }}
     >
       {token.text}
-      <Show when={props.selected ? props.insight : null}>
+      <Show when={props.showPopover && props.selected ? props.insight : null}>
         {(insight) => (
           <Portal>
             <WordPopover
