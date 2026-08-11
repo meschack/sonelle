@@ -36,9 +36,15 @@ android {
         if (releaseKeystorePropertiesFile.exists()) {
             create("release") {
                 keyAlias = releaseKeystoreProperties.getProperty("keyAlias")
-                keyPassword = releaseKeystoreProperties.getProperty("password")
+                keyPassword = releaseKeystoreProperties.getProperty(
+                    "keyPassword",
+                    releaseKeystoreProperties.getProperty("password")
+                )
                 storeFile = file(releaseKeystoreProperties.getProperty("storeFile"))
-                storePassword = releaseKeystoreProperties.getProperty("password")
+                storePassword = releaseKeystoreProperties.getProperty(
+                    "storePassword",
+                    releaseKeystoreProperties.getProperty("password")
+                )
             }
         }
     }

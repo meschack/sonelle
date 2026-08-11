@@ -27,6 +27,7 @@
     "report:android-core": "node scripts/report-android-core-flow.mjs",
     "decide:android-shell": "node scripts/record-android-shell-decision.mjs",
     "audit:android-release": "node scripts/audit-android-release.mjs",
+    "validate:android-store": "node scripts/validate-android-store-readiness.mjs",
     "spike:narration:setup": "node scripts/setup-narration-spike.mjs",
     "spike:narration:models": "node scripts/setup-narration-spike.mjs --models",
     "spike:narration:verify": "node scripts/setup-narration-spike.mjs --models --verify-only",

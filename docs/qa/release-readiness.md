@@ -55,3 +55,7 @@ Run `pnpm audit:android-release` and read the
 [Android narration license and privacy review](android-license-privacy-review.md) before treating an
 Android artifact as shareable. Repeat the audit whenever a runtime, model, voice, or device-voice
 adapter enters the actual Android target.
+
+After issues #132 and #133 close, follow the [Android store release](android-store-release.md)
+procedure. A locally signed APK is not store evidence: verify the Play-generated install and an
+upgrade from a higher version code on both baseline devices before promotion.
