@@ -12,6 +12,7 @@ pub struct LibraryBookView {
     pub sentence_count: i64,
     pub source_status: LibrarySourceStatusView,
     pub last_chapter_id: Option<String>,
+    pub last_read_at: Option<String>,
     pub completed_sentence_count: i64,
 }
 

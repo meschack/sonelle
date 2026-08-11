@@ -36,6 +36,49 @@ const document = {
 };
 
 describe("reader library application", () => {
+  it("restores the most recently read book after a normal restart", async () => {
+    const olderBook = { ...book, id: "book-older", lastReadAt: "2026-07-01T08:00:00Z" };
+    const recentBook = { ...book, id: "book-recent", lastReadAt: "2026-07-02T08:00:00Z" };
+    const open = vi.fn().mockResolvedValue({
+      ...document,
+      book: { ...document.book, id: recentBook.id }
+    });
+    const openDocument = vi.fn().mockResolvedValue(undefined);
+    const application = createReaderLibraryApplication(
+      {
+        catalog: { list: vi.fn().mockResolvedValue([olderBook, recentBook]), open },
+        drops: { listen: async () => () => undefined },
+        openRequests: { listen: async () => () => undefined },
+        importGateway: { importBook: vi.fn() },
+        importSourceStore: { prepare: vi.fn() },
+        bookmarks: { list: vi.fn().mockResolvedValue([]), save: vi.fn(), delete: vi.fn() },
+        eventDispatcher: createDomainEventDispatcher(),
+        friendlyError: () => "Library needs attention"
+      },
+      {
+        activeView: () => "reader",
+        currentBookSource: () => "sample",
+        projectBooks: vi.fn(),
+        projectBookmarks: vi.fn(),
+        projectLoading: vi.fn(),
+        projectImporting: vi.fn(),
+        projectDropTarget: vi.fn(),
+        projectLibraryNotice: vi.fn(),
+        projectBookmarkNotice: vi.fn(),
+        openDocument,
+        openBookmarkInspector: vi.fn()
+      }
+    );
+
+    await application.refresh();
+
+    expect(open).toHaveBeenCalledWith("book-recent", undefined);
+    expect(openDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ book: expect.objectContaining({ id: "book-recent" }) }),
+      {}
+    );
+  });
+
   it("ends the busy state when Android source preparation finishes", async () => {
     const dispatcher = createDomainEventDispatcher();
     const importing: boolean[] = [];

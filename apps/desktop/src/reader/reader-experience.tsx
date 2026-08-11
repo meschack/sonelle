@@ -789,12 +789,16 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       .catch(reportEventReactionFailure);
     clampSidebarWidthsToViewport();
 
+    const stopAppLifecycle = dependencies.appLifecycle.listenForBackground(() => {
+      void playbackApplication.stop();
+    });
     window.addEventListener("keydown", handleShortcut);
     window.addEventListener("resize", clampSidebarWidthsToViewport);
     onCleanup(() => {
       disposed = true;
       window.removeEventListener("keydown", handleShortcut);
       window.removeEventListener("resize", clampSidebarWidthsToViewport);
+      stopAppLifecycle();
       stopLibraryApplication?.();
       stopOfflineNarrationApplication?.();
       disconnectNarration();

@@ -8,6 +8,7 @@ export interface LibraryBookSummary {
   sentenceCount: number;
   sourceStatus?: { status: "ready" } | { status: "needs-attention"; message: string };
   lastChapterId: string | null;
+  lastReadAt?: string | null;
   completedSentenceCount: number;
 }
 

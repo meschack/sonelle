@@ -83,6 +83,13 @@ export function createReaderLibraryApplication(
     return books;
   };
 
+  const resumeBook = (books: LibraryBookSummary[]) =>
+    books.reduce<LibraryBookSummary | null>((latest, book) => {
+      if (book.lastReadAt == null) return latest;
+      if (latest?.lastReadAt == null) return book;
+      return book.lastReadAt > latest.lastReadAt ? book : latest;
+    }, null) ?? books[0];
+
   const refreshBookmarks = async (bookId?: string) => {
     try {
       const bookmarks = await dependencies.bookmarks.list(bookId);
@@ -206,8 +213,9 @@ export function createReaderLibraryApplication(
       options.projectLoading(true);
       try {
         const books = await refreshBooks();
-        if (options.currentBookSource() === "sample" && books[0] != null) {
-          await open(books[0].id);
+        const book = resumeBook(books);
+        if (options.currentBookSource() === "sample" && book != null) {
+          await open(book.id);
         }
       } catch (error) {
         reportLibraryError(error);
