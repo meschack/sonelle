@@ -50,3 +50,8 @@ hands-on testing:
 After both baseline devices complete the benchmark contract, combine their exact-build results with
 the [Android core-flow evidence report](android-core-flow-report.md). Pending checks, mismatched
 builds, or failures without focused follow-up issues are not release evidence.
+
+Run `pnpm audit:android-release` and read the
+[Android narration license and privacy review](android-license-privacy-review.md) before treating an
+Android artifact as shareable. Repeat the audit whenever a runtime, model, voice, or device-voice
+adapter enters the actual Android target.

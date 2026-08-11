@@ -1181,7 +1181,8 @@ describe("ReaderExperience integration", () => {
     expect(container.querySelector('[aria-label="Book content font"]')).not.toBeNull();
     expect(container.textContent).toContain("Offline readiness");
     expect(container.querySelector('[aria-label="Chapter narration readiness"]')).toBeNull();
-    expect(container.textContent).not.toContain("Diagnostics");
+    expect(container.querySelector(".diagnostics-card")).toBeNull();
+    expect(container.textContent).not.toContain("Show error log");
 
     dispose();
     container.remove();

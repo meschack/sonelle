@@ -34,6 +34,7 @@ import {
   WordIcon
 } from "./reader-icons";
 import { SavedPassageCard } from "./saved-passage-card";
+import { ReaderLegalPanel } from "./reader-legal";
 
 export interface ReaderInspectorModel {
   tab: InspectorTab;
@@ -475,6 +476,7 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
           {(notice) => <p class="library-notice">{notice()}</p>}
         </Show>
       </div>
+      <ReaderLegalPanel standardOfflineVoiceAvailable={props.offlineLibrary === "language-pack"} />
     </section>
   );
 }
