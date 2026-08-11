@@ -47,6 +47,11 @@ Readable manifest documents are available to spine extraction so relative footno
 citation targets can resolve across files. Reference markers are removed from narration text and
 projected onto their owning sentence with an inline offset.
 
+EPUB 3 navigation documents and NCX fallbacks are projected as an ordered, depth-bearing contents
+list. Internal targets resolve to stored chapter identifiers and, when an anchor has readable text,
+to the matching normalized sentence. Labels and hierarchy survive even when a publisher target is
+missing; unresolved destinations remain explicitly unavailable instead of becoming unsafe links.
+
 ## Invariants
 
 - library ports never import reader-owned DTOs
@@ -54,6 +59,7 @@ projected onto their owning sentence with an inline offset.
 - cancellation is a normal outcome; unreadable sources are failures
 - only fully written, synchronized Android sources receive an importable `.epub` path
 - imported text, paragraph, sentence, and reference projections commit atomically
+- contents metadata never injects publisher HTML or CSS into the reader
 - repair never blocks Tauri setup and one unreadable book does not stop later repairs
 - batches remain bounded and resumable by stable identifiers
 

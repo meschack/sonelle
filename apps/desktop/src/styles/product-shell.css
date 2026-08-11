@@ -1823,6 +1823,105 @@
   }
 }
 
+.mobile-contents-trigger {
+  display: none;
+}
+
+.reader-contents-backdrop {
+  align-items: end;
+  background: rgb(19 18 16 / 46%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 18px;
+  position: fixed;
+  z-index: 80;
+}
+
+.reader-contents-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px 18px 10px 10px;
+  box-shadow: 0 22px 60px rgb(24 22 18 / 24%);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: min(76vh, 720px);
+  max-width: 620px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.reader-contents-panel > header {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  padding: 18px;
+}
+
+.reader-contents-panel > header div {
+  display: grid;
+  gap: 3px;
+}
+
+.reader-contents-panel > header span {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reader-contents-panel > header strong {
+  font-size: 20px;
+}
+
+.reader-contents-panel > header button,
+.mobile-contents-trigger {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  min-height: 42px;
+  padding: 0 16px;
+}
+
+.reader-contents-panel nav {
+  display: grid;
+  overflow-y: auto;
+  padding: 8px 0 18px;
+}
+
+.contents-entry {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  color: var(--ink);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 52px;
+  padding-block: 10px;
+  padding-right: 18px;
+  text-align: left;
+  width: 100%;
+}
+
+.contents-entry.active {
+  background: var(--green-soft);
+  font-weight: 650;
+}
+
+.contents-entry:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.contents-entry small {
+  font-size: 11px;
+  font-weight: 500;
+}
+
 @media (max-width: 1180px) {
   .sonelle-shell {
     grid-template-columns: 230px minmax(0, 1fr);
@@ -2041,6 +2140,12 @@
   .chapter-navigation .chapter-divider,
   .chapter-navigation .chapter-meta-block:not(:first-child) {
     display: none;
+  }
+
+  .mobile-contents-trigger {
+    display: block;
+    margin: -2px 18px 12px;
+    width: calc(100% - 36px);
   }
 
   .chapter-progress-meta {

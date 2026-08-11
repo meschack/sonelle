@@ -21,8 +21,16 @@ export interface ReaderDocumentDto {
     coverImageSrc?: string | null;
   };
   activeChapterId: string | null;
+  navigation?: ReaderNavigationItemDto[];
   chapters: ReaderChapterDto[];
   position: ReadingPositionDto | null;
+}
+
+export interface ReaderNavigationItemDto {
+  label: string;
+  depth: number;
+  targetChapterId: string | null;
+  targetSentenceIndex: number | null;
 }
 
 export interface ReaderChapterDto {

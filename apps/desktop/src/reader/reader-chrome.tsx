@@ -1,6 +1,6 @@
-import { For, Show } from "solid-js";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { PlaybackStatus, ReaderProgress } from "@sonelle/reader";
-import type { ReaderChapterNavigationItem } from "./reader-view";
+import type { ReaderChapterNavigationItem, ReaderContentsItem } from "./reader-view";
 import {
   BookmarkIcon,
   FocusIcon,
@@ -160,6 +160,103 @@ export function ChapterNavigator(props: ChapterNavigatorProps) {
         </strong>
       </div>
     </nav>
+  );
+}
+
+interface ReaderContentsNavigatorProps {
+  items: ReaderContentsItem[];
+  activeChapterId: string;
+  onOpenLocation: (chapterId: string, sentenceIndex: number) => Promise<void>;
+}
+
+export function ReaderContentsNavigator(props: ReaderContentsNavigatorProps) {
+  const [open, setOpen] = createSignal(false);
+  const historyMarker = "reader-contents";
+
+  const openContents = () => {
+    if (open()) return;
+    window.history.pushState({ sonelleSurface: historyMarker }, "");
+    setOpen(true);
+  };
+
+  const closeContents = () => {
+    if (!open()) return;
+    setOpen(false);
+    if (window.history.state?.sonelleSurface === historyMarker) window.history.back();
+  };
+
+  onMount(() => {
+    const closeFromBackNavigation = () => setOpen(false);
+    window.addEventListener("popstate", closeFromBackNavigation);
+    onCleanup(() => window.removeEventListener("popstate", closeFromBackNavigation));
+  });
+
+  const openLocation = (item: ReaderContentsItem) => {
+    if (item.targetChapterId == null) return;
+    void props
+      .onOpenLocation(item.targetChapterId, item.targetSentenceIndex ?? 0)
+      .finally(closeContents);
+  };
+
+  return (
+    <>
+      <Show when={props.items.length > 0}>
+        <button
+          class="mobile-contents-trigger"
+          type="button"
+          aria-expanded={open()}
+          aria-controls="reader-contents-panel"
+          onClick={openContents}
+        >
+          Browse contents
+        </button>
+      </Show>
+      <Show when={open()}>
+        <div class="reader-contents-backdrop" role="presentation">
+          <section
+            id="reader-contents-panel"
+            class="reader-contents-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Table of contents"
+          >
+            <header>
+              <div>
+                <span>Book navigation</span>
+                <strong>Contents</strong>
+              </div>
+              <button type="button" aria-label="Back to reading" onClick={closeContents}>
+                Back
+              </button>
+            </header>
+            <nav aria-label="Table of contents">
+              <For each={props.items}>
+                {(item) => (
+                  <button
+                    type="button"
+                    classList={{
+                      "contents-entry": true,
+                      active: item.targetChapterId === props.activeChapterId
+                    }}
+                    style={{ "padding-left": `${18 + Math.min(item.depth, 6) * 20}px` }}
+                    disabled={item.targetChapterId == null}
+                    aria-label={
+                      item.targetChapterId == null ? `${item.label}, unavailable` : undefined
+                    }
+                    onClick={() => openLocation(item)}
+                  >
+                    <span>{item.label}</span>
+                    <Show when={item.targetChapterId == null}>
+                      <small>Unavailable</small>
+                    </Show>
+                  </button>
+                )}
+              </For>
+            </nav>
+          </section>
+        </div>
+      </Show>
+    </>
   );
 }
 
