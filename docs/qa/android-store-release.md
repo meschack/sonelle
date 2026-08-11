@@ -70,3 +70,14 @@ package name or erase the Play-managed app-signing key.
 - final signed-candidate privacy, model-license, permissions, and content-rating review;
 - Play internal or closed-track fresh installs and upgrades on both baseline devices;
 - recorded promotion, post-release verification, rollback rehearsal, and rejection-recovery owner.
+
+## Current platform references
+
+- [Tauri Google Play distribution](https://v2.tauri.app/distribute/google-play/)
+- [Android app signing and Play App Signing](https://developer.android.com/studio/publish/app-signing)
+- [Upload and test an Android App Bundle](https://developer.android.com/studio/publish/upload-bundle)
+- [Google Play target API requirements](https://support.google.com/googleplay/android-developer/answer/11926878?hl=en-GB_ALL)
+- [Google Play Data safety](https://support.google.com/googleplay/android-developer/answer/10787469?hl=en)
+- [Content rating requirements](https://support.google.com/googleplay/android-developer/answer/9859655?hl=en)
+- [Store preview asset requirements](https://support.google.com/googleplay/android-developer/answer/9866151?hl=en)
+- [Prepare and roll out a release](https://support.google.com/googleplay/android-developer/answer/9859348?hl=en)
