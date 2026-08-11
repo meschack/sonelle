@@ -170,6 +170,10 @@ a completed benchmark.
 
 ## Existing Commands
 
+The physical-device capture procedure and its guarded helper are documented in
+[Android device profiling](android-device-profiling.md). The helper refuses emulators and writes a
+device-specific worksheet beside its raw captures.
+
 Before device capture, verify the same EPUBs through the native QA paths:
 
 ```sh
