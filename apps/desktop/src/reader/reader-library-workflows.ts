@@ -1,7 +1,7 @@
 import { createDomainEvent, type DomainEvent, type DomainEventDispatcher } from "@sonelle/domain";
 import type {
   BookCatalog,
-  BookImporter,
+  BookImportGateway,
   BookmarkStore,
   SaveBookmarkInput
 } from "../library/library-contracts";
@@ -9,7 +9,7 @@ import type {
 export interface ReaderLibraryWorkflowDependencies {
   eventDispatcher: DomainEventDispatcher;
   catalog: Pick<BookCatalog, "list">;
-  importer: BookImporter;
+  importGateway: BookImportGateway;
   bookmarks: Pick<BookmarkStore, "delete" | "save">;
   friendlyError(error: unknown): string;
   onEventError?(error: unknown): void;
@@ -38,14 +38,14 @@ export function createReaderLibraryWorkflows(
     const { path } = event.payload;
     try {
       const existingBookIds = new Set((await dependencies.catalog.list()).map((book) => book.id));
-      const document =
-        path == null
-          ? await dependencies.importer.importFromDialog()
-          : await dependencies.importer.importFromPath(path);
-      if (document == null) {
+      const outcome = await dependencies.importGateway.importBook(
+        path == null ? { kind: "choose" } : { kind: "provided", source: path }
+      );
+      if (outcome.status === "cancelled") {
         await publish(createDomainEvent("BookImportCancelled", { path }));
         return;
       }
+      const { document } = outcome;
 
       await publish(
         createDomainEvent("BookImported", {

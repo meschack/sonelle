@@ -564,7 +564,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       catalog: bookCatalog,
       drops: dependencies.bookDropAdapter,
       openRequests: dependencies.bookOpenRequestAdapter,
-      importer: dependencies.bookImporter,
+      importGateway: dependencies.bookImportGateway,
       bookmarks: bookmarkStore,
       eventDispatcher,
       friendlyError: toFriendlyLibraryError,

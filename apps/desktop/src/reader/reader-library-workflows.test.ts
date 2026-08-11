@@ -24,14 +24,15 @@ describe("reader library workflows", () => {
     const openBookReaction = vi.fn();
     dispatcher.subscribe("BookImported", projectionReaction);
     dispatcher.subscribe("BookImported", openBookReaction);
+    const importBook = vi.fn().mockResolvedValue({
+      status: "imported",
+      document: importedDocument
+    });
     const workflows = createReaderLibraryWorkflows({
       eventDispatcher: dispatcher,
       friendlyError: friendlyError,
       catalog: { list: vi.fn().mockResolvedValue([{ id: "book-1" }]) },
-      importer: {
-        importFromDialog: vi.fn().mockResolvedValue(importedDocument),
-        importFromPath: vi.fn()
-      },
+      importGateway: { importBook },
       bookmarks: { save: vi.fn(), delete: vi.fn() }
     });
     const stop = workflows.start();
@@ -40,6 +41,7 @@ describe("reader library workflows", () => {
 
     expect(projectionReaction).toHaveBeenCalledOnce();
     expect(openBookReaction).toHaveBeenCalledOnce();
+    expect(importBook).toHaveBeenCalledWith({ kind: "choose" });
     expect(projectionReaction.mock.calls[0]?.[0]).toMatchObject({
       name: "BookImported",
       payload: { bookId: "book-1", replacedExisting: true }
@@ -67,7 +69,7 @@ describe("reader library workflows", () => {
       eventDispatcher: dispatcher,
       friendlyError,
       catalog: { list: vi.fn().mockResolvedValue([]) },
-      importer: { importFromDialog: vi.fn(), importFromPath: vi.fn() },
+      importGateway: { importBook: vi.fn() },
       bookmarks
     });
 
@@ -96,14 +98,12 @@ describe("reader library workflows", () => {
     const dispatcher = createDomainEventDispatcher();
     const failed = vi.fn();
     dispatcher.subscribe("BookImportFailed", failed);
+    const importBook = vi.fn().mockRejectedValue(new Error("broken EPUB"));
     const workflows = createReaderLibraryWorkflows({
       eventDispatcher: dispatcher,
       friendlyError,
       catalog: { list: vi.fn().mockResolvedValue([]) },
-      importer: {
-        importFromDialog: vi.fn(),
-        importFromPath: vi.fn().mockRejectedValue(new Error("broken EPUB"))
-      },
+      importGateway: { importBook },
       bookmarks: { save: vi.fn(), delete: vi.fn() }
     });
     const stop = workflows.start();
@@ -116,6 +116,10 @@ describe("reader library workflows", () => {
         payload: { path: "/tmp/broken.epub", reason: "broken EPUB" }
       })
     );
+    expect(importBook).toHaveBeenCalledWith({
+      kind: "provided",
+      source: "/tmp/broken.epub"
+    });
     stop();
   });
 
@@ -123,14 +127,12 @@ describe("reader library workflows", () => {
     const dispatcher = createDomainEventDispatcher();
     const cancelled = vi.fn();
     dispatcher.subscribe("BookImportCancelled", cancelled);
+    const importBook = vi.fn().mockResolvedValue({ status: "cancelled" });
     const workflows = createReaderLibraryWorkflows({
       eventDispatcher: dispatcher,
       friendlyError,
       catalog: { list: vi.fn().mockResolvedValue([]) },
-      importer: {
-        importFromDialog: vi.fn().mockResolvedValue(null),
-        importFromPath: vi.fn()
-      },
+      importGateway: { importBook },
       bookmarks: { save: vi.fn(), delete: vi.fn() }
     });
     const stop = workflows.start();
@@ -143,6 +145,7 @@ describe("reader library workflows", () => {
         payload: { path: null }
       })
     );
+    expect(importBook).toHaveBeenCalledWith({ kind: "choose" });
     stop();
   });
 });

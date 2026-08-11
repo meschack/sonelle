@@ -59,7 +59,7 @@ import {
   type BookDropAdapter,
   type BookOpenRequestAdapter,
   type BookExporter,
-  type BookImporter,
+  type BookImportGateway,
   type BookMetadataEditor,
   type BookmarkStore,
   type LibrarySearch,
@@ -70,7 +70,7 @@ import { createBookCatalog } from "../library/book-catalog";
 import { createBookDropAdapter } from "../library/book-drop-adapter";
 import { createBookOpenRequestAdapter } from "../library/book-open-request-adapter";
 import { createBookExporter } from "../library/book-exporter";
-import { createBookImporter } from "../library/book-importer";
+import { createBookImportGateway } from "../library/book-import-gateway";
 import { createBookMetadataEditor } from "../library/book-metadata-editor";
 import { createBookmarkStore } from "../library/bookmark-store";
 import { createLibrarySearch } from "../library/library-search";
@@ -126,7 +126,7 @@ export interface ReaderExperienceDependencies {
   bookDropAdapter: BookDropAdapter;
   bookOpenRequestAdapter: BookOpenRequestAdapter;
   bookExporter: BookExporter;
-  bookImporter: BookImporter;
+  bookImportGateway: BookImportGateway;
   bookMetadataEditor: BookMetadataEditor;
   bookmarkStore: BookmarkStore;
   dictionaryRepository: DictionaryRepository;
@@ -167,7 +167,7 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
       reportError: (error) => void reportAppError("book-open-request.delivery", error)
     }),
     bookExporter: createBookExporter(),
-    bookImporter: createBookImporter(),
+    bookImportGateway: createBookImportGateway(),
     bookMetadataEditor: createBookMetadataEditor(),
     bookmarkStore: createBookmarkStore(),
     dictionaryRepository: createDictionaryRepository(),
