@@ -132,6 +132,13 @@ export function createNarrationSession(options: NarrationSessionOptions): Narrat
     prefetchUpcomingPassages(currentChapter, passage);
 
     let pendingSentenceEvents = Promise.resolve();
+    const expectedSentenceIds = playbackSentenceIds(
+      prepared,
+      sentenceId,
+      output.autoAdvance ? null : sentenceId
+    );
+    let nextExpectedSentenceIndex = 0;
+    let acceptingSentenceCallbacks = true;
     try {
       await options.player.play(
         {
@@ -141,24 +148,38 @@ export function createNarrationSession(options: NarrationSessionOptions): Narrat
         },
         {
           sentenceEntered(nextSentenceId) {
-            if (run !== generation) return;
+            if (
+              run !== generation ||
+              !acceptingSentenceCallbacks ||
+              expectedSentenceIds[nextExpectedSentenceIndex] !== nextSentenceId
+            ) {
+              return;
+            }
+            nextExpectedSentenceIndex += 1;
             active = { passageId: passage.id, sentenceId: nextSentenceId };
-            pendingSentenceEvents = pendingSentenceEvents.then(() =>
-              publish(
+            pendingSentenceEvents = pendingSentenceEvents.then(() => {
+              if (run !== generation) return;
+              return publish(
                 createDomainEvent("NarrationSentenceEntered", {
                   bookId: passage.bookId,
                   chapterId: passage.chapterId,
                   passageId: passage.id,
                   sentenceId: nextSentenceId
                 })
-              )
-            );
+              );
+            });
           }
         }
       );
+      acceptingSentenceCallbacks = false;
       await pendingSentenceEvents;
+      if (nextExpectedSentenceIndex !== expectedSentenceIds.length) {
+        throw new Error("Narration playback lost its sentence position.");
+      }
     } catch (error) {
+      acceptingSentenceCallbacks = false;
       if (run !== generation) return;
+      generation += 1;
       reportError(error);
       await publish(
         createDomainEvent("NarrationPlaybackFailed", {
@@ -338,6 +359,20 @@ export function createNarrationSession(options: NarrationSessionOptions): Narrat
       });
     }
   }
+}
+
+function playbackSentenceIds(
+  narration: PreparedNarration,
+  startSentenceId: EntityId,
+  stopAfterSentenceId: EntityId | null
+): readonly EntityId[] {
+  const sentenceIds = narration.sentences.map((sentence) => sentence.sentenceId);
+  const startIndex = sentenceIds.indexOf(startSentenceId);
+  if (startIndex < 0) return [];
+  if (stopAfterSentenceId == null) return sentenceIds.slice(startIndex);
+
+  const stopIndex = sentenceIds.indexOf(stopAfterSentenceId, startIndex);
+  return sentenceIds.slice(startIndex, stopIndex < startIndex ? undefined : stopIndex + 1);
 }
 
 function prefetchLookaheadForEngine(engineId: NarrationEngineId): number {

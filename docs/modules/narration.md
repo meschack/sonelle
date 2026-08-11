@@ -73,13 +73,17 @@ legacy global profile remains the fallback for books without an explicit profile
 - cache identity includes engine, model revision, provider preparation revision, voice, source
   digest, and synthesis parameters
 - cancellation prevents stale preparation from becoming current playback
+- a playback run accepts manifest sentence-entry callbacks once and in reading order; duplicate,
+  reordered, incomplete, failed, stopped, and post-completion callbacks cannot advance projection
 - provider thread counts and ONNX allocator settings remain bounded
 - user-facing errors describe recovery, not engine or queue internals
 
 ## Tests
 
-Package tests cover routing, identity, sessions, cancellation, lookahead, and compatibility. Reader
-workflow tests cover preparation events, settings reactions, reset, and cross-chapter prefetch.
-Native tests cover pack verification, cache writes, provider input validation, manifests, and
-cancellation. The release-candidate provider smoke installs local packs and runs real Kokoro and
-Supertonic inference sequentially with one ONNX thread per provider.
+Package tests cover routing, identity, sessions, cancellation, lookahead, and compatibility. The
+session suite includes an adversarial player that duplicates and reorders callbacks, emits after
+completion or failure, and resolves a stop while more callbacks are pending. Reader workflow tests
+cover preparation events, settings reactions, reset, and cross-chapter prefetch. Native tests cover
+pack verification, cache writes, provider input validation, manifests, and cancellation. The
+release-candidate provider smoke installs local packs and runs real Kokoro and Supertonic inference
+sequentially with one ONNX thread per provider.
