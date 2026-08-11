@@ -1744,8 +1744,11 @@ export function ReaderExperience(props: ReaderExperienceProps) {
             content={readerReadingColumn()}
             tools={<ReaderInspector model={inspectorModel} />}
             playback={playbackRail()}
+            libraryBooks={libraryBooks()}
+            activeBookId={reader().book.id}
             toolsOpen={mobileToolsOpen()}
-            onBackToLibrary={() => openAppView("library")}
+            onOpenBook={(bookId) => libraryApplication.open(bookId)}
+            onOpenFullLibrary={() => openAppView("library")}
             onOpenSearch={() => {
               setInspectorTab("search");
               setMobileToolsOpen(true);

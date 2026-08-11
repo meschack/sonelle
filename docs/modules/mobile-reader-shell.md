@@ -4,7 +4,7 @@
 
 - selecting phone or desktop reader composition at the application boundary
 - the phone reader's compact header and explicit navigation, content, tools, and playback slots
-- the temporary reading-tools sheet and its return-to-reading action
+- touch-first Library and reading-tools sheets, including focus restoration and Back behavior
 
 ## Refuses To Own
 
@@ -20,9 +20,17 @@ composition root chooses `MobileReaderShell` only for the active reader. Library
 desktop reader keep their existing composition.
 
 `MobileReaderShell` receives already-composed navigation, reading content, tools, and playback
-elements. It owns where those surfaces live, not what they do. The header returns to the Library and
-opens search or settings inside the tools sheet. The reading column occupies a bounded scroll region,
-so opening header controls or mounting playback does not resize the text column.
+elements. It owns where those surfaces live, not what they do. The header opens a local Library sheet
+or search and settings inside the tools sheet. Library rows project book identity and persisted
+progress, while selection calls the existing library application and closes the sheet. The full
+Library remains available as an explicit management action. The reading column occupies a bounded
+scroll region, so opening sheets or mounting playback does not resize the text column.
+
+The EPUB contents navigator remains owned by shared reader chrome. On mobile it uses the same
+touch-safe sheet language as the Library while preserving publisher hierarchy and anchor targets.
+Both sheets push a temporary history entry, close on Android Back or their scrim, move focus into the
+sheet on open, and restore focus to their trigger on dismissal. None of those presentation actions
+changes the active sentence or scroll container.
 
 The visual direction is Sonelle's quiet reading desk reduced to one column: Satoshi carries controls,
 SpaceMono Nerd Font Propo labels the current book, the existing green and paper palette stays intact,
@@ -43,8 +51,9 @@ chapter, content, tool, and playback actions remain owned by their existing appl
 ## Tests
 
 The viewport adapter test covers initial selection, media-query changes, and cleanup. The component
-test proves the four explicit slots and Library action. The composed-reader tracer opens a persisted
-book in the mobile shell, changes chapter, opens and closes tools, returns to the Library, and reopens
-the book while asserting desktop chrome is absent. Rendered browser QA uses phone and desktop
-viewports when the in-app browser is available; Android packaging verifies the same composition is
-compiled into the mobile application.
+test proves the four explicit slots and Library sheet. The composed-reader tracer opens a persisted
+book in the mobile shell, changes chapter, opens and closes tools, dismisses the Library through its
+scrim and Back history, verifies focus and chapter stability, then switches books. Contents coverage
+selects a nested target and exercises close action, scrim, Back, and focus restoration. Rendered
+browser QA uses phone and desktop viewports when the in-app browser is available; Android packaging
+verifies the same composition is compiled into the mobile application.

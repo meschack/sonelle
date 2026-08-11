@@ -172,21 +172,31 @@ interface ReaderContentsNavigatorProps {
 export function ReaderContentsNavigator(props: ReaderContentsNavigatorProps) {
   const [open, setOpen] = createSignal(false);
   const historyMarker = "reader-contents";
+  let trigger: HTMLButtonElement | undefined;
+  let closeButton: HTMLButtonElement | undefined;
+
+  const restoreFocus = () => queueMicrotask(() => trigger?.focus());
 
   const openContents = () => {
     if (open()) return;
     window.history.pushState({ sonelleSurface: historyMarker }, "");
     setOpen(true);
+    queueMicrotask(() => closeButton?.focus());
   };
 
   const closeContents = () => {
     if (!open()) return;
     setOpen(false);
+    restoreFocus();
     if (window.history.state?.sonelleSurface === historyMarker) window.history.back();
   };
 
   onMount(() => {
-    const closeFromBackNavigation = () => setOpen(false);
+    const closeFromBackNavigation = () => {
+      if (!open()) return;
+      setOpen(false);
+      restoreFocus();
+    };
     window.addEventListener("popstate", closeFromBackNavigation);
     onCleanup(() => window.removeEventListener("popstate", closeFromBackNavigation));
   });
@@ -202,6 +212,7 @@ export function ReaderContentsNavigator(props: ReaderContentsNavigatorProps) {
     <>
       <Show when={props.items.length > 0}>
         <button
+          ref={trigger}
           class="mobile-contents-trigger"
           type="button"
           aria-expanded={open()}
@@ -212,7 +223,13 @@ export function ReaderContentsNavigator(props: ReaderContentsNavigatorProps) {
         </button>
       </Show>
       <Show when={open()}>
-        <div class="reader-contents-backdrop" role="presentation">
+        <div
+          class="reader-contents-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeContents();
+          }}
+        >
           <section
             id="reader-contents-panel"
             class="reader-contents-panel"
@@ -225,7 +242,12 @@ export function ReaderContentsNavigator(props: ReaderContentsNavigatorProps) {
                 <span>Book navigation</span>
                 <strong>Contents</strong>
               </div>
-              <button type="button" aria-label="Back to reading" onClick={closeContents}>
+              <button
+                ref={closeButton}
+                type="button"
+                aria-label="Back to reading"
+                onClick={closeContents}
+              >
                 Back
               </button>
             </header>

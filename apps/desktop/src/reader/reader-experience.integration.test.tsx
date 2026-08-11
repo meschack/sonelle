@@ -324,9 +324,10 @@ describe("ReaderExperience integration", () => {
 
   it("composes the mobile reader shell for book open, chapter change, tools, and library return", async () => {
     const mobileBook = createLibraryBook("mobile-reader", "Pocket Reader", 0);
+    const secondBook = createLibraryBook("mobile-second", "Another Book", 4);
     const openBook = vi.fn(async (bookId: string, chapterId?: string) => {
       const document = createReaderDocument(bookId);
-      document.book.title = "Pocket Reader";
+      document.book.title = bookId === "mobile-reader" ? "Pocket Reader" : "Another Book";
       document.chapters.push({
         id: `${bookId}-chapter-2`,
         title: "Chapter 2",
@@ -343,7 +344,7 @@ describe("ReaderExperience integration", () => {
       stopNarration: vi.fn(),
       stopDrops: vi.fn(),
       stopVoiceEvents: vi.fn(),
-      libraryBooks: [mobileBook],
+      libraryBooks: [mobileBook, secondBook],
       openBook,
       mobileReaderShell: true
     });
@@ -381,21 +382,43 @@ describe("ReaderExperience integration", () => {
       expect(container.querySelector('[role="dialog"][aria-label="Reading tools"]')).toBeNull()
     );
 
-    container.querySelector<HTMLButtonElement>('[aria-label="Back to library"]')?.click();
-    const card = await vi.waitFor(() => {
-      expect(container.querySelector('[aria-label="Mobile reader"]')).toBeNull();
-      const element = container.querySelector<HTMLButtonElement>(
-        '[data-library-book-card="mobile-reader"]'
-      );
+    const openLibrary = container.querySelector<HTMLButtonElement>('[aria-label="Open library"]');
+    openLibrary?.click();
+    const librarySheet = await vi.waitFor(() => {
+      const element = container.querySelector<HTMLElement>('[role="dialog"][aria-label="Library"]');
       expect(element).not.toBeNull();
       return element;
     });
-    openBook.mockClear();
-    card?.click();
-    await vi.waitFor(() => expect(openBook).toHaveBeenCalledWith("mobile-reader", undefined));
+    expect(librarySheet?.textContent).toContain("Another Book");
+    expect(librarySheet?.textContent).toContain("40% read");
+    expect(document.activeElement?.textContent).toContain("Back to reading");
+
+    container.querySelector<HTMLElement>(".mobile-reader-sheet-backdrop")?.click();
     await vi.waitFor(() =>
-      expect(container.querySelector('[aria-label="Mobile reader"]')).not.toBeNull()
+      expect(container.querySelector('[role="dialog"][aria-label="Library"]')).toBeNull()
     );
+    expect(container.querySelector(".mobile-reader-title")?.textContent).toContain("Chapter 2");
+    expect(document.activeElement).toBe(openLibrary);
+
+    openLibrary?.click();
+    await vi.waitFor(() =>
+      expect(container.querySelector('[role="dialog"][aria-label="Library"]')).not.toBeNull()
+    );
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    expect(container.querySelector('[role="dialog"][aria-label="Library"]')).toBeNull();
+    expect(container.querySelector(".mobile-reader-title")?.textContent).toContain("Chapter 2");
+    await vi.waitFor(() => expect(document.activeElement).toBe(openLibrary));
+
+    openLibrary?.click();
+    openBook.mockClear();
+    container
+      .querySelector<HTMLButtonElement>('[data-mobile-library-book="mobile-second"]')
+      ?.click();
+    await vi.waitFor(() => expect(openBook).toHaveBeenCalledWith("mobile-second", undefined));
+    await vi.waitFor(() =>
+      expect(container.querySelector('[role="dialog"][aria-label="Library"]')).toBeNull()
+    );
+    expect(container.querySelector(".mobile-reader-title")?.textContent).toContain("Another Book");
 
     dispose();
     container.remove();
@@ -1288,6 +1311,9 @@ describe("ReaderExperience integration", () => {
       return button;
     });
     browse?.click();
+    await vi.waitFor(() =>
+      expect(document.activeElement?.getAttribute("aria-label")).toBe("Back to reading")
+    );
 
     const nested = await vi.waitFor(() => {
       const button = Array.from(
@@ -1310,6 +1336,7 @@ describe("ReaderExperience integration", () => {
     );
     await vi.waitFor(() => expect(container.textContent).toContain("Anchor destination."));
     expect(container.querySelector('[aria-label="Table of contents"]')).toBeNull();
+    expect(document.activeElement).toBe(browse);
 
     browse?.click();
     const back = await vi.waitFor(() => {
@@ -1322,6 +1349,17 @@ describe("ReaderExperience integration", () => {
       expect(container.querySelector('[aria-label="Table of contents"]')).toBeNull()
     );
     expect(container.textContent).toContain("Anchor destination.");
+    expect(document.activeElement).toBe(browse);
+
+    browse?.click();
+    await vi.waitFor(() =>
+      expect(container.querySelector('[aria-label="Table of contents"]')).not.toBeNull()
+    );
+    container.querySelector<HTMLElement>(".reader-contents-backdrop")?.click();
+    await vi.waitFor(() =>
+      expect(container.querySelector('[aria-label="Table of contents"]')).toBeNull()
+    );
+    expect(document.activeElement).toBe(browse);
 
     browse?.click();
     await vi.waitFor(() =>
@@ -1330,6 +1368,7 @@ describe("ReaderExperience integration", () => {
     window.dispatchEvent(new PopStateEvent("popstate"));
     expect(container.querySelector('[aria-label="Table of contents"]')).toBeNull();
     expect(container.textContent).toContain("Anchor destination.");
+    await vi.waitFor(() => expect(document.activeElement).toBe(browse));
 
     dispose();
     container.remove();
