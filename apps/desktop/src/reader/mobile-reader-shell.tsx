@@ -1,6 +1,7 @@
 import { createEffect, createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js";
 import type { LibraryBookSummary } from "../library/library-models";
 import { LibraryIcon, SearchIcon, SettingsIcon } from "./reader-icons";
+import { containMobileDialogFocus } from "./mobile-dialog-focus";
 
 interface MobileReaderShellProps {
   bookTitle: string;
@@ -94,7 +95,7 @@ export function MobileReaderShell(props: MobileReaderShellProps) {
 
   return (
     <section class="mobile-reader-shell" aria-label="Mobile reader">
-      <header class="mobile-reader-header">
+      <header class="mobile-reader-header" aria-label={`${props.bookTitle}, ${props.chapterTitle}`}>
         <button
           ref={libraryTrigger}
           class="mobile-reader-library-trigger"
@@ -138,11 +139,16 @@ export function MobileReaderShell(props: MobileReaderShellProps) {
             role="dialog"
             aria-modal="true"
             aria-label="Library"
+            aria-labelledby="mobile-reader-library-title"
+            tabindex="-1"
+            onKeyDown={(event) =>
+              containMobileDialogFocus(event, event.currentTarget, closeLibrary)
+            }
           >
             <header>
               <div>
                 <span>Your books</span>
-                <strong>Library</strong>
+                <strong id="mobile-reader-library-title">Library</strong>
               </div>
               <button ref={libraryClose} type="button" onClick={closeLibrary}>
                 Back to reading
@@ -169,6 +175,7 @@ export function MobileReaderShell(props: MobileReaderShellProps) {
                         active: book.id === props.activeBookId
                       }}
                       aria-current={book.id === props.activeBookId ? "page" : undefined}
+                      aria-label={`${book.title}, ${book.author || "Unknown author"}, ${progress()}% read`}
                       onClick={() => selectBook(book.id)}
                     >
                       <span class="mobile-reader-book-cover" aria-hidden="true">
@@ -220,11 +227,16 @@ export function MobileReaderShell(props: MobileReaderShellProps) {
             role="dialog"
             aria-modal="true"
             aria-label="Reading tools"
+            aria-labelledby="mobile-reader-tools-title"
+            tabindex="-1"
+            onKeyDown={(event) =>
+              containMobileDialogFocus(event, event.currentTarget, props.onCloseTools)
+            }
           >
             <header>
               <div>
                 <span>Current book</span>
-                <strong>Reading tools</strong>
+                <strong id="mobile-reader-tools-title">Reading tools</strong>
               </div>
               <button ref={toolsClose} type="button" onClick={props.onCloseTools}>
                 Back to reading

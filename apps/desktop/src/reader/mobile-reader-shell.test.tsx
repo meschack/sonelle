@@ -55,7 +55,22 @@ it("keeps navigation, tools, reading, and playback in explicit mobile slots", as
   ).not.toBeNull();
   const library = container.querySelector<HTMLButtonElement>('[aria-label="Open library"]');
   library?.click();
-  expect(container.querySelector('[role="dialog"][aria-label="Library"]')).not.toBeNull();
+  const libraryDialog = container.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label="Library"]'
+  );
+  expect(libraryDialog).not.toBeNull();
+  expect(libraryDialog?.getAttribute("aria-labelledby")).toBe("mobile-reader-library-title");
+  const libraryClose = container.querySelector<HTMLButtonElement>(
+    ".mobile-reader-library-sheet > header button"
+  );
+  const manageLibrary = container.querySelector<HTMLButtonElement>(
+    ".mobile-reader-library-sheet > footer button"
+  );
+  manageLibrary?.focus();
+  manageLibrary?.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })
+  );
+  expect(document.activeElement).toBe(libraryClose);
   container
     .querySelector<HTMLButtonElement>(".mobile-reader-library-sheet > header button")
     ?.click();

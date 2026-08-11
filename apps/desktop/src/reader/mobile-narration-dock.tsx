@@ -1,3 +1,4 @@
+import { createUniqueId, Show } from "solid-js";
 import type { PlaybackStatus, ReaderProgress } from "@sonelle/reader";
 import { NextIcon, PauseIcon, PlayIcon, PreviousIcon, SettingsIcon } from "./reader-icons";
 
@@ -16,6 +17,7 @@ interface MobileNarrationDockProps {
 }
 
 export function MobileNarrationDock(props: MobileNarrationDockProps) {
+  const statusId = `mobile-narration-status-${createUniqueId()}`;
   const isFirstSentence = () => props.progress.chapterSentenceNumber <= 1;
   const isLastSentence = () =>
     props.progress.chapterSentenceCount === 0 ||
@@ -35,15 +37,19 @@ export function MobileNarrationDock(props: MobileNarrationDockProps) {
   };
 
   return (
-    <footer class="mobile-narration-dock" aria-label="Narration controls">
+    <footer
+      class="mobile-narration-dock"
+      aria-label="Narration controls"
+      aria-describedby={statusId}
+    >
       <div class="mobile-narration-copy">
-        <span>{statusLabel()}</span>
+        <span id={statusId}>{statusLabel()}</span>
         <strong title={props.chapterTitle}>{props.chapterTitle}</strong>
         <small>
           Sentence {props.progress.chapterSentenceNumber} of {props.progress.chapterSentenceCount}
         </small>
       </div>
-      <div class="mobile-narration-transport">
+      <div class="mobile-narration-transport" role="group" aria-label="Narration transport">
         <button
           type="button"
           aria-label="Previous sentence"
@@ -89,6 +95,18 @@ export function MobileNarrationDock(props: MobileNarrationDockProps) {
       >
         <SettingsIcon />
       </button>
+      <Show when={props.notice}>
+        {(notice) => (
+          <span class="reader-visually-hidden" role="alert">
+            {notice()}
+          </span>
+        )}
+      </Show>
+      <Show when={props.notice == null && props.preparing}>
+        <span class="reader-visually-hidden" role="status" aria-live="polite">
+          Preparing narration audio.
+        </span>
+      </Show>
     </footer>
   );
 }

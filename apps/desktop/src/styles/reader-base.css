@@ -73,6 +73,16 @@ svg {
   width: 22px;
 }
 
+.reader-visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
 .sonelle-shell {
   --inspector-rail-width: 400px;
   --library-rail-width: 340px;
