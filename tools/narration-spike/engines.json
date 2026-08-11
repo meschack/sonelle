@@ -46,11 +46,21 @@
       "id": "supertonic",
       "source": {
         "repository": "https://github.com/supertone-inc/supertonic.git",
-        "revision": "dff55dc00064c398736080c78195f577527832ae"
+        "revision": "dff55dc00064c398736080c78195f577527832ae",
+        "license": {
+          "id": "MIT",
+          "file": "LICENSE",
+          "sha256": "0dfe0d0ba84416fe3879d9a34f4909d8d0137c78d1e95834177b0414ac096fa2"
+        }
       },
       "model": {
         "repository": "Supertone/supertonic-3",
         "revision": "3cadd1ee6394adea1bd021217a0e650ede09a323",
+        "license": {
+          "id": "OpenRAIL-M",
+          "file": "assets/LICENSE",
+          "sha256": "0d944a9110fed9a9602d60e0423a272903e7bd21ab060490774efc77c2275e9f"
+        },
         "artifacts": [
           {
             "remotePath": "LICENSE",

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "status": "reader-only",
+  "bundledNarrationRuntime": false,
+  "bundledNarrationModel": false,
+  "deviceVoiceIntegration": false
+}

@@ -79,6 +79,9 @@ jobs:
       - name: Check native shell
         run: cargo check --workspace --locked
 
+      - name: Audit Android release licenses
+        run: pnpm audit:android-release
+
       - name: Lint native shell
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
