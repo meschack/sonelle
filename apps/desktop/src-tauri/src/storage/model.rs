@@ -195,8 +195,6 @@ pub struct SaveBookmarkRequest {
     pub book_id: String,
     pub chapter_id: String,
     pub sentence_id: String,
-    pub sentence_index: i64,
-    pub text: String,
     pub note: Option<String>,
 }
 

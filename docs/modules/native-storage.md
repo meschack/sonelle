@@ -45,6 +45,11 @@ Book title, author, and cover edits update the local library projection without 
 source EPUB. Replacement covers are copied into Sonelle's managed cover directory before the
 database transaction commits; superseded managed covers are removed only after a successful commit.
 
+Bookmark writes identify a stored book, chapter, and sentence, but native storage resolves the
+sentence index and text from SQLite before committing. The deterministic bookmark identity and
+unique passage constraint make repeated saves idempotent. Bookmark reads join the full target chain,
+so a stale legacy row whose sentence disappeared is omitted instead of exposing a broken jump.
+
 ## Domain Events
 
 Native storage does not journal domain events. Application workflows publish events through the
@@ -59,6 +64,7 @@ in-process dispatcher after their core storage operation succeeds.
 - opening a persisted book never depends on the continued presence of its managed EPUB source
 - restored reading positions always address the active stored chapter and a bounded sentence index
 - unresolved contents entries cannot manufacture a chapter or sentence destination
+- bookmark text and position come from the stored sentence rather than renderer-supplied copies
 - unmanaged desktop source paths retain their existing behavior and are not polled for health
 - migrations preserve existing local libraries, including the intentional `.readex` compatibility path
 
@@ -68,3 +74,5 @@ Rust tests use temporary SQLite databases and exercise the public store behavior
 search, bookmarks, exports, editable metadata and managed covers, cumulative cross-chapter progress,
 removal of legacy event history, mobile-safe application-data paths, and cold restart behavior with
 healthy, damaged, and missing managed EPUB sources.
+Bookmark coverage includes idempotent saves, restart persistence, removal, authoritative passage
+data, and stale-target filtering.

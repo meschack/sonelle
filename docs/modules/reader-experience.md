@@ -58,6 +58,10 @@ entries preserve nesting through indentation and route valid chapter or anchor s
 the shared navigation application. Closing the panel returns to the unchanged reader; unavailable
 publisher targets are shown disabled rather than guessed.
 
+Bookmark controls remain part of the shared reader and playback surfaces on Android. Saving or
+removing the active sentence refreshes the native bookmark projection through domain events, while
+opening a saved passage uses the same book, chapter, and sentence navigation path as desktop.
+
 ## Domain Events
 
 Library workflows complete their core operation and dispatch the resulting event. `ReaderOpened`
@@ -86,3 +90,5 @@ Lifecycle tests cover background flushing and most-recent-book restoration, whil
 scheduler tests bound write frequency during narration.
 Contents tests cover nested labels, anchor-level navigation, panel dismissal, and unavailable
 targets across native import, storage, projection, and the composed reader.
+The Android bookmark tracer covers visible add/remove state and an exact saved-passage jump; native
+tests cover restart, duplicate saves, and vanished targets.
