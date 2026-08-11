@@ -44,3 +44,17 @@ export {
   type NarrationSessionChapter,
   type NarrationSessionOptions
 } from "./narration-session";
+export {
+  planNarrationStorageRemoval,
+  preflightVoicePackInstallation,
+  type NarrationPlaybackActivity,
+  type NarrationStorageActivity,
+  type NarrationStorageRemovalPlan,
+  type NarrationStorageRemovalRequest,
+  type NarrationStorageRemovalTarget,
+  type NarrationStorageSnapshot,
+  type PreparedAudioStorageEntry,
+  type VoicePackInstallationPreflight,
+  type VoicePackInstallationRequest,
+  type VoicePackStorageEntry
+} from "./narration-storage-maintenance";
