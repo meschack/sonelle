@@ -2,16 +2,22 @@ use tauri::{AppHandle, Manager};
 
 use crate::error_log::{self, AppErrorReport};
 
+#[cfg(desktop)]
 use crate::audio::{
     audio_cache_summary_for_book, clear_audio_cache_for_book, prepare_narration,
     speak_prepared_narration, stop_narration, AudioCacheStats, PreparedSentenceAudio,
     SentenceAudioRequest,
 };
 use crate::library_import::prepare_epub_import;
+#[cfg(mobile)]
+use crate::mobile_shell::{empty_audio_cache_stats, MobileAudioCacheStats};
+#[cfg(desktop)]
 use crate::narration_cache::NarrationChapterCacheStats;
+#[cfg(desktop)]
 use crate::narration_engine_pack::{
     engine_status, install_engine, NarrationEngineInstallationStatus,
 };
+#[cfg(desktop)]
 use crate::narration_manifest::{
     cancel_manifest_narration as cancel_manifest_narration_request, clear_manifest_cache,
     manifest_cache_summary, manifest_chapter_cache_summary,
@@ -19,6 +25,7 @@ use crate::narration_manifest::{
     PreparedManifestNarration,
 };
 
+#[cfg(desktop)]
 #[tauri::command]
 pub fn cancel_manifest_narration(request_id: String) {
     cancel_manifest_narration_request(request_id);
@@ -28,7 +35,9 @@ use crate::storage::{
     LibrarySearchResultView, ReaderDocumentView, SaveBookmarkRequest, SaveReadingPositionRequest,
     SonelleStore, UpdateBookMetadataRequest,
 };
+#[cfg(desktop)]
 use crate::system_fonts::list_system_font_families;
+#[cfg(desktop)]
 use crate::voice_installation::{install_voice, voice_status, NarrationVoiceInstallationStatus};
 
 #[tauri::command]
@@ -72,6 +81,7 @@ pub async fn update_book_metadata(
     .await
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn prepare_sentence_audio(
     app: AppHandle,
@@ -83,6 +93,7 @@ pub async fn prepare_sentence_audio(
     .await
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn prepare_manifest_narration(
     app: AppHandle,
@@ -94,6 +105,7 @@ pub async fn prepare_manifest_narration(
     .await
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn play_sentence_audio(
     app: AppHandle,
@@ -105,11 +117,13 @@ pub async fn play_sentence_audio(
     .await
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub fn stop_sentence_audio() -> Result<(), String> {
     stop_narration().inspect_err(|error| error_log::record_native_error("narration.stop", error))
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn get_narration_voice_status(
     app: AppHandle,
@@ -118,6 +132,7 @@ pub async fn get_narration_voice_status(
     run_blocking("voice.status", move || voice_status(&app, &voice_id)).await
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn install_narration_voice(
     app: AppHandle,
@@ -126,6 +141,7 @@ pub async fn install_narration_voice(
     run_blocking("voice.install", move || install_voice(&app, &voice_id)).await
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn get_narration_engine_status(
     app: AppHandle,
@@ -137,6 +153,7 @@ pub async fn get_narration_engine_status(
     .await
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn install_narration_engine(
     app: AppHandle,
@@ -148,6 +165,7 @@ pub async fn install_narration_engine(
     .await
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn get_audio_cache_stats(
     app: AppHandle,
@@ -159,6 +177,13 @@ pub async fn get_audio_cache_stats(
     .await
 }
 
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn get_audio_cache_stats(_book_id: String) -> Result<MobileAudioCacheStats, String> {
+    Ok(empty_audio_cache_stats())
+}
+
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn get_narration_chapter_cache_stats(
     app: AppHandle,
@@ -172,6 +197,7 @@ pub async fn get_narration_chapter_cache_stats(
     .await
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn clear_prepared_audio_cache(
     app: AppHandle,
@@ -185,6 +211,7 @@ pub async fn clear_prepared_audio_cache(
     .await
 }
 
+#[cfg(desktop)]
 fn book_audio_cache_summary(app: &AppHandle, book_id: &str) -> Result<AudioCacheStats, String> {
     let legacy = audio_cache_summary_for_book(app, book_id)?;
     let manifest = manifest_cache_summary(app, book_id)?;
@@ -256,9 +283,16 @@ pub async fn export_book_data(app: AppHandle, book_id: String) -> Result<BookExp
     run_blocking("library.export", move || store.export_book_data(&book_id)).await
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn list_system_fonts() -> Result<Vec<String>, String> {
     run_blocking("system-fonts.list", list_system_font_families).await
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn list_system_fonts() -> Result<Vec<String>, String> {
+    Ok(Vec::new())
 }
 
 fn managed_store(app: &AppHandle) -> SonelleStore {

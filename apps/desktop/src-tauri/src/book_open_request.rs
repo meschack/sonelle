@@ -48,6 +48,7 @@ pub fn take_pending_book_open_requests(
     })
 }
 
+#[cfg(desktop)]
 pub fn enqueue_cli_arguments<R: Runtime>(
     app: &AppHandle<R>,
     arguments: impl IntoIterator<Item = String>,
@@ -99,11 +100,14 @@ pub fn focus_main_window<R: Runtime>(app: &AppHandle<R>) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
-    for (operation, result) in [
-        ("show", window.show()),
-        ("unminimize", window.unminimize()),
-        ("focus", window.set_focus()),
-    ] {
+    #[cfg(desktop)]
+    if let Err(error) = window.unminimize() {
+        record_native_error(
+            "book-open-request.focus",
+            &format!("operation=unminimize error={error}"),
+        );
+    }
+    for (operation, result) in [("show", window.show()), ("focus", window.set_focus())] {
         if let Err(error) = result {
             record_native_error(
                 "book-open-request.focus",
@@ -113,6 +117,7 @@ pub fn focus_main_window<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
+#[cfg(any(desktop, test))]
 fn resolve_epub_argument(argument: &str, current_directory: &Path) -> Option<PathBuf> {
     let argument = argument.trim();
     if argument.is_empty() || argument.starts_with('-') {

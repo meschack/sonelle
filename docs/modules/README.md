@@ -13,3 +13,4 @@ contracts, not aspirational diagrams: when behavior moves, update the relevant n
 - [Library ingestion and repair](library-ingestion.md)
 - [Learning](learning.md)
 - [Native storage](native-storage.md)
+- [Mobile shell](mobile-shell.md)

@@ -9,6 +9,7 @@
     "dev:tui": "node scripts/dev-tui.mjs",
     "dev:stop": "node scripts/dev-stop.mjs",
     "dev:desktop": "pnpm --filter @sonelle/desktop tauri dev",
+    "dev:android": "pnpm --filter @sonelle/desktop tauri android dev",
     "dev:web": "pnpm --filter @sonelle/desktop dev",
     "dev:landing": "pnpm --filter @sonelle/landing dev",
     "setup:piper": "node scripts/setup-piper-voice.mjs",

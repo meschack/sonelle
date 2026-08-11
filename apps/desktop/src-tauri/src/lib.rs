@@ -1,25 +1,42 @@
+#[cfg(desktop)]
 mod audio;
+#[cfg(desktop)]
 mod background_process;
 mod book_open_request;
 mod commands;
 mod epub_import;
 mod error_log;
+#[cfg(desktop)]
 mod kokoro_manifest;
+#[cfg(desktop)]
 pub mod kokoro_narration;
+#[cfg(desktop)]
 pub mod kokoro_text;
 mod library_import;
 mod library_migration;
+#[cfg(any(mobile, test))]
+mod mobile_shell;
+#[cfg(desktop)]
 pub mod narration_cache;
+#[cfg(desktop)]
 mod narration_engine_pack;
+#[cfg(desktop)]
 mod narration_manifest;
+#[cfg(desktop)]
 pub mod narration_pack;
+#[cfg(desktop)]
 mod narration_rendered_audio;
+#[cfg(desktop)]
 mod narration_wav;
 mod storage;
+#[cfg(desktop)]
 mod supertonic_helper;
+#[cfg(desktop)]
 mod supertonic_narration;
+#[cfg(desktop)]
 mod system_fonts;
 mod text;
+#[cfg(desktop)]
 mod voice_installation;
 
 use std::io;
@@ -44,7 +61,7 @@ pub fn run() {
         book_open_request::focus_main_window(app);
     }));
 
-    builder
+    let builder = builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -55,12 +72,15 @@ pub fn run() {
             })?;
             let migration_store = store.clone();
             app.manage(store);
-            let current_directory = std::env::current_dir().unwrap_or_default();
-            book_open_request::enqueue_cli_arguments(
-                app.handle(),
-                std::env::args().skip(1),
-                &current_directory,
-            );
+            #[cfg(desktop)]
+            {
+                let current_directory = std::env::current_dir().unwrap_or_default();
+                book_open_request::enqueue_cli_arguments(
+                    app.handle(),
+                    std::env::args().skip(1),
+                    &current_directory,
+                );
+            }
             tauri::async_runtime::spawn_blocking(move || {
                 if let Err(error) = migrate_legacy_library(&migration_store) {
                     error_log::record_native_error(
@@ -70,35 +90,58 @@ pub fn run() {
                 }
             });
             Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            app_status,
-            commands::cancel_manifest_narration,
-            commands::clear_prepared_audio_cache,
-            commands::delete_bookmark,
-            commands::export_book_data,
-            commands::get_audio_cache_stats,
-            commands::get_narration_chapter_cache_stats,
-            commands::get_narration_engine_status,
-            book_open_request::take_pending_book_open_requests,
-            commands::import_epub,
-            commands::install_narration_engine,
-            commands::list_bookmarks,
-            commands::list_books,
-            commands::list_system_fonts,
-            commands::open_book,
-            commands::prepare_manifest_narration,
-            commands::prepare_sentence_audio,
-            commands::report_app_error,
-            commands::play_sentence_audio,
-            commands::save_bookmark,
-            commands::save_reading_position,
-            commands::search_library,
-            commands::stop_sentence_audio,
-            commands::update_book_metadata,
-            commands::get_narration_voice_status,
-            commands::install_narration_voice
-        ])
+        });
+
+    #[cfg(desktop)]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        app_status,
+        commands::cancel_manifest_narration,
+        commands::clear_prepared_audio_cache,
+        commands::delete_bookmark,
+        commands::export_book_data,
+        commands::get_audio_cache_stats,
+        commands::get_narration_chapter_cache_stats,
+        commands::get_narration_engine_status,
+        book_open_request::take_pending_book_open_requests,
+        commands::import_epub,
+        commands::install_narration_engine,
+        commands::list_bookmarks,
+        commands::list_books,
+        commands::list_system_fonts,
+        commands::open_book,
+        commands::prepare_manifest_narration,
+        commands::prepare_sentence_audio,
+        commands::report_app_error,
+        commands::play_sentence_audio,
+        commands::save_bookmark,
+        commands::save_reading_position,
+        commands::search_library,
+        commands::stop_sentence_audio,
+        commands::update_book_metadata,
+        commands::get_narration_voice_status,
+        commands::install_narration_voice,
+    ]);
+
+    #[cfg(mobile)]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        app_status,
+        commands::delete_bookmark,
+        commands::export_book_data,
+        commands::get_audio_cache_stats,
+        book_open_request::take_pending_book_open_requests,
+        commands::import_epub,
+        commands::list_bookmarks,
+        commands::list_books,
+        commands::list_system_fonts,
+        commands::open_book,
+        commands::report_app_error,
+        commands::save_bookmark,
+        commands::save_reading_position,
+        commands::search_library,
+        commands::update_book_metadata,
+    ]);
+
+    builder
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(book_open_request::handle_run_event);
