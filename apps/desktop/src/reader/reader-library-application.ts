@@ -154,6 +154,10 @@ export function createReaderLibraryApplication(
           importing = false;
           options.projectImporting(false);
         }),
+        dependencies.eventDispatcher.subscribe("BookImportSourceSelected", () => {
+          importing = false;
+          options.projectImporting(false);
+        }),
         dependencies.eventDispatcher.subscribe("BookImportFailed", (event) => {
           options.projectLibraryNotice(event.payload.reason);
         }),

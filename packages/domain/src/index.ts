@@ -12,6 +12,7 @@ export interface NarrationSettingsSnapshot {
 export interface DomainEventPayloadMap {
   BookImportRequested: { path: string | null };
   BookImportCancelled: { path: string | null };
+  BookImportSourceSelected: { source: string };
   BookImportFailed: { path: string | null; reason: string };
   BookImported: {
     bookId: EntityId;

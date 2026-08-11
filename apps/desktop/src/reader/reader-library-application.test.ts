@@ -36,6 +36,46 @@ const document = {
 };
 
 describe("reader library application", () => {
+  it("ends the busy state when Android source selection finishes", async () => {
+    const dispatcher = createDomainEventDispatcher();
+    const importing: boolean[] = [];
+    const application = createReaderLibraryApplication(
+      {
+        catalog: { list: vi.fn().mockResolvedValue([]), open: vi.fn() },
+        drops: { listen: async () => () => undefined },
+        openRequests: { listen: async () => () => undefined },
+        importGateway: {
+          importBook: vi.fn().mockResolvedValue({
+            status: "source-selected",
+            source: "content://books/the-book.epub"
+          })
+        },
+        bookmarks: { list: vi.fn().mockResolvedValue([]), save: vi.fn(), delete: vi.fn() },
+        eventDispatcher: dispatcher,
+        friendlyError: () => "Library needs attention"
+      },
+      {
+        activeView: () => "library",
+        currentBookSource: () => "library",
+        projectBooks: vi.fn(),
+        projectBookmarks: vi.fn(),
+        projectLoading: vi.fn(),
+        projectImporting: (active) => importing.push(active),
+        projectDropTarget: vi.fn(),
+        projectLibraryNotice: vi.fn(),
+        projectBookmarkNotice: vi.fn(),
+        openDocument: vi.fn(),
+        openBookmarkInspector: vi.fn()
+      }
+    );
+    const stop = await application.start();
+
+    await application.importFromDialog();
+    await vi.waitFor(() => expect(importing).toEqual([true, false]));
+
+    stop();
+  });
+
   it("coordinates import facts and independent library projections through its interface", async () => {
     const dispatcher = createDomainEventDispatcher();
     const events: AnyDomainEvent[] = [];
