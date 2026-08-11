@@ -85,13 +85,91 @@ describe("reader playback application", () => {
 
     harness.mediaSession.pause("headset");
     expect(harness.playback().status).toBe("paused");
-    expect(harness.pause).toHaveBeenCalled();
+    await vi.waitFor(() => expect(harness.pause).toHaveBeenCalled());
 
     harness.mediaSession.play();
     harness.mediaSession.stop();
     expect(harness.playback().status).toBe("paused");
     expect(harness.reset).toHaveBeenCalled();
     disconnect();
+    harness.application.dispose();
+  });
+
+  it("waits for an in-flight pause before resuming narration", async () => {
+    let finishPause: (() => void) | undefined;
+    const harness = createHarness({
+      pause: () =>
+        new Promise<void>((resolve) => {
+          finishPause = resolve;
+        })
+    });
+    harness.setPlayback({ activeSentenceIndex: 1, status: "playing" });
+
+    harness.application.toggle();
+    await vi.waitFor(() => expect(harness.pause).toHaveBeenCalledOnce());
+    harness.application.toggle();
+    harness.application.playbackChanged();
+
+    expect(harness.playback()).toEqual({ activeSentenceIndex: 1, status: "playing" });
+    expect(harness.requestPlayback).not.toHaveBeenCalled();
+
+    finishPause?.();
+    await vi.waitFor(() =>
+      expect(harness.requestPlayback).toHaveBeenCalledWith(harness.reader().sentences[1].id)
+    );
+    harness.application.dispose();
+  });
+
+  it("suppresses a queued resume when the newest rapid control intent is pause", async () => {
+    const pauseResolvers: Array<() => void> = [];
+    const harness = createHarness({
+      pause: () =>
+        new Promise<void>((resolve) => {
+          pauseResolvers.push(resolve);
+        })
+    });
+    harness.setPlayback({ activeSentenceIndex: 1, status: "playing" });
+
+    harness.application.toggle();
+    await vi.waitFor(() => expect(harness.pause).toHaveBeenCalledOnce());
+    harness.application.toggle();
+    harness.application.playbackChanged();
+    harness.application.toggle();
+
+    expect(harness.playback()).toEqual({ activeSentenceIndex: 1, status: "paused" });
+    pauseResolvers.shift()?.();
+    await vi.waitFor(() => expect(pauseResolvers).toHaveLength(1));
+    pauseResolvers.shift()?.();
+    await Promise.resolve();
+
+    expect(harness.requestPlayback).not.toHaveBeenCalled();
+    expect(harness.playback()).toEqual({ activeSentenceIndex: 1, status: "paused" });
+    harness.application.dispose();
+  });
+
+  it("clears playback immediately and orders resume behind an explicit stop", async () => {
+    let finishPause: (() => void) | undefined;
+    const harness = createHarness({
+      pause: () =>
+        new Promise<void>((resolve) => {
+          finishPause = resolve;
+        })
+    });
+    harness.setPlayback({ activeSentenceIndex: 2, status: "playing" });
+
+    const stopping = harness.application.stop();
+    expect(harness.playback()).toEqual({ activeSentenceIndex: 2, status: "paused" });
+    await vi.waitFor(() => expect(harness.pause).toHaveBeenCalledOnce());
+
+    harness.application.toggle();
+    harness.application.playbackChanged();
+    expect(harness.requestPlayback).not.toHaveBeenCalled();
+
+    finishPause?.();
+    await stopping;
+    await vi.waitFor(() =>
+      expect(harness.requestPlayback).toHaveBeenCalledWith(harness.reader().sentences[2].id)
+    );
     harness.application.dispose();
   });
 
@@ -273,6 +351,7 @@ function createHarness(
     savePosition?: (position: SaveReadingPositionInput) => Promise<void>;
     allowsChapterTransition?: () => boolean;
     reset?: () => Promise<void>;
+    pause?: () => Promise<void>;
   } = {}
 ) {
   let currentReader: ReaderView = { ...buildFixtureReaderView(), source: "library" };
@@ -292,7 +371,7 @@ function createHarness(
     prepare: vi.fn().mockResolvedValue(undefined),
     readiness: vi.fn(() => "ready" as const),
     start: vi.fn((sentenceId: string) => void operations.push(`play:${sentenceId}`)),
-    pause: vi.fn().mockResolvedValue(undefined),
+    pause: vi.fn(options.pause ?? (() => Promise.resolve())),
     resume: vi.fn(),
     setOutput: vi.fn(),
     prepareUpcoming: vi.fn(),

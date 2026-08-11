@@ -35,6 +35,11 @@ Closing a reader flushes and awaits the latest reading-position save before play
 independent `ReaderClosed` listener then refreshes the library projection, so collection cards show
 the position that was just persisted rather than the position from when the book was opened.
 
+Playback control serializes asynchronous pause and stop commands before a later start reaches the
+narration gateway. A newer pause supersedes a queued resume, while explicit Stop clears the audible
+projection immediately and keeps its gateway pause behind the pending reading-position save. The
+application expresses reader intent only; engine and platform playback remain behind the gateway.
+
 The whole-book preparation application hydrates chapter bodies only after an explicit request,
 projects native cache summaries, and cancels owned preparation on cleanup. Session controls react to
 playback boundary events and ask playback orchestration to stop; they never manipulate an audio
@@ -53,6 +58,7 @@ drive projection and preference persistence. Domain events are not recorded in S
 - platform adapters are injected at the composition edge
 - event diagnostics never alter product control flow
 - reading-position writes are serialized, and reader closure waits for the latest write to settle
+- rapid pause, resume, and stop actions settle on the newest reader intent
 - stopping an application removes every subscription and cancels owned work
 
 ## Tests
@@ -60,5 +66,6 @@ drive projection and preference persistence. Domain events are not recorded in S
 Workflow tests use real dispatchers and fake ports. Navigation tests cover sample, chapter, bookmark,
 and search paths. The opening workflow proves that one fact drives independent projections. The
 reader integration test covers lifecycle startup, reader closure, playback stop, and cleanup.
-Playback tests prove that closure waits for pending progress, while library tests prove that
+Playback tests prove that closure waits for pending progress, that resume waits for an in-flight
+pause or Stop, and that a newer pause suppresses a queued resume. Library tests prove that
 `ReaderClosed` refreshes the collection projection.
