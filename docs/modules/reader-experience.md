@@ -41,6 +41,10 @@ Cross-book search is projected as a full Library workspace rather than a sidebar
 The composition root owns only the debounced query and result projections; native storage owns
 full-text matching, while the navigation application opens a result at its book, chapter, and
 sentence context.
+Empty queries remain idle, no-result feedback stays inside the Library workspace, and matching text
+is highlighted without changing the persisted excerpt. Because the command is asynchronous and the
+matching database is local, searching does not introduce a network dependency or block the active
+reader path on Android.
 
 Distraction-free reading is transient presentation state. It hides application chrome without
 mutating either sidebar preference, so leaving the mode restores the reader layout exactly as the
@@ -92,3 +96,5 @@ Contents tests cover nested labels, anchor-level navigation, panel dismissal, an
 targets across native import, storage, projection, and the composed reader.
 The Android bookmark tracer covers visible add/remove state and an exact saved-passage jump; native
 tests cover restart, duplicate saves, and vanished targets.
+The Android library-search tracer covers idle empty input, no matches, non-Latin highlighting, book
+and chapter context, and navigation to the exact persisted sentence.
