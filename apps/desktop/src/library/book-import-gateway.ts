@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { open, type OpenDialogOptions } from "@tauri-apps/plugin-dialog";
 import { isAndroidRuntime, isTauriRuntime } from "../platform/tauri-runtime";
 import {
@@ -6,7 +6,12 @@ import {
   type MediaSourceGateway
 } from "../platform/media-source-gateway";
 import { resolveDocumentAssets } from "./book-assets";
-import type { BookImportGateway, BookImportOutcome, BookImportRequest } from "./library-contracts";
+import type {
+  BookImportGateway,
+  BookImportOutcome,
+  BookImportProgress,
+  BookImportRequest
+} from "./library-contracts";
 import type { ReaderDocumentDto } from "./library-models";
 
 export function createBookImportGateway(
@@ -18,19 +23,25 @@ export function createBookImportGateway(
     return createAndroidBookImportGateway({
       choose: (options) => open(options),
       probe: (source) => invoke("probe_book_import_source", { source }),
-      async importDocument(source) {
-        const document = await invoke<ReaderDocumentDto>("import_epub", { path: source });
+      async importDocument(source, onProgress) {
+        const document = await invoke<ReaderDocumentDto>("import_epub", {
+          path: source,
+          onProgress: new Channel(onProgress)
+        });
         return resolveDocumentAssets(document, mediaSources);
       }
     });
   }
 
   return {
-    async importBook(request) {
+    async importBook(request, options) {
       const source = await resolveDesktopSource(request);
       if (source == null) return { status: "cancelled" };
 
-      const document = await invoke<ReaderDocumentDto>("import_epub", { path: source });
+      const document = await invoke<ReaderDocumentDto>("import_epub", {
+        path: source,
+        onProgress: new Channel(options?.onProgress ?? ignoreImportProgress)
+      });
       return imported(resolveDocumentAssets(document, mediaSources));
     }
   };
@@ -39,7 +50,10 @@ export function createBookImportGateway(
 interface AndroidBookImportDependencies {
   choose(options: OpenDialogOptions): Promise<string | string[] | null>;
   probe(source: string): Promise<void>;
-  importDocument(source: string): Promise<ReaderDocumentDto>;
+  importDocument(
+    source: string,
+    onProgress: (progress: BookImportProgress) => void
+  ): Promise<ReaderDocumentDto>;
 }
 
 const androidEpubPickerOptions: OpenDialogOptions = {
@@ -57,9 +71,14 @@ export function createAndroidBookImportGateway(
   dependencies: AndroidBookImportDependencies
 ): BookImportGateway {
   return {
-    async importBook(request) {
+    async importBook(request, options) {
       if (request.kind === "provided" && !isAndroidDocumentSource(request.source)) {
-        return imported(await dependencies.importDocument(request.source));
+        return imported(
+          await dependencies.importDocument(
+            request.source,
+            options?.onProgress ?? ignoreImportProgress
+          )
+        );
       }
 
       let source: string | null;
@@ -119,3 +138,5 @@ const unavailableBookImportGateway: BookImportGateway = {
     throw new Error("EPUB import is available in the desktop app.");
   }
 };
+
+function ignoreImportProgress() {}

@@ -9,8 +9,15 @@ export type BookImportOutcome =
   | { status: "source-selected"; source: string }
   | { status: "imported"; document: ReaderDocumentDto };
 
+export interface BookImportProgress {
+  phase: "reading" | "saving";
+}
+
 export interface BookImportGateway {
-  importBook(request: BookImportRequest): Promise<BookImportOutcome>;
+  importBook(
+    request: BookImportRequest,
+    options?: { onProgress(progress: BookImportProgress): void }
+  ): Promise<BookImportOutcome>;
 }
 
 export interface BookImportSourceStore {

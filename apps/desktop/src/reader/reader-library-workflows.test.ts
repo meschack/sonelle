@@ -44,11 +44,45 @@ describe("reader library workflows", () => {
 
     expect(projectionReaction).toHaveBeenCalledOnce();
     expect(openBookReaction).toHaveBeenCalledOnce();
-    expect(importBook).toHaveBeenCalledWith({ kind: "choose" });
+    expect(importBook).toHaveBeenCalledWith(
+      { kind: "choose" },
+      expect.objectContaining({ onProgress: expect.any(Function) })
+    );
     expect(projectionReaction.mock.calls[0]?.[0]).toMatchObject({
       name: "BookImported",
       payload: { bookId: "book-1", replacedExisting: true }
     });
+    stop();
+  });
+
+  it("publishes native import phases in order before the completion fact", async () => {
+    const dispatcher = createDomainEventDispatcher();
+    const events: string[] = [];
+    dispatcher.subscribe("BookImportProgressed", (event) => {
+      events.push(event.payload.phase);
+    });
+    dispatcher.subscribe("BookImported", () => {
+      events.push("imported");
+    });
+    const importBook = vi.fn().mockImplementation(async (_request, options) => {
+      options.onProgress({ phase: "reading" });
+      await Promise.resolve();
+      options.onProgress({ phase: "saving" });
+      return { status: "imported", document: importedDocument };
+    });
+    const workflows = createReaderLibraryWorkflows({
+      eventDispatcher: dispatcher,
+      friendlyError,
+      catalog: { list: vi.fn().mockResolvedValue([]) },
+      importGateway: { importBook },
+      importSourceStore: unusedImportSourceStore,
+      bookmarks: { save: vi.fn(), delete: vi.fn() }
+    });
+    const stop = workflows.start();
+
+    await workflows.importFromPath("/data/import-sources/large.epub");
+
+    expect(events).toEqual(["reading", "saving", "imported"]);
     stop();
   });
 
@@ -121,10 +155,13 @@ describe("reader library workflows", () => {
         payload: { path: "/tmp/broken.epub", reason: "broken EPUB" }
       })
     );
-    expect(importBook).toHaveBeenCalledWith({
-      kind: "provided",
-      source: "/tmp/broken.epub"
-    });
+    expect(importBook).toHaveBeenCalledWith(
+      {
+        kind: "provided",
+        source: "/tmp/broken.epub"
+      },
+      expect.objectContaining({ onProgress: expect.any(Function) })
+    );
     stop();
   });
 
@@ -151,7 +188,10 @@ describe("reader library workflows", () => {
         payload: { path: null }
       })
     );
-    expect(importBook).toHaveBeenCalledWith({ kind: "choose" });
+    expect(importBook).toHaveBeenCalledWith(
+      { kind: "choose" },
+      expect.objectContaining({ onProgress: expect.any(Function) })
+    );
     stop();
   });
 
@@ -250,7 +290,10 @@ describe("reader library workflows", () => {
       })
     );
 
-    expect(importBook).toHaveBeenCalledWith({ kind: "provided", source: managedSource });
+    expect(importBook).toHaveBeenCalledWith(
+      { kind: "provided", source: managedSource },
+      expect.objectContaining({ onProgress: expect.any(Function) })
+    );
     expect(failed).toHaveBeenCalledWith(
       expect.objectContaining({
         payload: { path: managedSource, reason: "That EPUB could not be read." }

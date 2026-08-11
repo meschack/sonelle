@@ -100,8 +100,38 @@ describe("Android book import gateway", () => {
     ).resolves.toEqual({ status: "imported", document });
 
     expect(importDocument).toHaveBeenCalledWith(
-      "/data/user/0/app.sonelle.reader/files/import-sources/hash.epub"
+      "/data/user/0/app.sonelle.reader/files/import-sources/hash.epub",
+      expect.any(Function)
     );
     expect(probe).not.toHaveBeenCalled();
+  });
+
+  it("forwards native import phases without making the adapter own their projection", async () => {
+    const onProgress = vi.fn();
+    const importDocument = vi.fn().mockImplementation(async (_source, emitProgress) => {
+      emitProgress({ phase: "reading" });
+      emitProgress({ phase: "saving" });
+      return {
+        book: { id: "book-1", title: "The Book", author: "A. Writer", language: "en" },
+        activeChapterId: "chapter-1",
+        chapters: [],
+        position: null
+      };
+    });
+    const gateway = createAndroidBookImportGateway({
+      choose: vi.fn(),
+      probe: vi.fn(),
+      importDocument
+    });
+
+    await gateway.importBook(
+      { kind: "provided", source: "/data/import-sources/large.epub" },
+      { onProgress }
+    );
+
+    expect(onProgress.mock.calls.map(([progress]) => progress.phase)).toEqual([
+      "reading",
+      "saving"
+    ]);
   });
 });

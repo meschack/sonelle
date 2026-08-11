@@ -1,9 +1,7 @@
-use tauri::{AppHandle, Manager};
+use tauri::{ipc::Channel, AppHandle, Manager};
 
 #[cfg(mobile)]
 use std::io::Read;
-#[cfg(mobile)]
-use tauri::ipc::Channel;
 #[cfg(mobile)]
 use tauri_plugin_fs::{FilePath, FsExt, OpenOptions};
 
@@ -19,7 +17,7 @@ use crate::audio::{
     speak_prepared_narration, stop_narration, AudioCacheStats, PreparedSentenceAudio,
     SentenceAudioRequest,
 };
-use crate::library_import::prepare_epub_import;
+use crate::library_import::{prepare_epub_import, BookImportPhase, BookImportProgress};
 #[cfg(mobile)]
 use crate::mobile_shell::{empty_audio_cache_stats, MobileAudioCacheStats};
 #[cfg(desktop)]
@@ -52,10 +50,20 @@ use crate::system_fonts::list_system_font_families;
 use crate::voice_installation::{install_voice, voice_status, NarrationVoiceInstallationStatus};
 
 #[tauri::command]
-pub async fn import_epub(app: AppHandle, path: String) -> Result<ReaderDocumentView, String> {
+pub async fn import_epub(
+    app: AppHandle,
+    path: String,
+    on_progress: Channel<BookImportProgress>,
+) -> Result<ReaderDocumentView, String> {
     let store = managed_store(&app);
+    let _ = on_progress.send(BookImportProgress {
+        phase: BookImportPhase::Reading,
+    });
     run_blocking("library.import", move || {
         let imported = prepare_epub_import(path.as_ref()).map_err(|error| error.to_string())?;
+        let _ = on_progress.send(BookImportProgress {
+            phase: BookImportPhase::Saving,
+        });
         store.save_imported_book(imported)
     })
     .await

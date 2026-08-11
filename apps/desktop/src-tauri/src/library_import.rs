@@ -8,6 +8,19 @@ use crate::{
     text::segment_normalized_paragraphs,
 };
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookImportProgress {
+    pub phase: BookImportPhase,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BookImportPhase {
+    Reading,
+    Saving,
+}
+
 #[derive(Debug, Clone)]
 pub struct PreparedBookImport {
     pub id: String,
