@@ -4,5 +4,5 @@
   "description": "Least-privilege capability for the Android reader shell",
   "windows": ["main"],
   "platforms": ["android"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:allow-open"]
 }

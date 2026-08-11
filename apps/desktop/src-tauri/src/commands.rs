@@ -1,5 +1,10 @@
 use tauri::{AppHandle, Manager};
 
+#[cfg(mobile)]
+use std::io::Read;
+#[cfg(mobile)]
+use tauri_plugin_fs::{FilePath, FsExt, OpenOptions};
+
 use crate::error_log::{self, AppErrorReport};
 
 #[cfg(desktop)]
@@ -46,6 +51,32 @@ pub async fn import_epub(app: AppHandle, path: String) -> Result<ReaderDocumentV
     run_blocking("library.import", move || {
         let imported = prepare_epub_import(path.as_ref()).map_err(|error| error.to_string())?;
         store.save_imported_book(imported)
+    })
+    .await
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn probe_book_import_source(app: AppHandle, source: String) -> Result<(), String> {
+    run_blocking("library.source.probe", move || {
+        let source_path = source
+            .parse::<FilePath>()
+            .expect("FilePath parsing is infallible");
+        let mut options = OpenOptions::new();
+        options.read(true);
+        let mut file = app
+            .fs()
+            .open(source_path, options)
+            .map_err(|error| format!("book source is unavailable: {error}"))?;
+        let mut first_byte = [0_u8; 1];
+        if file
+            .read(&mut first_byte)
+            .map_err(|error| format!("book source is unreadable: {error}"))?
+            == 0
+        {
+            return Err("book source is empty".to_owned());
+        }
+        Ok(())
     })
     .await
 }

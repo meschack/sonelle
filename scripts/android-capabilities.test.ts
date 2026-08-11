@@ -20,12 +20,12 @@ function permissionIdentifiers(capability: Capability): string[] {
 }
 
 describe("Android capability boundary", () => {
-  it("uses a dedicated core-only Android profile", () => {
+  it("grants only the system document picker beyond the Android core", () => {
     const android = readCapability("android");
 
     expect(android.identifier).toBe("android-reader");
     expect(android.platforms).toEqual(["android"]);
-    expect(permissionIdentifiers(android)).toEqual(["core:default"]);
+    expect(permissionIdentifiers(android)).toEqual(["core:default", "dialog:allow-open"]);
   });
 
   it("keeps the desktop profile and its plugin permissions off Android", () => {
@@ -38,7 +38,7 @@ describe("Android capability boundary", () => {
     expect(permissions.some((permission) => permission.startsWith("opener:"))).toBe(true);
 
     const androidPermissions = permissionIdentifiers(readCapability("android"));
-    for (const forbiddenPrefix of ["dialog:", "fs:", "opener:", "process:", "shell:"]) {
+    for (const forbiddenPrefix of ["fs:", "opener:", "process:", "shell:"]) {
       expect(androidPermissions.some((permission) => permission.startsWith(forbiddenPrefix))).toBe(
         false
       );

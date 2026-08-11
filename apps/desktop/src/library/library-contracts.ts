@@ -5,7 +5,9 @@ export type { LibraryBookSummary, ReaderDocumentDto } from "./library-models";
 export type BookImportRequest = { kind: "choose" } | { kind: "provided"; source: string };
 
 export type BookImportOutcome =
-  { status: "cancelled" } | { status: "imported"; document: ReaderDocumentDto };
+  | { status: "cancelled" }
+  | { status: "source-selected"; source: string }
+  | { status: "imported"; document: ReaderDocumentDto };
 
 export interface BookImportGateway {
   importBook(request: BookImportRequest): Promise<BookImportOutcome>;

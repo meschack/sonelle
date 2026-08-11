@@ -45,6 +45,10 @@ export function createReaderLibraryWorkflows(
         await publish(createDomainEvent("BookImportCancelled", { path }));
         return;
       }
+      if (outcome.status === "source-selected") {
+        await publish(createDomainEvent("BookImportSourceSelected", { source: outcome.source }));
+        return;
+      }
       const { document } = outcome;
 
       await publish(

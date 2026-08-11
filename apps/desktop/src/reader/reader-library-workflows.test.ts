@@ -148,6 +148,35 @@ describe("reader library workflows", () => {
     expect(importBook).toHaveBeenCalledWith({ kind: "choose" });
     stop();
   });
+
+  it("publishes a selected Android source for the next import stage", async () => {
+    const dispatcher = createDomainEventDispatcher();
+    const selected = vi.fn();
+    dispatcher.subscribe("BookImportSourceSelected", selected);
+    const workflows = createReaderLibraryWorkflows({
+      eventDispatcher: dispatcher,
+      friendlyError,
+      catalog: { list: vi.fn().mockResolvedValue([]) },
+      importGateway: {
+        importBook: vi.fn().mockResolvedValue({
+          status: "source-selected",
+          source: "content://books/the-book.epub"
+        })
+      },
+      bookmarks: { save: vi.fn(), delete: vi.fn() }
+    });
+    const stop = workflows.start();
+
+    await workflows.importFromDialog();
+
+    expect(selected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "BookImportSourceSelected",
+        payload: { source: "content://books/the-book.epub" }
+      })
+    );
+    stop();
+  });
 });
 
 function friendlyError(error: unknown): string {

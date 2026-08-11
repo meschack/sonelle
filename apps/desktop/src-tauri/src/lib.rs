@@ -92,6 +92,9 @@ pub fn run() {
             Ok(())
         });
 
+    #[cfg(mobile)]
+    let builder = builder.plugin(tauri_plugin_fs::init());
+
     #[cfg(desktop)]
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_status,
@@ -134,6 +137,7 @@ pub fn run() {
         commands::list_books,
         commands::list_system_fonts,
         commands::open_book,
+        commands::probe_book_import_source,
         commands::report_app_error,
         commands::save_bookmark,
         commands::save_reading_position,

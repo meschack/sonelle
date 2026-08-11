@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, type OpenDialogOptions } from "@tauri-apps/plugin-dialog";
 import { isTauriRuntime } from "../platform/tauri-runtime";
 import {
   createDesktopMediaSourceGateway,
@@ -14,6 +14,13 @@ export function createBookImportGateway(
 ): BookImportGateway {
   if (!isTauriRuntime()) return unavailableBookImportGateway;
 
+  if (isAndroidRuntime()) {
+    return createAndroidBookImportGateway({
+      choose: (options) => open(options),
+      probe: (source) => invoke("probe_book_import_source", { source })
+    });
+  }
+
   return {
     async importBook(request) {
       const source = await resolveDesktopSource(request);
@@ -21,6 +28,52 @@ export function createBookImportGateway(
 
       const document = await invoke<ReaderDocumentDto>("import_epub", { path: source });
       return imported(resolveDocumentAssets(document, mediaSources));
+    }
+  };
+}
+
+interface AndroidBookImportDependencies {
+  choose(options: OpenDialogOptions): Promise<string | string[] | null>;
+  probe(source: string): Promise<void>;
+}
+
+const androidEpubPickerOptions: OpenDialogOptions = {
+  multiple: false,
+  pickerMode: "document",
+  filters: [
+    {
+      name: "EPUB books",
+      extensions: ["epub", "application/epub+zip", "application/zip", "application/octet-stream"]
+    }
+  ]
+};
+
+export function createAndroidBookImportGateway(
+  dependencies: AndroidBookImportDependencies
+): BookImportGateway {
+  return {
+    async importBook(request) {
+      let source: string | null;
+      try {
+        source =
+          request.kind === "provided"
+            ? request.source
+            : singleSelection(await dependencies.choose(androidEpubPickerOptions));
+      } catch (error) {
+        if (isPickerCancellation(error)) return { status: "cancelled" };
+        throw error;
+      }
+
+      if (source == null) return { status: "cancelled" };
+
+      try {
+        await dependencies.probe(source);
+      } catch {
+        throw new Error(
+          "We couldn't read that book from your document provider. Please choose it again."
+        );
+      }
+      return { status: "source-selected", source };
     }
   };
 }
@@ -37,6 +90,19 @@ async function resolveDesktopSource(request: BookImportRequest): Promise<string 
 
 function imported(document: ReaderDocumentDto): BookImportOutcome {
   return { status: "imported", document };
+}
+
+function singleSelection(selected: string | string[] | null): string | null {
+  return selected == null || Array.isArray(selected) ? null : selected;
+}
+
+function isPickerCancellation(error: unknown): boolean {
+  const message = typeof error === "string" ? error : error instanceof Error ? error.message : "";
+  return message.toLocaleLowerCase().includes("picker cancelled");
+}
+
+function isAndroidRuntime(): boolean {
+  return typeof navigator !== "undefined" && /\bandroid\b/i.test(navigator.userAgent);
 }
 
 const unavailableBookImportGateway: BookImportGateway = {
