@@ -13,6 +13,27 @@ export interface BookImportGateway {
   importBook(request: BookImportRequest): Promise<BookImportOutcome>;
 }
 
+export interface BookImportSourceStore {
+  prepare(
+    source: string,
+    options: {
+      requestId: string;
+      signal?: AbortSignal;
+      onProgress(progress: BookImportPreparationProgress): void;
+    }
+  ): Promise<PreparedBookImportSource>;
+}
+
+export interface BookImportPreparationProgress {
+  completedBytes: number;
+  totalBytes: number | null;
+}
+
+export interface PreparedBookImportSource {
+  source: string;
+  reusedExisting: boolean;
+}
+
 export interface BookCatalog {
   list(): Promise<LibraryBookSummary[]>;
   open(bookId: string, chapterId?: string): Promise<ReaderDocumentDto>;

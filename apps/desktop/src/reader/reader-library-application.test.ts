@@ -36,7 +36,7 @@ const document = {
 };
 
 describe("reader library application", () => {
-  it("ends the busy state when Android source selection finishes", async () => {
+  it("ends the busy state when Android source preparation finishes", async () => {
     const dispatcher = createDomainEventDispatcher();
     const importing: boolean[] = [];
     const application = createReaderLibraryApplication(
@@ -48,6 +48,12 @@ describe("reader library application", () => {
           importBook: vi.fn().mockResolvedValue({
             status: "source-selected",
             source: "content://books/the-book.epub"
+          })
+        },
+        importSourceStore: {
+          prepare: vi.fn().mockResolvedValue({
+            source: "/data/import-sources/book.epub",
+            reusedExisting: false
           })
         },
         bookmarks: { list: vi.fn().mockResolvedValue([]), save: vi.fn(), delete: vi.fn() },
@@ -106,6 +112,7 @@ describe("reader library application", () => {
           }
         },
         importGateway: { importBook },
+        importSourceStore: { prepare: vi.fn() },
         bookmarks: {
           list: async () => [],
           save: vi.fn(),

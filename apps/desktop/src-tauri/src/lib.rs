@@ -2,6 +2,8 @@
 mod audio;
 #[cfg(desktop)]
 mod background_process;
+#[cfg(any(mobile, test))]
+mod book_import_source;
 mod book_open_request;
 mod commands;
 mod epub_import;
@@ -128,6 +130,8 @@ pub fn run() {
     #[cfg(mobile)]
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_status,
+        commands::cancel_book_import_source_copy,
+        commands::copy_book_import_source,
         commands::delete_bookmark,
         commands::export_book_data,
         commands::get_audio_cache_stats,

@@ -3,8 +3,14 @@ use tauri::{AppHandle, Manager};
 #[cfg(mobile)]
 use std::io::Read;
 #[cfg(mobile)]
+use tauri::ipc::Channel;
+#[cfg(mobile)]
 use tauri_plugin_fs::{FilePath, FsExt, OpenOptions};
 
+#[cfg(mobile)]
+use crate::book_import_source::{
+    self, BookImportCopyProgress, CopyBookImportSourceRequest, PreparedBookImportSource,
+};
 use crate::error_log::{self, AppErrorReport};
 
 #[cfg(desktop)]
@@ -79,6 +85,55 @@ pub async fn probe_book_import_source(app: AppHandle, source: String) -> Result<
         Ok(())
     })
     .await
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn copy_book_import_source(
+    app: AppHandle,
+    request: CopyBookImportSourceRequest,
+    on_progress: Channel<BookImportCopyProgress>,
+) -> Result<PreparedBookImportSource, String> {
+    let request_id = request.request_id.clone();
+    let result = run_blocking("library.source.copy", move || {
+        let source_path = request
+            .source
+            .parse::<FilePath>()
+            .expect("FilePath parsing is infallible");
+        let mut options = OpenOptions::new();
+        options.read(true);
+        let mut source = app.fs().open(source_path, options).map_err(|_| {
+            "We couldn't keep reading that book. Please choose it again.".to_owned()
+        })?;
+        let total_bytes = source
+            .metadata()
+            .ok()
+            .map(|metadata| metadata.len())
+            .filter(|length| *length > 0);
+        let root = app
+            .path()
+            .app_data_dir()
+            .map_err(|_| "We couldn't prepare a safe place for that book.".to_owned())?
+            .join("import-sources");
+        book_import_source::copy_reader_to_managed_source(
+            &mut source,
+            &root,
+            &request.request_id,
+            total_bytes,
+            |progress| {
+                let _ = on_progress.send(progress);
+            },
+        )
+    })
+    .await;
+    book_import_source::finish_copy(&request_id);
+    result
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub fn cancel_book_import_source_copy(request_id: String) {
+    book_import_source::cancel_copy(request_id);
 }
 
 #[tauri::command]

@@ -12,7 +12,7 @@
 
 - reader presentation models, playback activation, Solid state, or narration preparation
 - dictionary lookup and provider selection
-- durable Android sandbox copying; selection only proves that the provider source is readable
+- EPUB parsing from Android managed sources; source preparation stops at a durable readable file
 
 ## Interface
 
@@ -27,14 +27,15 @@ The request's supplied source is intentionally opaque to the workflow. The deskt
 as a path. The Android adapter opens the least-privilege system document picker with EPUB and common
 fallback MIME types, normalizes the platform's rejected cancellation response, and probes the
 returned document URI before publishing `BookImportSourceSelected`. It does not request broad
-storage access or persist the source. A later adapter copies that selected source into
-Sonelle-controlled storage before opening it. Native `library_import` turns parsed EPUB data into a
+storage access. `BookImportSourceStore` copies that selected source into Sonelle-controlled storage
+before provider permission can disappear. Native `library_import` turns parsed EPUB data into a
 storage import. `library_migration` runs after startup on a blocking runtime task, reads legacy rows in
 bounded keyset batches, and isolates individual repair failures.
 
 ## Domain Events
 
-Import dispatches requested, source-selected, cancelled, imported, and failed facts through the application
+Import dispatches requested, source-selected, preparation-started, preparation-progressed,
+source-prepared, cancelled, imported, and failed facts through the application
 dispatcher. Native storage persists the resulting book, chapter, sentence, and paragraph
 projections without maintaining a separate event history. Legacy repair logs failures to local
 diagnostics and updates missing projections directly.
@@ -48,6 +49,7 @@ projected onto their owning sentence with an inline offset.
 - library ports never import reader-owned DTOs
 - exactly one platform import gateway is composed at the application edge
 - cancellation is a normal outcome; unreadable sources are failures
+- only fully written, synchronized Android sources receive an importable `.epub` path
 - imported text, paragraph, sentence, and reference projections commit atomically
 - repair never blocks Tauri setup and one unreadable book does not stop later repairs
 - batches remain bounded and resumable by stable identifiers
