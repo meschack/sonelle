@@ -486,7 +486,21 @@ export function LibraryWorkspace(componentProps: { model: LibraryWorkspaceModel 
                           <span class="library-card-progress" aria-hidden="true">
                             <span style={{ width: `${libraryProgressPercent(book)}%` }} />
                           </span>
-                          <em>{libraryProgressPercent(book)}% read</em>
+                          <em
+                            classList={{
+                              "library-book-attention":
+                                book.sourceStatus?.status === "needs-attention"
+                            }}
+                            title={
+                              book.sourceStatus?.status === "needs-attention"
+                                ? book.sourceStatus.message
+                                : undefined
+                            }
+                          >
+                            {book.sourceStatus?.status === "needs-attention"
+                              ? "Needs attention"
+                              : `${libraryProgressPercent(book)}% read`}
+                          </em>
                         </span>
                       </button>
                     )}

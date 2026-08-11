@@ -2260,6 +2260,10 @@ svg {
   margin-top: -20px;
 }
 
+.library-book-card em.library-book-attention {
+  color: var(--danger);
+}
+
 .library-drop-card {
   align-items: center;
   border: 2px dashed #bfc8c3;

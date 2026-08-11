@@ -10,8 +10,36 @@ pub struct LibraryBookView {
     pub imported_at: String,
     pub chapter_count: i64,
     pub sentence_count: i64,
+    pub source_status: LibrarySourceStatusView,
     pub last_chapter_id: Option<String>,
     pub completed_sentence_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "kebab-case", tag = "status", content = "message")]
+pub enum LibrarySourceStatusView {
+    Ready,
+    NeedsAttention(String),
+}
+
+impl LibrarySourceStatusView {
+    pub fn ready() -> Self {
+        Self::Ready
+    }
+
+    pub fn missing() -> Self {
+        Self::NeedsAttention(
+            "The saved book is still readable, but its EPUB source is missing. Reimport it to restore the source file."
+                .to_string(),
+        )
+    }
+
+    pub fn damaged() -> Self {
+        Self::NeedsAttention(
+            "The saved book is still readable, but its EPUB source needs attention. Reimport it to restore the source file."
+                .to_string(),
+        )
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

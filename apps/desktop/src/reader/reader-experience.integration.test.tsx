@@ -197,7 +197,13 @@ describe("ReaderExperience integration", () => {
     const openBook = vi.fn(async (bookId: string) => createReaderDocument(bookId));
     const libraryBooks = [
       createLibraryBook("book-one", "First Book", 0),
-      createLibraryBook("book-two", "Second Book", 3),
+      {
+        ...createLibraryBook("book-two", "Second Book", 3),
+        sourceStatus: {
+          status: "needs-attention" as const,
+          message: "The saved book is still readable. Reimport it to restore the source file."
+        }
+      },
       createLibraryBook("book-three", "Third Book", 0)
     ];
     const dependencies = createDependencies({
@@ -219,6 +225,11 @@ describe("ReaderExperience integration", () => {
     await vi.waitFor(() =>
       expect(container.querySelectorAll("[data-library-book-card]")).toHaveLength(3)
     );
+    const attention = container.querySelector<HTMLElement>(
+      '[data-library-book-card="book-two"] .library-book-attention'
+    );
+    expect(attention?.textContent).toBe("Needs attention");
+    expect(attention?.title).toContain("Reimport");
 
     dispatchShortcut("f", { ctrlKey: true });
     const search = container.querySelector<HTMLInputElement>(
