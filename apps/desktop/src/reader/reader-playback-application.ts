@@ -8,6 +8,9 @@ import {
   playPlayback,
   projectNarrationEventToPlayback,
   selectPlaybackSentence,
+  type MediaSessionGateway,
+  type MediaSessionIntent,
+  type MediaSessionSnapshot,
   type NarrationPlaybackProjectionEvent,
   type PlaybackStatus,
   type ReaderPlaybackState
@@ -20,6 +23,7 @@ type PositionSaveIntent = "immediate" | "playback";
 
 interface ReaderPlaybackApplicationDependencies {
   narration: NarrationGateway;
+  mediaSession: MediaSessionGateway;
   eventDispatcher: DomainEventDispatcher;
   positions: ReadingPositionStore;
   preparesAcrossChapters: boolean;
@@ -86,6 +90,7 @@ export function createReaderPlaybackApplication(
   let jumpRun = 0;
   let chapterTransitionRun = 0;
   let chapterTransitionTimer: ReturnType<typeof setTimeout> | undefined;
+  let resumeAfterInterruption = false;
 
   const pauseNarration = () => {
     void dependencies.narration.pause().catch(dependencies.reportEventError);
@@ -104,6 +109,26 @@ export function createReaderPlaybackApplication(
     options.projectAudible(false);
     cancelChapterTransition();
     pauseNarration();
+  };
+
+  const pausePlaybackNow = () => {
+    if (options.currentPlayback().status !== "playing" && !options.narrationAudible()) return;
+    stopPlaybackNow();
+    options.projectPlayback(pausePlayback);
+  };
+
+  const requestPlayback = () => {
+    const readinessMessage = options.narrationReadinessMessage();
+    if (readinessMessage != null) {
+      stopPlaybackNow();
+      options.projectPlayback(pausePlayback);
+      options.projectNotice(readinessMessage);
+      return;
+    }
+    if (options.currentPlayback().status === "playing" || options.narrationAudible()) return;
+    options.projectPlayback((current) =>
+      playPlayback(current, options.currentReader().sentences.length)
+    );
   };
 
   const commitJump = (resolve: (current: ReaderPlaybackState) => ReaderPlaybackState) => {
@@ -149,9 +174,49 @@ export function createReaderPlaybackApplication(
     event.payload.source === "user" &&
     event.payload.previousVoiceId !== event.payload.settings.voiceId;
 
+  const handleMediaSessionIntent = (intent: MediaSessionIntent) => {
+    switch (intent.type) {
+      case "play":
+        resumeAfterInterruption = false;
+        requestPlayback();
+        return;
+      case "pause":
+        resumeAfterInterruption = false;
+        pausePlaybackNow();
+        return;
+      case "stop":
+        resumeAfterInterruption = false;
+        cancelChapterTransition();
+        void dependencies.narration.stop().catch(dependencies.reportEventError);
+        options.projectAudible(false);
+        options.projectPlayback(pausePlayback);
+        return;
+      case "seek":
+        commitJump((current) =>
+          movePlayback(current, options.currentReader().sentences.length, intent.sentenceOffset)
+        );
+        return;
+      case "interruption-started":
+        resumeAfterInterruption =
+          options.currentPlayback().status === "playing" || options.narrationAudible();
+        pausePlaybackNow();
+        return;
+      case "interruption-ended": {
+        const shouldResume = resumeAfterInterruption && intent.mayResume;
+        resumeAfterInterruption = false;
+        if (shouldResume) requestPlayback();
+      }
+    }
+  };
+
   return {
     start() {
       const subscriptions = [
+        dependencies.mediaSession.subscribe(handleMediaSessionIntent),
+        dependencies.eventDispatcher.subscribe("ReaderClosed", () => {
+          resumeAfterInterruption = false;
+          dependencies.mediaSession.clear();
+        }),
         dependencies.eventDispatcher.subscribe("NarrationSettingsChanged", (event) => {
           if (isUserVoiceChange(event)) void dependencies.narration.stop();
         }),
@@ -171,6 +236,7 @@ export function createReaderPlaybackApplication(
       const playback = options.currentPlayback();
       const reader = options.currentReader();
       const sentence = reader.sentences[playback.activeSentenceIndex];
+      dependencies.mediaSession.publish(mediaSessionSnapshot(reader, playback));
       const ignoreSessionProjection = sessionProjectedPlaybackChange;
       sessionProjectedPlaybackChange = false;
       if (ignoreSessionProjection || playback.status !== "playing" || sentence == null) {
@@ -250,22 +316,11 @@ export function createReaderPlaybackApplication(
       }
     },
     toggle() {
-      const readinessMessage = options.narrationReadinessMessage();
-      if (readinessMessage != null) {
-        stopPlaybackNow();
-        options.projectPlayback(pausePlayback);
-        options.projectNotice(readinessMessage);
-        return;
-      }
-
       if (options.currentPlayback().status === "playing" || options.narrationAudible()) {
-        stopPlaybackNow();
-        options.projectPlayback(pausePlayback);
+        pausePlaybackNow();
         return;
       }
-      options.projectPlayback((current) =>
-        playPlayback(current, options.currentReader().sentences.length)
-      );
+      requestPlayback();
     },
     move(direction) {
       commitJump((current) =>
@@ -335,6 +390,35 @@ export function createReaderPlaybackApplication(
     dispose() {
       cancelChapterTransition();
       positionScheduler.flush();
+      dependencies.mediaSession.clear();
     }
+  };
+}
+
+function mediaSessionSnapshot(
+  reader: ReaderView,
+  playback: ReaderPlaybackState
+): MediaSessionSnapshot {
+  const sentence = reader.sentences[playback.activeSentenceIndex] ?? null;
+  return {
+    book: {
+      id: reader.book.id,
+      title: reader.book.title,
+      author: reader.book.author,
+      coverImageSrc: reader.book.coverImageSrc
+    },
+    chapter: {
+      id: reader.chapter.id,
+      title: reader.chapter.title
+    },
+    activeSentence:
+      sentence == null
+        ? null
+        : {
+            id: sentence.id,
+            index: sentence.index,
+            count: reader.sentences.length
+          },
+    playbackStatus: playback.status
   };
 }

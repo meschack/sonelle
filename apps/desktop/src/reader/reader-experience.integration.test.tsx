@@ -10,7 +10,11 @@ import {
 import { createDomainEvent, createDomainEventDispatcher } from "@sonelle/domain";
 import type { NarrationGateway } from "@sonelle/audio/narration";
 import { createSavedDictionary } from "@sonelle/learning";
-import { createReaderPreferences, type ReaderPreferences } from "@sonelle/reader";
+import {
+  createNoopMediaSessionGateway,
+  createReaderPreferences,
+  type ReaderPreferences
+} from "@sonelle/reader";
 import type { ReaderExperienceDependencies } from "./reader-dependencies";
 import type {
   BookImportGateway,
@@ -1160,6 +1164,7 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
     },
     fontCatalog: { listFamilies: vi.fn().mockResolvedValue(["Inter", "Literata"]) },
     librarySearch: { search: spies.searchLibrary ?? vi.fn().mockResolvedValue([]) },
+    mediaSession: createNoopMediaSessionGateway(),
     narration: {
       capabilities: {
         offlineLibrary: spies.offlineLibrary ?? "individual-voice",
