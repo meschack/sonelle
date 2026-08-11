@@ -2459,6 +2459,68 @@ mod tests {
     }
 
     #[test]
+    fn searches_persisted_normalized_and_non_latin_passages_without_network_state() {
+        let temp_dir = temp_store_dir();
+        fs::create_dir_all(&temp_dir).expect("test store dir should be created");
+        let store = SonelleStore::open_at(temp_dir.join("sonelle.sqlite3"))
+            .expect("store should initialize");
+        store
+            .save_imported_book(ImportedBook {
+                id: "book-local-search".to_string(),
+                title: "Many Languages".to_string(),
+                author: "Local Reader".to_string(),
+                language: None,
+                cover_image: None,
+                source_path: "/tmp/local-search.epub".to_string(),
+                navigation: Vec::new(),
+                chapters: vec![ImportedChapter {
+                    id: "book-local-search:chapter-1".to_string(),
+                    title: "Search chapter".to_string(),
+                    index: 0,
+                    body: "Économie locale éclaire les choix.\n\n東京では静かな読書が続く。\n\nСвободный выбор требует внимания."
+                        .to_string(),
+                    references: Vec::new(),
+                    links: Vec::new(),
+                    presentations: Vec::new(),
+                }],
+            })
+            .expect("book should save");
+
+        let search = |query: &str| {
+            store
+                .search_library(LibrarySearchRequest {
+                    query: query.to_string(),
+                    book_id: None,
+                    limit: Some(10),
+                })
+                .expect("local search should run")
+        };
+
+        assert!(search("   ").is_empty());
+        assert!(search("does-not-exist").is_empty());
+
+        let accent_normalized = search("economie");
+        assert_eq!(accent_normalized.len(), 1);
+        assert_eq!(accent_normalized[0].book_title, "Many Languages");
+        assert_eq!(
+            accent_normalized[0].chapter_title.as_deref(),
+            Some("Search chapter")
+        );
+        assert_eq!(accent_normalized[0].sentence_index, Some(0));
+        assert!(accent_normalized[0].excerpt.contains("Économie locale"));
+
+        let japanese = search("東京");
+        assert_eq!(japanese[0].sentence_index, Some(1));
+        assert!(japanese[0].excerpt.contains("静かな読書"));
+
+        let cyrillic = search("выбор");
+        assert_eq!(cyrillic[0].sentence_index, Some(2));
+        assert!(cyrillic[0].excerpt.contains("Свободный выбор"));
+
+        fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
     #[ignore = "measures synthetic and local EPUB performance for manual QA"]
     fn large_book_performance_harness_reports_reader_timings() {
         let temp_dir = temp_store_dir();

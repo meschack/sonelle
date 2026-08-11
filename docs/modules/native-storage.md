@@ -50,6 +50,12 @@ sentence index and text from SQLite before committing. The deterministic bookmar
 unique passage constraint make repeated saves idempotent. Bookmark reads join the full target chain,
 so a stale legacy row whose sentence disappeared is omitted instead of exposing a broken jump.
 
+Library search runs against the persisted SQLite FTS projection and never requires a network
+connection or the source EPUB. Queries use Unicode-aware tokenization and the same normalized
+sentence text used by narration, so accented Latin, non-Latin scripts, and ordinary local passages
+share one search path. Results include the stored book, chapter, sentence identity, sentence index,
+and excerpt needed to open the exact passage without reparsing the book.
+
 ## Domain Events
 
 Native storage does not journal domain events. Application workflows publish events through the
@@ -65,6 +71,7 @@ in-process dispatcher after their core storage operation succeeds.
 - restored reading positions always address the active stored chapter and a bounded sentence index
 - unresolved contents entries cannot manufacture a chapter or sentence destination
 - bookmark text and position come from the stored sentence rather than renderer-supplied copies
+- library search reads only persisted local projections and returns authoritative navigation context
 - unmanaged desktop source paths retain their existing behavior and are not polled for health
 - migrations preserve existing local libraries, including the intentional `.readex` compatibility path
 
@@ -76,3 +83,5 @@ removal of legacy event history, mobile-safe application-data paths, and cold re
 healthy, damaged, and missing managed EPUB sources.
 Bookmark coverage includes idempotent saves, restart persistence, removal, authoritative passage
 data, and stale-target filtering.
+Search coverage includes empty and missing queries, accent-normalized Latin text, Japanese and
+Cyrillic passages, result context, and exact stored sentence positions.

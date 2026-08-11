@@ -488,22 +488,35 @@ describe("ReaderExperience integration", () => {
     container.remove();
   });
 
-  it("searches across imported books and opens a sentence result in context", async () => {
-    const openBook = vi.fn(async (bookId: string) => createReaderDocument(bookId));
-    const searchLibrary = vi.fn<LibrarySearch["search"]>().mockResolvedValue([
-      {
-        id: "sentence:book-two-sentence",
-        kind: "sentence",
-        bookId: "book-two",
-        bookTitle: "Second Book",
-        author: "Library Author",
-        chapterId: "book-two-chapter",
-        chapterTitle: "Chapter 1",
-        sentenceId: "book-two-sentence",
-        sentenceIndex: 0,
-        excerpt: "Every serious choice involves trade-offs."
+  it("searches persisted non-Latin text, handles no matches, and opens the exact sentence", async () => {
+    const openBook = vi.fn(async (bookId: string) => {
+      const document = createReaderDocument(bookId);
+      if (bookId === "book-two") {
+        document.chapters[0].sentenceCount = 2;
+        document.chapters[0].sentences = [
+          { id: "book-two-sentence-1", index: 0, text: "Before the match." },
+          { id: "book-two-sentence-2", index: 1, text: "東京では静かな読書が続く。" }
+        ];
       }
-    ] satisfies LibrarySearchResultDto[]);
+      return document;
+    });
+    const searchLibrary = vi.fn<LibrarySearch["search"]>(async ({ query }) => {
+      if (query !== "東京") return [];
+      return [
+        {
+          id: "sentence:book-two-sentence-2",
+          kind: "sentence",
+          bookId: "book-two",
+          bookTitle: "Second Book",
+          author: "Library Author",
+          chapterId: "book-two-chapter",
+          chapterTitle: "Chapter 1",
+          sentenceId: "book-two-sentence-2",
+          sentenceIndex: 1,
+          excerpt: "東京では静かな読書が続く。"
+        }
+      ] satisfies LibrarySearchResultDto[];
+    });
     const dependencies = createDependencies({
       dispatcher: createDomainEventDispatcher(),
       pause: vi.fn().mockResolvedValue(undefined),
@@ -522,6 +535,7 @@ describe("ReaderExperience integration", () => {
     const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
     await vi.waitFor(() => expect(openBook).toHaveBeenCalledWith("book-one", undefined));
     openBook.mockClear();
+    expect(searchLibrary).not.toHaveBeenCalled();
 
     dispatchShortcut("f", { ctrlKey: true, shiftKey: true });
     const search = await vi.waitFor(() => {
@@ -532,24 +546,37 @@ describe("ReaderExperience integration", () => {
       return input;
     });
     if (search == null) throw new Error("Cross-book search was not rendered");
-    search.value = "trade";
+    search.value = "missing phrase";
     search.dispatchEvent(new InputEvent("input", { bubbles: true }));
 
     await vi.waitFor(() =>
-      expect(searchLibrary).toHaveBeenCalledWith({ query: "trade", limit: 30 })
+      expect(searchLibrary).toHaveBeenCalledWith({ query: "missing phrase", limit: 30 })
+    );
+    await vi.waitFor(() => expect(container.textContent).toContain("No matches across your books"));
+
+    search.value = "東京";
+    search.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(searchLibrary).toHaveBeenCalledWith({ query: "東京", limit: 30 })
     );
     const results = await vi.waitFor(() => {
       const view = container.querySelector(".cross-book-search-results");
-      expect(view?.textContent).toContain("Every serious choice involves trade-offs.");
+      expect(view?.textContent).toContain("東京では静かな読書が続く。");
+      expect(view?.textContent).toContain("Second Book");
       return view;
     });
-    expect(results?.querySelector("mark")?.textContent).toBe("trade");
+    expect(results?.querySelector("mark")?.textContent).toBe("東京");
     const result = [...(results?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
-      (button) => button.textContent?.includes("Every serious choice")
+      (button) => button.textContent?.includes("東京では静かな読書")
     );
     result?.click();
 
     await vi.waitFor(() => expect(openBook).toHaveBeenCalledWith("book-two", "book-two-chapter"));
+    await vi.waitFor(() =>
+      expect(container.querySelector(".sentence.active")?.textContent).toContain(
+        "東京では静かな読書が続く。"
+      )
+    );
     dispose();
     container.remove();
   });
