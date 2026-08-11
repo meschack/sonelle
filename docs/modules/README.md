@@ -14,3 +14,4 @@ contracts, not aspirational diagrams: when behavior moves, update the relevant n
 - [Learning](learning.md)
 - [Native storage](native-storage.md)
 - [Mobile shell](mobile-shell.md)
+- [Media sources](media-sources.md)

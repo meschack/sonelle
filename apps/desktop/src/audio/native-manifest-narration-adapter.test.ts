@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createNativeManifestNarrationAdapter } from "./native-manifest-narration-adapter";
+import {
+  createDesktopMediaSourceGateway,
+  createFakeMediaSourceGateway
+} from "../platform/media-source-gateway";
 
 describe("createNativeManifestNarrationAdapter", () => {
   it("prepares manifest narration through the native command", async () => {
@@ -15,8 +19,9 @@ describe("createNativeManifestNarrationAdapter", () => {
       voiceId: "kokoro:af_heart",
       sourceTextDigest: "digest"
     });
-    const convertFileSrc = vi.fn((path: string, protocol?: string) => `${protocol}:${path}`);
-    const adapter = createNativeManifestNarrationAdapter({ invoke, convertFileSrc });
+    const convertLocalSource = vi.fn((path: string, protocol?: string) => `${protocol}:${path}`);
+    const mediaSources = createDesktopMediaSourceGateway(convertLocalSource);
+    const adapter = createNativeManifestNarrationAdapter({ invoke, mediaSources });
 
     const narration = await adapter.prepare({
       requestId: "request-1",
@@ -38,7 +43,7 @@ describe("createNativeManifestNarrationAdapter", () => {
     expect(invoke).toHaveBeenCalledWith("prepare_manifest_narration", {
       request: expect.objectContaining({ engineId: "kokoro" })
     });
-    expect(convertFileSrc).toHaveBeenCalledWith("/tmp/sonelle/audio.wav", "asset");
+    expect(convertLocalSource).toHaveBeenCalledWith("/tmp/sonelle/audio.wav", "asset");
     expect(narration.sourceUrl).toBe("asset:/tmp/sonelle/audio.wav");
   });
 
@@ -69,6 +74,28 @@ describe("createNativeManifestNarrationAdapter", () => {
       )
     ).rejects.toThrow("stale");
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("rejects prepared narration that has no usable media source", async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      assetId: "missing-asset",
+      sourceUrl: "/missing/audio.wav",
+      sampleRate: 24_000,
+      sampleCount: 24_000,
+      sentences: [{ sentenceId: "sentence-1", startSample: 0, endSample: 24_000 }],
+      cached: false,
+      engineId: "kokoro",
+      modelRevision: "kokoro-test",
+      voiceId: "kokoro:af_heart",
+      sourceTextDigest: "digest"
+    });
+    const mediaSources = createFakeMediaSourceGateway({
+      "/missing/audio.wav": { status: "missing" }
+    });
+
+    await expect(
+      createNativeManifestNarrationAdapter({ invoke, mediaSources }).prepare(request())
+    ).rejects.toThrow("not available to play");
   });
 
   it("forwards in-flight cancellation to the native renderer", async () => {

@@ -21,7 +21,8 @@ Renderer workflows depend on the small interfaces in `library-contracts.ts`. `Bo
 accepts either a request to choose a book or a source already supplied by a platform entry point. It
 returns an explicit imported or cancelled outcome; unreadable sources reject. The desktop adapter
 owns the file dialog, accepts drag-and-drop and file-open paths, invokes the native importer, and
-resolves local assets. Shared workflows never call a desktop selection interface directly.
+resolves local assets through `MediaSourceGateway`. Shared workflows never call a desktop
+selection interface or construct platform URLs directly.
 
 The request's supplied source is intentionally opaque to the workflow. The desktop adapter treats it
 as a path; a later Android adapter may treat it as a document URI and copy the content into

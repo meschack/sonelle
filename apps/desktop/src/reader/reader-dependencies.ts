@@ -77,6 +77,7 @@ import { createLibrarySearch } from "../library/library-search";
 import { createReadingPositionStore } from "../library/reading-position-store";
 import { isTauriRuntime } from "../platform/tauri-runtime";
 import { createSystemFontCatalog, type SystemFontCatalog } from "../platform/system-font-catalog";
+import { createDesktopMediaSourceGateway } from "../platform/media-source-gateway";
 import { createQuoteImageExporter, type QuoteImageExporter } from "./reader-quote-image";
 import {
   createReaderPreferencesRepository,
@@ -144,16 +145,20 @@ export interface ReaderExperienceDependencies {
 
 export function createReaderExperienceDependencies(): ReaderExperienceDependencies {
   const eventDispatcher = createDomainEventDispatcher();
+  const mediaSources = createDesktopMediaSourceGateway();
   const htmlAudioPlayer = createHtmlAudioPlayer();
-  const narrationRepository = createPrefetchingNarrationGateway(createNarrationRepository());
+  const narrationRepository = createPrefetchingNarrationGateway(
+    createNarrationRepository(mediaSources)
+  );
   const narrationSessionRoutingMode = resolveDevelopmentNarrationSessionRoutingMode(
     import.meta.env.VITE_SONELLE_NARRATION_SESSION
   );
   const narrationPreparationAdapter = createNarrationPreparationAdapterForMode(
     narrationSessionRoutingMode,
-    narrationRepository
+    narrationRepository,
+    { createNativeAdapter: () => createNativeManifestNarrationAdapter({ mediaSources }) }
   );
-  const bookCatalog = createBookCatalog();
+  const bookCatalog = createBookCatalog(mediaSources);
   const usesLanguagePacks = narrationSessionRoutingMode === "hybrid-v1";
   const engineInstallations: Partial<Record<NarrationEngineId, EngineInstallationState>> = {};
 
@@ -166,9 +171,9 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
     bookOpenRequestAdapter: createBookOpenRequestAdapter({
       reportError: (error) => void reportAppError("book-open-request.delivery", error)
     }),
-    bookExporter: createBookExporter(),
-    bookImportGateway: createBookImportGateway(),
-    bookMetadataEditor: createBookMetadataEditor(),
+    bookExporter: createBookExporter(mediaSources),
+    bookImportGateway: createBookImportGateway(mediaSources),
+    bookMetadataEditor: createBookMetadataEditor(mediaSources),
     bookmarkStore: createBookmarkStore(),
     dictionaryRepository: createDictionaryRepository(),
     engineInstallationRepository: createEngineInstallationRepository(),

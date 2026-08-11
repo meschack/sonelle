@@ -35,6 +35,10 @@ Upcoming-chapter preparation uses the same limits and is cancelled when reader c
 Whole-book preparation uses deterministic passage identities through the same adapter, runs
 sequentially, and resumes from completed cached passages after cancellation or failure.
 
+Prepared native paths cross `MediaSourceGateway` before reaching playback. Narration modules receive
+an available renderer URL or a missing/invalid outcome; they never construct Tauri asset-protocol
+URLs or depend on application-data directory layout.
+
 Language-pack voices are projected only after their provider files report ready. Installation
 updates refresh the current book's voice field immediately; the UI does not poll provider state.
 
