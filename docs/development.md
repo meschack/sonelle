@@ -55,6 +55,10 @@ Set `ANDROID_HOME` to the SDK directory and either set `JAVA_HOME` or ensure the
 belongs to the intended JDK. The Gradle wrapper is checked in and downloads its pinned distribution
 on the first build.
 
+For a signed release-like QA artifact, use the protected workflow documented in
+[`qa/android-internal-build.md`](qa/android-internal-build.md). Signing files remain outside source
+control; ordinary local release builds may remain unsigned.
+
 ## Commands
 
 ```bash
