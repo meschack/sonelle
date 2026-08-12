@@ -9,6 +9,7 @@
 - resumable whole-book preparation and per-chapter cache summaries
 - low-storage preflight and safe narration-only cleanup policy
 - reproducible, explicitly unaccepted mobile-model candidates for device benchmarking
+- explicitly selected Android device voices as an optional, uncached fallback
 
 ## Refuses To Own
 
@@ -16,6 +17,7 @@
 - EPUB parsing and sentence segmentation
 - word-level timing or approximate sentence highlighting
 - approving a mobile model without physical-device and listening evidence
+- silently selecting a device voice or promising that its provider works offline
 
 ## Interface
 
@@ -49,6 +51,13 @@ URLs or depend on application-data directory layout.
 
 Language-pack voices are projected only after their provider files report ready. Installation
 updates refresh the current book's voice field immediately; the UI does not poll provider state.
+
+On Android, available device voices are appended to the voice picker after the platform adapter
+reports them. They are selected deliberately and routed through a dedicated sentence gateway; a
+failure never activates one automatically. Android does not expose a reliable pause position, so
+resuming a paused device voice restarts the current sentence. Device-voice audio is neither cached
+nor included in whole-book preparation. Selecting a Sonelle voice again restores its normal model
+and preparation identity.
 
 The narration storage-maintenance module is the policy seam for mobile storage adapters. It checks
 manifest download requirements against available space while retaining a post-install reserve.
@@ -95,6 +104,7 @@ legacy global profile remains the fallback for books without an explicit profile
 - user-facing errors describe recovery, not engine or queue internals
 - narration cleanup cannot address reader-library storage, and cannot remove active narration assets
 - a host-compatible mobile candidate is not an accepted offline voice pack
+- an Android device voice is used only while its explicit prefixed voice identifier is selected
 
 ## Tests
 
@@ -109,3 +119,5 @@ Storage-maintenance tests cover resumable-install space accounting, insufficient
 confirmation, verified-pack boundaries, active playback, and narrow narration-only deletion.
 The mobile-candidate suite covers deterministic identity, catalog projection, corruption, and the
 standard-pack size gate; candidate preparation additionally runs real native synthesis.
+Android adapter tests cover voice projection, network disclosure, command routing, sentence events,
+interruption, restart-on-resume, failure, and the absence of implicit fallback.

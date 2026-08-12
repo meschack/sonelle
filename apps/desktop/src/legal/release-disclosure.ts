@@ -19,8 +19,8 @@ export const releasePrivacyStatements = [
     body: "Sonelle writes bounded error diagnostics locally when something fails. They are never uploaded automatically; review them before sharing."
   },
   {
-    title: "Device voices remain separate",
-    body: "This build does not activate an Android device-provided voice. A future device-voice option must tell you whether the selected speech engine requires a network connection before any book text is sent to it."
+    title: "Device voices are optional",
+    body: "Sonelle uses an Android device-provided voice only when you choose one. The voice list tells you when Android reports that a voice may require a network connection; choosing one of those voices may send the sentence being read to its speech provider."
   }
 ] as const;
 

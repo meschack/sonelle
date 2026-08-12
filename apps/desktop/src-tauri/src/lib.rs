@@ -1,3 +1,5 @@
+#[cfg(any(mobile, test))]
+mod android_device_voice;
 #[cfg(desktop)]
 mod audio;
 #[cfg(desktop)]
@@ -95,7 +97,9 @@ pub fn run() {
         });
 
     #[cfg(mobile)]
-    let builder = builder.plugin(tauri_plugin_fs::init());
+    let builder = builder
+        .plugin(tauri_plugin_fs::init())
+        .plugin(android_device_voice::init());
 
     #[cfg(desktop)]
     let builder = builder.invoke_handler(tauri::generate_handler![
@@ -132,6 +136,7 @@ pub fn run() {
         app_status,
         commands::cancel_book_import_source_copy,
         commands::copy_book_import_source,
+        commands::list_android_device_voices,
         commands::delete_bookmark,
         commands::export_book_data,
         commands::get_audio_cache_stats,
@@ -146,6 +151,8 @@ pub fn run() {
         commands::save_bookmark,
         commands::save_reading_position,
         commands::search_library,
+        commands::speak_android_device_sentence,
+        commands::stop_android_device_voice,
         commands::update_book_metadata,
     ]);
 

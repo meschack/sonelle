@@ -117,6 +117,18 @@ describe("sentence narration", () => {
     });
   });
 
+  it("persists an explicitly selected Android device voice without making it a default", () => {
+    const voiceId = "android-device:en-us-reader";
+    const settings = createAudioSettings({
+      voiceId,
+      voicePreferences: { en: voiceId }
+    });
+
+    expect(settings.voiceId).toBe(voiceId);
+    expect(activateHybridAudioSettingsForLanguage(settings, "en").voiceId).toBe(voiceId);
+    expect(createAudioSettings().voiceId).toBe(DEFAULT_NARRATION_VOICE_ID);
+  });
+
   it("keeps hybrid voice choices compatible with the active book", () => {
     expect(hybridNarrationVoicesForLanguage("en").map((voice) => voice.id)).toEqual([
       "kokoro:af-heart",

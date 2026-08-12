@@ -1,9 +1,14 @@
-import { createDomainEventDispatcher, type DomainEventDispatcher } from "@sonelle/domain";
+import {
+  createDomainEventDispatcher,
+  normalizeLanguageCode,
+  type DomainEventDispatcher
+} from "@sonelle/domain";
 import { createNoopMediaSessionGateway, type MediaSessionGateway } from "@sonelle/reader";
 import {
   activateAudioSettingsForLanguage,
   activateHybridAudioSettingsForLanguage,
   hybridNarrationVoicesForLanguage,
+  isAndroidDeviceVoiceId,
   SUPPORTED_NARRATION_VOICES,
   type AudioSettings,
   type NarrationVoice
@@ -47,6 +52,10 @@ import {
   type NarrationEngineId
 } from "../audio/engine-installation-repository";
 import { createNativeManifestNarrationAdapter } from "../audio/native-manifest-narration-adapter";
+import {
+  createAndroidDeviceVoiceRepository,
+  type AndroidDeviceVoice
+} from "../audio/android-device-voice-repository";
 import { createNarrationRepository } from "../audio/narration-repository";
 import {
   createVoiceInstallationRepository,
@@ -102,6 +111,10 @@ import {
 import { createReaderNarrationPrefetchWorkflow } from "./reader-narration-prefetch-workflow";
 import { buildReaderViewFromDocument } from "./reader-view";
 import { createReaderNarrationSessionChapter } from "./reader-narration";
+import {
+  createAndroidDeviceNarrationGateway,
+  routeNarrationGateway
+} from "./android-device-narration-gateway";
 
 export interface ReaderBookNarrationIdentity {
   voiceId: string;
@@ -115,6 +128,7 @@ export interface ReaderNarrationService {
   };
   activateSettings(settings: AudioSettings, language: string | null): AudioSettings;
   voices(language: string | null): readonly NarrationVoice[];
+  refreshVoices?(language: string | null): Promise<readonly NarrationVoice[]>;
   observeEngineInstallation(installation: EngineInstallationState): void;
   createGateway(
     options: Omit<DesktopNarrationGatewayOptions, "engineInstallations">
@@ -176,6 +190,18 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
   const bookCatalog = createBookCatalog(mediaSources);
   const usesLanguagePacks = narrationSessionRoutingMode === "hybrid-v1";
   const engineInstallations: Partial<Record<NarrationEngineId, EngineInstallationState>> = {};
+  const deviceVoices = createAndroidDeviceVoiceRepository();
+  let availableDeviceVoices: readonly AndroidDeviceVoice[] = [];
+  const voicesForLanguage = (language: string | null): readonly NarrationVoice[] => {
+    const sonelleVoices = usesLanguagePacks
+      ? availableHybridNarrationVoicesForLanguage(language, engineInstallations)
+      : SUPPORTED_NARRATION_VOICES;
+    const languageCode = normalizeLanguageCode(language);
+    const matchingDeviceVoices = availableDeviceVoices.filter(
+      (voice) => languageCode == null || normalizeLanguageCode(voice.locale) === languageCode
+    );
+    return [...sonelleVoices, ...matchingDeviceVoices];
+  };
 
   return {
     appLifecycle: createAppLifecycleGateway(),
@@ -210,9 +236,16 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
           : activateAudioSettingsForLanguage(settings, language);
       },
       voices(language) {
-        return usesLanguagePacks
-          ? availableHybridNarrationVoicesForLanguage(language, engineInstallations)
-          : SUPPORTED_NARRATION_VOICES;
+        return voicesForLanguage(language);
+      },
+      async refreshVoices(language) {
+        try {
+          availableDeviceVoices = await deviceVoices.list();
+        } catch (error) {
+          availableDeviceVoices = [];
+          void reportAppError("android-device-voice.list", error);
+        }
+        return voicesForLanguage(language);
       },
       observeEngineInstallation(installation) {
         engineInstallations[installation.engineId] = installation;
@@ -232,7 +265,7 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
           routingMode: narrationSessionRoutingMode,
           engineInstallations: () => engineInstallations
         });
-        return createDesktopNarrationGateway(
+        const sonelleGateway = createDesktopNarrationGateway(
           {
             eventDispatcher,
             prefetchWorkflow,
@@ -241,8 +274,16 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
           },
           { ...options, engineInstallations: () => engineInstallations }
         );
+        const deviceGateway = createAndroidDeviceNarrationGateway(
+          { eventDispatcher, repository: deviceVoices },
+          options
+        );
+        return routeNarrationGateway(sonelleGateway, deviceGateway, () =>
+          isAndroidDeviceVoiceId(options.currentSettings().voiceId)
+        );
       },
       bookIdentity(document, voiceId) {
+        if (isAndroidDeviceVoiceId(voiceId)) return null;
         const chapter = document.chapters[0];
         if (chapter == null) return null;
         const sessionChapter = createReaderNarrationSessionChapter(
@@ -257,6 +298,9 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
         };
       },
       async prepareBook(document, voiceId, options) {
+        if (isAndroidDeviceVoiceId(voiceId)) {
+          throw new Error("Device voices read while the book is open.");
+        }
         const chapters = document.chapters.map((chapter) =>
           createReaderNarrationSessionChapter(
             buildReaderViewFromDocument(document, { chapterId: chapter.id }),

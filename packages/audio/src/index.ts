@@ -15,6 +15,7 @@ interface SerializedAudioSettingsV2 extends AudioSettings {
 }
 
 export const DEFAULT_NARRATION_VOICE_ID = narrationVoiceConfig.defaultVoiceId;
+export const ANDROID_DEVICE_VOICE_PREFIX = "android-device:";
 
 export const NARRATION_PLAYBACK_RATES = [0.75, 0.9, 1, 1.25, 1.5] as const;
 
@@ -158,6 +159,7 @@ export function resolveHybridNarrationVoiceForLanguage(
   language: string | null | undefined,
   currentVoiceId: string
 ): string {
+  if (isAndroidDeviceVoiceId(currentVoiceId)) return currentVoiceId;
   const availableVoices = hybridNarrationVoicesForLanguage(language);
   if (availableVoices.some((voice) => voice.id === currentVoiceId)) return currentVoiceId;
 
@@ -186,10 +188,21 @@ export function activateHybridAudioSettingsForLanguage(
 }
 
 export function isSupportedNarrationVoiceId(voiceId: string): boolean {
-  return SELECTABLE_NARRATION_VOICES.some((voice) => voice.id === voiceId);
+  return (
+    SELECTABLE_NARRATION_VOICES.some((voice) => voice.id === voiceId) ||
+    isAndroidDeviceVoiceId(voiceId)
+  );
+}
+
+export function isAndroidDeviceVoiceId(voiceId: string): boolean {
+  return (
+    voiceId.startsWith(ANDROID_DEVICE_VOICE_PREFIX) &&
+    voiceId.length > ANDROID_DEVICE_VOICE_PREFIX.length
+  );
 }
 
 export function narrationVoiceLabel(voiceId: string): string {
+  if (isAndroidDeviceVoiceId(voiceId)) return "Device voice";
   return (
     SELECTABLE_NARRATION_VOICES.find((voice) => voice.id === voiceId)?.label ??
     SUPPORTED_NARRATION_VOICES[0].label

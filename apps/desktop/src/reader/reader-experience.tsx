@@ -10,7 +10,11 @@ import {
   Show,
   untrack
 } from "solid-js";
-import { cycleNarrationPlaybackRate, type AudioSettings } from "@sonelle/audio";
+import {
+  cycleNarrationPlaybackRate,
+  isAndroidDeviceVoiceId,
+  type AudioSettings
+} from "@sonelle/audio";
 import { createDomainEvent, type AnyDomainEvent } from "@sonelle/domain";
 import {
   bookmarkedBookIds,
@@ -405,11 +409,13 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       narrationAudible,
       allowsChapterTransition: () => allowsChapterTransition(),
       narrationReadinessMessage: () =>
-        usesLanguagePacks
-          ? offlineNarrationReadinessMessage(offlineNarrationProfiles(), reader().book.language)
-          : voiceInstallation().status === "ready"
-            ? null
-            : "Download this voice to listen offline.",
+        isAndroidDeviceVoiceId(audioSettings().voiceId)
+          ? null
+          : usesLanguagePacks
+            ? offlineNarrationReadinessMessage(offlineNarrationProfiles(), reader().book.language)
+            : voiceInstallation().status === "ready"
+              ? null
+              : "Download this voice to listen offline.",
       projectPlayback: setPlayback,
       projectNotice: (message) => {
         if (message != null) setInspectorTab("settings");
@@ -901,6 +907,13 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   createEffect(() => {
     const language = reader().book.language;
     setNarrationVoices(narrationService.voices(language));
+    let current = true;
+    void narrationService.refreshVoices?.(language).then((voices) => {
+      if (current) setNarrationVoices(voices);
+    });
+    onCleanup(() => {
+      current = false;
+    });
   });
 
   createEffect(() => {

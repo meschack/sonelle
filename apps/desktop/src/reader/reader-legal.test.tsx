@@ -22,8 +22,9 @@ describe("reader privacy and license information", () => {
     expect(container.textContent).toContain("Your library stays on this device");
     expect(container.textContent).toContain("never uploaded automatically");
     expect(container.textContent).toContain(
-      "This build does not activate an Android device-provided voice"
+      "uses an Android device-provided voice only when you choose one"
     );
+    expect(container.textContent).toContain("may send the sentence being read");
     expect(container.textContent).not.toContain("Supertonic 3 model");
   });
 
