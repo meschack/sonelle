@@ -61,6 +61,8 @@ function nativePublication(snapshot: MediaSessionSnapshot) {
     bookTitle: snapshot.book.title,
     author: snapshot.book.author,
     chapterTitle: snapshot.chapter.title,
+    sentenceIndex: snapshot.activeSentence?.index ?? 0,
+    sentenceCount: snapshot.activeSentence?.count ?? 0,
     playbackStatus: snapshot.playbackStatus
   };
 }

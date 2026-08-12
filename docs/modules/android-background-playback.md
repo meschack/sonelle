@@ -3,7 +3,8 @@
 ## Owns
 
 - Keeping an active Android narration process in the foreground while audio is playing.
-- The low-importance narration notification and its resume, pause, and stop actions.
+- The low-importance narration notification and Android media session.
+- Lock-screen resume, pause, stop, previous-sentence, and next-sentence actions.
 - Translating notification actions into `MediaSessionGateway` intents.
 - Releasing the foreground service when playback ends, the reader closes, or the user stops it.
 
@@ -22,7 +23,15 @@ seam. `BackgroundPlaybackPlugin` maps that snapshot to a small native service po
 - `playing` starts the foreground service or updates its notification;
 - `paused` updates an already-active service but never starts one by itself;
 - `idle`, `ended`, reader close, and explicit clear stop the service;
-- notification controls return `play`, `pause`, and `stop` intents to the shared playback application.
+- notification and lock-screen controls return `play`, `pause`, `stop`, and sentence-seek intents to
+  the shared playback application.
+
+The media session publishes the book as the title, author as the artist, chapter as the album, and
+active sentence index/count as track-number metadata. It deliberately omits a duration and timeline:
+Sonelle can navigate exact sentences but cannot honestly promise book-wide millisecond seeking.
+Previous and next therefore move exactly one sentence through the shared bounded jump behavior.
+Repeated play or pause callbacks are suppressed after the first state change; repeated previous and
+next actions remain meaningful user navigation.
 
 The service never edits reader state. This prevents notification state and the visible reader from
 becoming competing authorities.
@@ -50,6 +59,7 @@ domain lifecycle.
 - TypeScript adapter tests cover metadata publication, duplicate suppression, native controls, and
   clear behavior.
 - JVM tests cover start, update, pause, end, and notification-stop service policy.
+- Lock-screen policy tests cover idempotent play/pause, explicit stop, and sentence navigation.
 - An Android instrumented test verifies the service is private and declares `mediaPlayback`.
 - Reader integration coverage verifies backgrounding flushes reading position without pausing.
 - Physical background, lock-screen, notification-permission, and vendor battery-policy QA remains a

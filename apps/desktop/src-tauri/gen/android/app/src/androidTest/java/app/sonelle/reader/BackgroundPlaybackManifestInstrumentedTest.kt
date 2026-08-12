@@ -1,9 +1,11 @@
 package app.sonelle.reader
 
 import android.content.ComponentName
+import android.media.session.MediaSessionManager
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BackgroundPlaybackManifestInstrumentedTest {
@@ -21,5 +23,12 @@ class BackgroundPlaybackManifestInstrumentedTest {
       android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
       service.foregroundServiceType
     )
+  }
+
+  @Test
+  fun platformMediaSessionServiceIsAvailable() {
+    val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+    assertTrue(context.getSystemService(MediaSessionManager::class.java) != null)
   }
 }

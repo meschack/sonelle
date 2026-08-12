@@ -53,6 +53,11 @@ ordinary platform intents. Backgrounding flushes pending reading progress but no
 active narration session. The service stops when playback ends, the reader closes, or the platform
 stop action is used; it does not resurrect narration after process death.
 
+The Android media session publishes book, author, chapter, and sentence-count metadata without a
+fabricated time duration. System previous and next actions map to the gateway's existing one-sentence
+seek intents. Play and pause callbacks are idempotent against the last native projection, while each
+previous or next action remains a deliberate navigation request.
+
 ## Ownership
 
 - `MediaSessionGateway` owns now-playing publication, external control delivery, and platform-session
