@@ -8,6 +8,8 @@ use tauri_plugin_fs::{FilePath, FsExt, OpenOptions};
 #[cfg(mobile)]
 use crate::android_audio_focus;
 #[cfg(mobile)]
+use crate::android_background_playback::{self, AndroidBackgroundPlaybackSnapshot};
+#[cfg(mobile)]
 use crate::android_device_voice::{self, AndroidDeviceSpeechRequest, AndroidDeviceVoice};
 #[cfg(mobile)]
 use crate::book_import_source::{
@@ -188,6 +190,30 @@ pub async fn set_android_audio_focus_playback(app: AppHandle, playing: bool) -> 
 #[tauri::command]
 pub async fn clear_android_audio_focus(app: AppHandle) -> Result<(), String> {
     android_audio_focus::clear(&app).await
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn subscribe_android_background_playback(
+    app: AppHandle,
+    on_intent: Channel<serde_json::Value>,
+) -> Result<(), String> {
+    android_background_playback::subscribe(&app, on_intent).await
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn publish_android_background_playback(
+    app: AppHandle,
+    snapshot: AndroidBackgroundPlaybackSnapshot,
+) -> Result<(), String> {
+    android_background_playback::publish(&app, snapshot).await
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn clear_android_background_playback(app: AppHandle) -> Result<(), String> {
+    android_background_playback::clear(&app).await
 }
 
 #[tauri::command]

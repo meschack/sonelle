@@ -623,7 +623,7 @@ describe("ReaderExperience integration", () => {
         sentenceIndex: 0
       })
     );
-    await vi.waitFor(() => expect(pause).toHaveBeenCalled());
+    expect(pause).not.toHaveBeenCalled();
 
     dispose();
     container.remove();

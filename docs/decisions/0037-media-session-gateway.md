@@ -46,6 +46,13 @@ closes. A transient loss—including a request to duck—pauses narration rather
 under competing audio. Focus gain may resume only the session that was playing before that loss.
 Permanent loss clears pending resume and leaves the reader paused on the same sentence.
 
+Android also projects the snapshot into a lightweight foreground playback service. The service owns
+process survival and the required notification, while the shared playback application remains the
+only authority for sentence and playback state. Notification controls return through the gateway as
+ordinary platform intents. Backgrounding flushes pending reading progress but no longer pauses an
+active narration session. The service stops when playback ends, the reader closes, or the platform
+stop action is used; it does not resurrect narration after process death.
+
 ## Ownership
 
 - `MediaSessionGateway` owns now-playing publication, external control delivery, and platform-session
@@ -72,6 +79,8 @@ Permanent loss clears pending resume and leaves the reader paused on the same se
 - The fake adapter drives play, pause, stop, headset seek, and interruption scenarios.
 - Android policy tests cover transient loss, ducking-as-pause, permanent loss, duplicate callbacks,
   and focus return; an instrumented fixture runs the same policy on Android.
+- Android background-playback tests cover service lifecycle policy, notification control delivery,
+  manifest declaration, and background position flushing without an implicit pause.
 - Output-disconnect coverage proves one pause, stable sentence selection, and no automatic resume.
 - Playback application tests assert published book and playback snapshots.
 - Reader-close and disposal tests assert platform-session clearing.

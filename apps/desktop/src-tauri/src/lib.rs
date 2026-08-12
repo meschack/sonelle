@@ -1,5 +1,7 @@
 #[cfg(any(mobile, test))]
 mod android_audio_focus;
+#[cfg(mobile)]
+mod android_background_playback;
 #[cfg(any(mobile, test))]
 mod android_device_voice;
 #[cfg(desktop)]
@@ -102,7 +104,8 @@ pub fn run() {
     let builder = builder
         .plugin(tauri_plugin_fs::init())
         .plugin(android_device_voice::init())
-        .plugin(android_audio_focus::init());
+        .plugin(android_audio_focus::init())
+        .plugin(android_background_playback::init());
 
     #[cfg(desktop)]
     let builder = builder.invoke_handler(tauri::generate_handler![
@@ -139,6 +142,7 @@ pub fn run() {
         app_status,
         commands::cancel_book_import_source_copy,
         commands::clear_android_audio_focus,
+        commands::clear_android_background_playback,
         commands::copy_book_import_source,
         commands::list_android_device_voices,
         commands::delete_bookmark,
@@ -151,6 +155,7 @@ pub fn run() {
         commands::list_system_fonts,
         commands::open_book,
         commands::probe_book_import_source,
+        commands::publish_android_background_playback,
         commands::report_app_error,
         commands::save_bookmark,
         commands::save_reading_position,
@@ -159,6 +164,7 @@ pub fn run() {
         commands::speak_android_device_sentence,
         commands::stop_android_device_voice,
         commands::subscribe_android_audio_focus,
+        commands::subscribe_android_background_playback,
         commands::update_book_metadata,
     ]);
 

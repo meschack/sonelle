@@ -66,6 +66,7 @@ export interface ReaderPlaybackApplication {
     playbackStatus?: PlaybackStatus
   ): Promise<void>;
   projectNarration(event: NarrationPlaybackProjectionEvent): void;
+  backgrounded(): Promise<void>;
   stop(): Promise<void>;
   jumpStatus(): PlaybackStatus;
   dispose(): void;
@@ -405,6 +406,10 @@ export function createReaderPlaybackApplication(
         options.projectNotice(event.payload.reason);
         dependencies.reportPlaybackError(event);
       }
+    },
+    async backgrounded() {
+      positionScheduler.flush();
+      await positionSaveSettled;
     },
     async stop() {
       cancelChapterTransition();
