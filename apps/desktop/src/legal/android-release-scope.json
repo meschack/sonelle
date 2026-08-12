@@ -3,5 +3,5 @@
   "status": "reader-only",
   "bundledNarrationRuntime": false,
   "bundledNarrationModel": false,
-  "deviceVoiceIntegration": false
+  "deviceVoiceIntegration": true
 }

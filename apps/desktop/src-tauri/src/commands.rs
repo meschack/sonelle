@@ -6,6 +6,8 @@ use std::io::Read;
 use tauri_plugin_fs::{FilePath, FsExt, OpenOptions};
 
 #[cfg(mobile)]
+use crate::android_device_voice::{self, AndroidDeviceSpeechRequest, AndroidDeviceVoice};
+#[cfg(mobile)]
 use crate::book_import_source::{
     self, BookImportCopyProgress, CopyBookImportSourceRequest, PreparedBookImportSource,
 };
@@ -142,6 +144,27 @@ pub async fn copy_book_import_source(
 #[tauri::command]
 pub fn cancel_book_import_source_copy(request_id: String) {
     book_import_source::cancel_copy(request_id);
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn list_android_device_voices(app: AppHandle) -> Result<Vec<AndroidDeviceVoice>, String> {
+    android_device_voice::list(&app).await
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn speak_android_device_sentence(
+    app: AppHandle,
+    request: AndroidDeviceSpeechRequest,
+) -> Result<(), String> {
+    android_device_voice::speak(&app, request).await
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn stop_android_device_voice(app: AppHandle) -> Result<(), String> {
+    android_device_voice::stop(&app).await
 }
 
 #[tauri::command]
