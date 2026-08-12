@@ -37,6 +37,7 @@ import {
 import { createHtmlAudioPlayer } from "../audio/html-audio-player";
 import { createHtmlManifestNarrationPlayer } from "../audio/html-manifest-narration-player";
 import { reportAppError } from "../platform/error-reporting";
+import { createAndroidAudioFocusGateway } from "../platform/android-audio-focus-gateway";
 import {
   createExternalLinkOpener,
   type ExternalLinkOpener
@@ -92,7 +93,7 @@ import {
   createAppLifecycleGateway,
   type AppLifecycleGateway
 } from "../platform/app-lifecycle-gateway";
-import { isTauriRuntime } from "../platform/tauri-runtime";
+import { isAndroidRuntime, isTauriRuntime } from "../platform/tauri-runtime";
 import { createSystemFontCatalog, type SystemFontCatalog } from "../platform/system-font-catalog";
 import { createPlatformMediaSourceGateway } from "../platform/media-source-gateway";
 import {
@@ -224,7 +225,11 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
     externalLinkOpener: createExternalLinkOpener(),
     fontCatalog: createSystemFontCatalog(),
     librarySearch: createLibrarySearch(),
-    mediaSession: createNoopMediaSessionGateway(),
+    mediaSession: isAndroidRuntime()
+      ? createAndroidAudioFocusGateway({
+          reportError: (error) => void reportAppError("android.audio-focus", error)
+        })
+      : createNoopMediaSessionGateway(),
     narration: {
       capabilities: {
         offlineLibrary: usesLanguagePacks ? "language-pack" : "individual-voice",

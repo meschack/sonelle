@@ -6,6 +6,8 @@ use std::io::Read;
 use tauri_plugin_fs::{FilePath, FsExt, OpenOptions};
 
 #[cfg(mobile)]
+use crate::android_audio_focus;
+#[cfg(mobile)]
 use crate::android_device_voice::{self, AndroidDeviceSpeechRequest, AndroidDeviceVoice};
 #[cfg(mobile)]
 use crate::book_import_source::{
@@ -165,6 +167,27 @@ pub async fn speak_android_device_sentence(
 #[tauri::command]
 pub async fn stop_android_device_voice(app: AppHandle) -> Result<(), String> {
     android_device_voice::stop(&app).await
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn subscribe_android_audio_focus(
+    app: AppHandle,
+    on_intent: Channel<serde_json::Value>,
+) -> Result<(), String> {
+    android_audio_focus::subscribe(&app, on_intent).await
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn set_android_audio_focus_playback(app: AppHandle, playing: bool) -> Result<(), String> {
+    android_audio_focus::set_playing(&app, playing).await
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn clear_android_audio_focus(app: AppHandle) -> Result<(), String> {
+    android_audio_focus::clear(&app).await
 }
 
 #[tauri::command]

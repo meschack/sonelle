@@ -7,10 +7,13 @@
   desktop fonts, until mobile adapters own those capabilities.
 - The platform boundary that keeps desktop narration runtimes and command-line book opening out of
   Android builds.
+- Android audio-focus requests and the translation of native focus changes into shared playback
+  interruption intents.
 
 ## Refuses to own
 
-- Mobile narration, model installation, document selection, background playback, or media controls.
+- Narration generation, model installation, document selection, background playback, or lock-screen
+  controls.
 - Reader state, EPUB parsing, storage behavior, or UI platform detection.
 - Compatibility shims that claim an unavailable desktop feature works on mobile.
 
@@ -45,8 +48,12 @@ by that handler and are not a reason to grant unrelated plugin permissions.
 
 ## Domain events
 
-None. The shell only selects platform adapters and command availability; it does not own long-running
-work or project domain state.
+The shell does not emit domain events itself. Android audio focus is exposed through
+`MediaSessionGateway`, not reader state. The native adapter requests focus only while narration is
+playing and translates transient loss, ducking, permanent loss, and gain into interruption intents.
+The playback application remains the sole owner of pause, resume, sentence highlighting, and
+progress. Transient interruption retains focus long enough to receive gain; ordinary pause,
+permanent loss, reader close, and clear release it promptly.
 
 ## Testing
 
@@ -56,3 +63,6 @@ work or project domain state.
 - Emulator QA loads the fixture book and navigates between chapters through the rendered WebView.
 - The capability contract test verifies Android has a dedicated core-only profile and that desktop
   permissions are platform-constrained.
+- JVM and Android instrumented policy fixtures cover transient loss, ducking-as-pause, permanent
+  loss, duplicate callbacks, and focus return. Reader application tests prove stable sentence state
+  and bounded resumption through the shared gateway.

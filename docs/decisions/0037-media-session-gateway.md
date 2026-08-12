@@ -40,7 +40,11 @@ Duplicate or delayed disconnect callbacks are idempotent once playback is paused
 
 Desktop uses a no-op adapter, preserving existing behavior. Tests use a deterministic fake adapter
 that publishes snapshots and drives platform or headset controls without native media APIs. Android
-will provide the first real platform adapter behind the same interface.
+provides the first real platform adapter behind the same interface. It requests full media focus for
+speech while narration is playing and abandons it when playback ends, pauses normally, or the reader
+closes. A transient loss—including a request to duck—pauses narration rather than mixing speech
+under competing audio. Focus gain may resume only the session that was playing before that loss.
+Permanent loss clears pending resume and leaves the reader paused on the same sentence.
 
 ## Ownership
 
@@ -66,6 +70,8 @@ will provide the first real platform adapter behind the same interface.
 ## Testing
 
 - The fake adapter drives play, pause, stop, headset seek, and interruption scenarios.
+- Android policy tests cover transient loss, ducking-as-pause, permanent loss, duplicate callbacks,
+  and focus return; an instrumented fixture runs the same policy on Android.
 - Output-disconnect coverage proves one pause, stable sentence selection, and no automatic resume.
 - Playback application tests assert published book and playback snapshots.
 - Reader-close and disposal tests assert platform-session clearing.
