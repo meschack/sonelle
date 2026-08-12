@@ -363,14 +363,23 @@ describe("ReaderExperience integration", () => {
 
     container.querySelector<HTMLButtonElement>('[aria-label="Open narration controls"]')?.click();
     await vi.waitFor(() =>
-      expect(container.querySelector('[role="dialog"][aria-label="Reading tools"]')).not.toBeNull()
+      expect(
+        container.querySelector('[role="dialog"][aria-label="Narration controls"]')
+      ).not.toBeNull()
     );
     expect(container.querySelector('[aria-label="Narration voice"]')).not.toBeNull();
-    container
-      .querySelector<HTMLButtonElement>(".mobile-reader-tools-sheet > header button")
-      ?.click();
+    const mobileVolume = container.querySelector<HTMLInputElement>(
+      '[aria-label="Narration volume"]'
+    );
+    expect(mobileVolume?.max).toBe("1.5");
+    expect(mobileVolume?.value).toBe("1.2");
+    expect(mobileVolume?.getAttribute("aria-valuetext")).toBe("120 percent");
+    expect(container.querySelector('[aria-label="Narration stop setting"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Book text size"]')).toBeNull();
+    expect(container.textContent).not.toContain("Book details");
+    container.querySelector<HTMLButtonElement>(".mobile-narration-sheet > header button")?.click();
     await vi.waitFor(() =>
-      expect(container.querySelector('[role="dialog"][aria-label="Reading tools"]')).toBeNull()
+      expect(container.querySelector('[role="dialog"][aria-label="Narration controls"]')).toBeNull()
     );
 
     const chapter = container.querySelector<HTMLSelectElement>(

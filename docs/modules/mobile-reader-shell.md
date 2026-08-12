@@ -5,8 +5,8 @@
 - selecting phone or desktop reader composition at the application boundary
 - the phone reader's compact header and explicit navigation, content, tools, and playback slots
 - the compact narration dock's phone-sized projection of shared playback state and intents
-- touch-first Library and contextual reading-tools sheets, including focus restoration and Back
-  behavior
+- touch-first Library, contextual reading-tools, and focused narration sheets, including focus
+  restoration and Back behavior
 
 ## Refuses To Own
 
@@ -31,9 +31,11 @@ scroll region, so opening sheets or mounting playback does not resize the text c
 The mobile playback slot receives `MobileNarrationDock`, a deliberately smaller projection than the
 desktop rail. It shows current narration truth and emits previous, play/pause/resume, next, stop, and
 open-controls intents into the existing playback application. Readiness or attention state changes
-the controls affordance into a recovery link; the Reading tools sheet remains the one place for
-voice, speed, sleep, and offline preparation controls. The dock does not prepare audio, persist
-position, or interpret engine callbacks.
+the controls affordance into a recovery link. A focused listening sheet exposes voice, speed,
+volume, sleep, and offline preparation controls while deliberately omitting book metadata, reading
+appearance, export, and legal sections that belong to Reading tools. The dock and sheet do not
+prepare audio, persist position, or interpret engine callbacks; they project shared settings and
+invoke existing intents.
 
 The dock exposes one named narration group and transport group. Its visible playback label describes
 current truth without becoming a live region. Only preparation and actionable attention messages use
@@ -46,7 +48,7 @@ Both sheets push a temporary history entry, close on Android Back or their scrim
 sheet on open, and restore focus to their trigger on dismissal. None of those presentation actions
 changes the active sentence or scroll container.
 
-Library, tools, and contents dialogs share `containMobileDialogFocus`. It keeps Tab and Shift+Tab
+Library, tools, narration, and contents dialogs share `containMobileDialogFocus`. It keeps Tab and Shift+Tab
 inside the active modal, closes on Escape, and leaves Back/history ownership with each surface.
 Dialogs expose labelled headings; Library rows summarize book identity and progress as one control.
 Focus containment owns no navigation or application state.
@@ -105,7 +107,9 @@ component separately covers system Back and focus restoration for the tools shee
 
 The dock component projects playing and needs-attention states and verifies each transport intent.
 The composed-reader tracer proves the phone mounts the dock instead of the desktop rail and routes
-its controls affordance to the shared settings sheet.
+its controls affordance to the focused narration sheet. It verifies the shared 150% volume contract,
+voice and session controls, preparation recovery, and the absence of desktop-only settings. Shell
+coverage exercises narration-sheet focus restoration and Android Back behavior.
 
 The mobile layout contract pins representative portrait/narrow, large-text, and short-landscape
 rules: edge-to-edge viewport support, 48-pixel targets, safe-area coverage, ordered scroll regions,

@@ -9,15 +9,18 @@ interface MobileReaderShellProps {
   navigation: JSX.Element;
   content: JSX.Element;
   tools: JSX.Element;
+  narration: JSX.Element;
   playback: JSX.Element;
   libraryBooks: LibraryBookSummary[];
   activeBookId: string;
   toolsOpen: boolean;
+  narrationOpen: boolean;
   onOpenBook(bookId: string): Promise<void>;
   onOpenFullLibrary(): void;
   onOpenSearch(): void;
   onOpenTools(): void;
   onCloseTools(): void;
+  onCloseNarration(): void;
 }
 
 export function MobileReaderShell(props: MobileReaderShellProps) {
@@ -26,9 +29,13 @@ export function MobileReaderShell(props: MobileReaderShellProps) {
   let libraryTrigger: HTMLButtonElement | undefined;
   let libraryClose: HTMLButtonElement | undefined;
   let toolsClose: HTMLButtonElement | undefined;
+  let narrationClose: HTMLButtonElement | undefined;
   let toolsReturnFocus: HTMLElement | null = null;
+  let narrationReturnFocus: HTMLElement | null = null;
   let toolsHistoryActive = false;
+  let narrationHistoryActive = false;
   let toolsWereOpen = false;
+  let narrationWasOpen = false;
 
   const restoreLibraryFocus = () => queueMicrotask(() => libraryTrigger?.focus());
   const openLibrary = () => {
@@ -55,6 +62,11 @@ export function MobileReaderShell(props: MobileReaderShellProps) {
       if (toolsReturnFocus?.isConnected) toolsReturnFocus.focus();
       toolsReturnFocus = null;
     });
+  const restoreNarrationFocus = () =>
+    queueMicrotask(() => {
+      if (narrationReturnFocus?.isConnected) narrationReturnFocus.focus();
+      narrationReturnFocus = null;
+    });
 
   createEffect(() => {
     const open = props.toolsOpen;
@@ -77,6 +89,30 @@ export function MobileReaderShell(props: MobileReaderShellProps) {
     }
   });
 
+  createEffect(() => {
+    const open = props.narrationOpen;
+    if (open === narrationWasOpen) return;
+    narrationWasOpen = open;
+
+    if (open) {
+      narrationReturnFocus =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      window.history.pushState({ sonelleSurface: "mobile-reader-narration" }, "");
+      narrationHistoryActive = true;
+      queueMicrotask(() => narrationClose?.focus());
+      return;
+    }
+
+    restoreNarrationFocus();
+    if (
+      narrationHistoryActive &&
+      window.history.state?.sonelleSurface === "mobile-reader-narration"
+    ) {
+      narrationHistoryActive = false;
+      window.history.back();
+    }
+  });
+
   onMount(() => {
     const closeFromBackNavigation = () => {
       if (libraryOpen()) {
@@ -87,6 +123,11 @@ export function MobileReaderShell(props: MobileReaderShellProps) {
         toolsHistoryActive = false;
         props.onCloseTools();
         restoreToolsFocus();
+      }
+      if (props.narrationOpen && narrationHistoryActive) {
+        narrationHistoryActive = false;
+        props.onCloseNarration();
+        restoreNarrationFocus();
       }
     };
     window.addEventListener("popstate", closeFromBackNavigation);
@@ -243,6 +284,41 @@ export function MobileReaderShell(props: MobileReaderShellProps) {
               </button>
             </header>
             <div class="mobile-reader-tools-slot">{props.tools}</div>
+          </section>
+        </div>
+      </Show>
+
+      <Show when={props.narrationOpen}>
+        <div
+          class="mobile-reader-tools-backdrop mobile-narration-sheet-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) props.onCloseNarration();
+          }}
+        >
+          <section
+            class="mobile-reader-tools-sheet mobile-narration-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Narration controls"
+            aria-labelledby="mobile-narration-sheet-title"
+            tabindex="-1"
+            onKeyDown={(event) =>
+              containMobileDialogFocus(event, event.currentTarget, props.onCloseNarration)
+            }
+          >
+            <header>
+              <div>
+                <span>Current book</span>
+                <strong id="mobile-narration-sheet-title">Listen</strong>
+              </div>
+              <button ref={narrationClose} type="button" onClick={props.onCloseNarration}>
+                Back to reading
+              </button>
+            </header>
+            <div class="mobile-reader-tools-slot mobile-narration-controls-slot">
+              {props.narration}
+            </div>
           </section>
         </div>
       </Show>
