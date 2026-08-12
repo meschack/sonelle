@@ -230,6 +230,11 @@ production artifacts and cover direct manifest rendering plus install-then-rende
 The Python Kokoro export and corpus commands remain separate research tools. Optional Piper setup
 remains available with `pnpm setup:piper` when explicitly testing the compatibility adapter.
 
+For the Android benchmark candidate, run `pnpm spike:narration:supertonic-int8`. The ignored output
+is hash-addressed, must render through the pinned native runtime, and remains explicitly unaccepted
+until the physical-device and listening gates pass. See
+[Android Supertonic INT8 candidate](qa/android-supertonic-int8-candidate.md).
+
 ## CI and Releases
 
 GitHub Actions runs two workflows:

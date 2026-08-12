@@ -8,12 +8,14 @@
 - compatibility projection for legacy Piper sentence audio while that rollback path remains available
 - resumable whole-book preparation and per-chapter cache summaries
 - low-storage preflight and safe narration-only cleanup policy
+- reproducible, explicitly unaccepted mobile-model candidates for device benchmarking
 
 ## Refuses To Own
 
 - reader navigation, Solid state, bookmarks, or reading-position persistence
 - EPUB parsing and sentence segmentation
 - word-level timing or approximate sentence highlighting
+- approving a mobile model without physical-device and listening evidence
 
 ## Interface
 
@@ -28,6 +30,11 @@ phonemization, then an embedded pure-Rust predictor for genuine unknown English 
 compounds retain one spoken phrase while short initialisms remain spelled. Supertonic renders
 supported non-English sentences into one manifest-backed WAV. Both providers reuse bounded native
 sessions and accept terminable run options.
+
+The mobile candidate tool transforms the exact pinned Supertonic snapshot into a dynamic QInt8
+artifact set behind an ignored local catalog. Its manifest remains `candidate-not-accepted`; the
+production catalog cannot discover it implicitly. Candidate identity includes every measured size
+and SHA-256, and native synthesis must pass before the tool publishes the directory.
 
 The session keeps three contextual Kokoro passages prepared. Supertonic groups at most two ordinary
 sentences per passage and keeps two passages prepared, while one reusable runtime and one ONNX thread
@@ -87,6 +94,7 @@ legacy global profile remains the fallback for books without an explicit profile
 - provider thread counts and ONNX allocator settings remain bounded
 - user-facing errors describe recovery, not engine or queue internals
 - narration cleanup cannot address reader-library storage, and cannot remove active narration assets
+- a host-compatible mobile candidate is not an accepted offline voice pack
 
 ## Tests
 
@@ -99,3 +107,5 @@ release-candidate provider smoke installs local packs and runs real Kokoro and S
 sequentially with one ONNX thread per provider.
 Storage-maintenance tests cover resumable-install space accounting, insufficient-space recovery,
 confirmation, verified-pack boundaries, active playback, and narrow narration-only deletion.
+The mobile-candidate suite covers deterministic identity, catalog projection, corruption, and the
+standard-pack size gate; candidate preparation additionally runs real native synthesis.
