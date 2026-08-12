@@ -218,6 +218,7 @@ function fakePlayback(
     select: vi.fn(),
     activate: vi.fn(),
     projectNarration: vi.fn(),
+    backgrounded: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn().mockResolvedValue(undefined),
     jumpStatus: vi.fn<() => PlaybackStatus>(() => "idle"),
     dispose: vi.fn(),

@@ -53,7 +53,7 @@ hidden.
 
 Reading-position changes continue through the shared throttled scheduler. Manual navigation saves
 immediately, narration progress is coalesced, and backgrounding the webview flushes the pending
-position before pausing playback. On a cold start, the library application opens the book with the
+position without pausing playback. On a cold start, the library application opens the book with the
 latest persisted reading activity; native storage remains the authority for its chapter and sentence
 fallback.
 
@@ -94,8 +94,9 @@ across every inspector surface through the composed reader shell.
 An imported-book tracer opens a structurally rich document from the Library and verifies its first
 chapter, link and list presentation, stable sentence range, and bounded mounted content. Native EPUB
 tests commit both small and structurally complex fixtures before reopening their reader documents.
-Lifecycle tests cover background flushing and most-recent-book restoration, while the shared
-scheduler tests bound write frequency during narration.
+Lifecycle tests cover background flushing without interrupting active Android narration and
+most-recent-book restoration, while the shared scheduler tests bound write frequency during
+narration.
 Contents tests cover nested labels, anchor-level navigation, panel dismissal, and unavailable
 targets across native import, storage, projection, and the composed reader.
 The Android bookmark tracer covers visible add/remove state and an exact saved-passage jump; native

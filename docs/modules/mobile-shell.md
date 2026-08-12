@@ -9,11 +9,12 @@
   Android builds.
 - Android audio-focus requests and the translation of native focus changes into shared playback
   interruption intents.
+- Android foreground narration service registration and notification-control delivery.
 
 ## Refuses to own
 
-- Narration generation, model installation, document selection, background playback, or lock-screen
-  controls.
+- Narration generation, model installation, document selection, or lock-screen media-session
+  metadata beyond the foreground notification.
 - Reader state, EPUB parsing, storage behavior, or UI platform detection.
 - Compatibility shims that claim an unavailable desktop feature works on mobile.
 
@@ -54,6 +55,10 @@ playing and translates transient loss, ducking, permanent loss, and gain into in
 The playback application remains the sole owner of pause, resume, sentence highlighting, and
 progress. Transient interruption retains focus long enough to receive gain; ordinary pause,
 permanent loss, reader close, and clear release it promptly.
+
+Android background playback uses the same gateway snapshot to maintain a foreground service and a
+silent, low-importance notification. Notification controls return through the gateway; the native
+service never projects reader state directly.
 
 ## Testing
 

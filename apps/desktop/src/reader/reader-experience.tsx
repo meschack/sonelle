@@ -823,7 +823,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     clampSidebarWidthsToViewport();
 
     const stopAppLifecycle = dependencies.appLifecycle.listenForBackground(() => {
-      void playbackApplication.stop();
+      void playbackApplication.backgrounded();
     });
     window.addEventListener("keydown", handleShortcut);
     window.addEventListener("resize", clampSidebarWidthsToViewport);

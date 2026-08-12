@@ -37,7 +37,7 @@ import {
 import { createHtmlAudioPlayer } from "../audio/html-audio-player";
 import { createHtmlManifestNarrationPlayer } from "../audio/html-manifest-narration-player";
 import { reportAppError } from "../platform/error-reporting";
-import { createAndroidAudioFocusGateway } from "../platform/android-audio-focus-gateway";
+import { createAndroidMediaSessionGateway } from "../platform/android-media-session-gateway";
 import {
   createExternalLinkOpener,
   type ExternalLinkOpener
@@ -226,7 +226,7 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
     fontCatalog: createSystemFontCatalog(),
     librarySearch: createLibrarySearch(),
     mediaSession: isAndroidRuntime()
-      ? createAndroidAudioFocusGateway({
+      ? createAndroidMediaSessionGateway({
           reportError: (error) => void reportAppError("android.audio-focus", error)
         })
       : createNoopMediaSessionGateway(),
