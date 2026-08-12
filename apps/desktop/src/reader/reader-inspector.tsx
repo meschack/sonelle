@@ -481,6 +481,92 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
   );
 }
 
+/** Mobile listening controls only; reading appearance and book management stay in Reading tools. */
+export function MobileNarrationControls(componentProps: { model: ReaderSettingsInspectorModel }) {
+  const props = componentProps.model;
+  return (
+    <section class="mobile-narration-controls" aria-label="Narration settings">
+      <div class="narration-profile-context">
+        <HeadphonesIcon />
+        <span>
+          <small>Listening with</small>
+          <strong title={props.book.title}>{props.book.title}</strong>
+        </span>
+      </div>
+      <div class="mobile-narration-control-grid">
+        <SpeedSelect
+          value={props.audioSettings.playbackRate}
+          onChange={(playbackRate) => props.onAudioSettingsChange({ playbackRate })}
+        />
+        <label class="setting-field mobile-narration-volume">
+          <span class="inspector-section-title">Volume</span>
+          <span class="font-size-control">
+            <input
+              aria-label="Narration volume"
+              type="range"
+              min="0"
+              max="1.5"
+              step="0.05"
+              value={props.audioSettings.volume}
+              aria-valuetext={`${Math.round(props.audioSettings.volume * 100)} percent`}
+              onInput={(event) =>
+                props.onAudioSettingsChange({ volume: Number(event.currentTarget.value) })
+              }
+            />
+            <output>{Math.round(props.audioSettings.volume * 100)}%</output>
+          </span>
+        </label>
+      </div>
+      <VoiceSelect
+        voiceId={props.audioSettings.voiceId}
+        voices={props.narrationVoices}
+        sourceLabel={
+          props.offlineLibrary === "language-pack" ? "Offline narration" : "Local narration"
+        }
+        onChange={(voiceId) => props.onAudioSettingsChange({ voiceId })}
+      />
+      <Show when={props.offlineLibrary === "individual-voice"}>
+        <VoiceInstallationCard
+          installation={props.voiceInstallation}
+          onInstall={props.onInstallVoice}
+        />
+      </Show>
+      <Show when={props.offlineLibrary === "language-pack"}>
+        <OfflineNarrationFilesPanel
+          profiles={props.offlineNarrationProfiles}
+          onInstall={props.onInstallNarrationProfile}
+          onRefresh={props.onRefreshEngines}
+        />
+      </Show>
+      <SessionControls limit={props.sessionLimit} onChange={props.onSessionLimitChange} />
+      <label class="toggle-row settings-toggle">
+        <span>
+          <strong>Auto-advance</strong>
+          <small>Continue into the next chapter while narrating</small>
+        </span>
+        <input
+          type="checkbox"
+          checked={props.audioSettings.autoAdvance}
+          onChange={(event) =>
+            props.onAudioSettingsChange({ autoAdvance: event.currentTarget.checked })
+          }
+        />
+      </label>
+      <BookReadinessPanel
+        readiness={props.bookNarrationReadiness}
+        progress={props.bookNarrationProgress}
+        canPrepare={props.canPrepareBook}
+        fallbackStats={props.audioCacheStats}
+        notice={props.audioCacheNotice}
+        onPrepare={props.onPrepareBook}
+        onCancel={props.onCancelBookPreparation}
+        onRefresh={props.onRefreshCache}
+        onClear={props.onClearCache}
+      />
+    </section>
+  );
+}
+
 function BookMetadataEditorPanel(props: {
   book: ReaderSettingsInspectorModel["book"];
   notice: BookMetadataNotice | null;

@@ -61,7 +61,11 @@ import { ReaderToast } from "./reader-feedback";
 import type { LibraryBookSummary } from "../library/library-models";
 import type { AppView, InspectorTab, SelectedWord } from "./reader-experience-types";
 import { cssFontFamilyStack, isTypingTarget } from "./reader-formatting";
-import { ReaderInspector, type ReaderInspectorModel } from "./reader-inspector";
+import {
+  MobileNarrationControls,
+  ReaderInspector,
+  type ReaderInspectorModel
+} from "./reader-inspector";
 import {
   clampSidebarWidth,
   getSidebarResizeBounds,
@@ -223,10 +227,14 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     dependencies.readerShellViewport.isMobile()
   );
   const [mobileToolsOpen, setMobileToolsOpen] = createSignal(false);
+  const [mobileNarrationOpen, setMobileNarrationOpen] = createSignal(false);
   onCleanup(
     dependencies.readerShellViewport.listen((mobile) => {
       setMobileReaderShell(mobile);
-      if (!mobile) setMobileToolsOpen(false);
+      if (!mobile) {
+        setMobileToolsOpen(false);
+        setMobileNarrationOpen(false);
+      }
     })
   );
   const [focusLibrarySearchPending, setFocusLibrarySearchPending] = createSignal(false);
@@ -1613,8 +1621,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       onNext={() => moveSentence(1)}
       onStop={() => void stopReaderPlayback()}
       onOpenControls={() => {
-        setInspectorTab("settings");
-        setMobileToolsOpen(true);
+        setMobileNarrationOpen(true);
       }}
     />
   );
@@ -1655,6 +1662,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         setActiveView("library");
         setDistractionFree(false);
         setMobileToolsOpen(false);
+        setMobileNarrationOpen(false);
         sendLibraryRailEvent({ type: "library-opened" });
       });
     }),
@@ -1779,10 +1787,12 @@ export function ReaderExperience(props: ReaderExperienceProps) {
             navigation={readerNavigation()}
             content={readerReadingColumn()}
             tools={<ReaderInspector model={inspectorModel} />}
+            narration={<MobileNarrationControls model={inspectorModel.settings} />}
             playback={mobileNarrationDock()}
             libraryBooks={libraryBooks()}
             activeBookId={reader().book.id}
             toolsOpen={mobileToolsOpen()}
+            narrationOpen={mobileNarrationOpen()}
             onOpenBook={(bookId) => libraryApplication.open(bookId)}
             onOpenFullLibrary={() => openAppView("library")}
             onOpenSearch={() => {
@@ -1794,6 +1804,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
               setMobileToolsOpen(true);
             }}
             onCloseTools={() => setMobileToolsOpen(false)}
+            onCloseNarration={() => setMobileNarrationOpen(false)}
           />
         </Show>
         {readerFeedback()}
