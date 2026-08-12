@@ -12,6 +12,8 @@ pub struct AndroidBackgroundPlaybackSnapshot {
     pub book_title: String,
     pub author: String,
     pub chapter_title: String,
+    pub sentence_index: u32,
+    pub sentence_count: u32,
     pub playback_status: String,
 }
 

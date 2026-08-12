@@ -29,6 +29,8 @@ class BackgroundPlaybackSnapshotArgs {
   lateinit var bookTitle: String
   lateinit var author: String
   lateinit var chapterTitle: String
+  var sentenceIndex: Int = 0
+  var sentenceCount: Int = 0
   lateinit var playbackStatus: String
 }
 
@@ -65,10 +67,7 @@ class BackgroundPlaybackPlugin(private val activity: Activity) : Plugin(activity
     override fun onReceive(context: Context, intent: Intent) {
       val control = intent.getStringExtra(NarrationPlaybackService.EXTRA_CONTROL) ?: return
       if (control == "stop") policy.stoppedExternally()
-      intentChannel?.send(JSObject().apply {
-        put("type", control)
-        put("source", "platform")
-      })
+      intentChannel?.send(platformIntent(control) ?: return)
     }
   }
 
@@ -124,6 +123,8 @@ class BackgroundPlaybackPlugin(private val activity: Activity) : Plugin(activity
       putExtra(NarrationPlaybackService.EXTRA_BOOK_TITLE, snapshot.bookTitle)
       putExtra(NarrationPlaybackService.EXTRA_AUTHOR, snapshot.author)
       putExtra(NarrationPlaybackService.EXTRA_CHAPTER_TITLE, snapshot.chapterTitle)
+      putExtra(NarrationPlaybackService.EXTRA_SENTENCE_INDEX, snapshot.sentenceIndex)
+      putExtra(NarrationPlaybackService.EXTRA_SENTENCE_COUNT, snapshot.sentenceCount)
       putExtra(NarrationPlaybackService.EXTRA_PLAYING, snapshot.playbackStatus == "playing")
     }
 
@@ -143,6 +144,24 @@ class BackgroundPlaybackPlugin(private val activity: Activity) : Plugin(activity
         NOTIFICATION_PERMISSION_REQUEST
       )
     }
+  }
+
+  private fun platformIntent(control: String): JSObject? = when (control) {
+    "previous" -> JSObject().apply {
+      put("type", "seek")
+      put("sentenceOffset", -1)
+      put("source", "platform")
+    }
+    "next" -> JSObject().apply {
+      put("type", "seek")
+      put("sentenceOffset", 1)
+      put("source", "platform")
+    }
+    "play", "pause", "stop" -> JSObject().apply {
+      put("type", control)
+      put("source", "platform")
+    }
+    else -> null
   }
 
   companion object {

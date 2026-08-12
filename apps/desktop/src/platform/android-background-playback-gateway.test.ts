@@ -25,6 +25,8 @@ describe("Android background playback gateway", () => {
         bookTitle: "The Book",
         author: "A Reader",
         chapterTitle: "First chapter",
+        sentenceIndex: 0,
+        sentenceCount: 2,
         playbackStatus: "playing"
       }
     });
@@ -33,6 +35,8 @@ describe("Android background playback gateway", () => {
         bookTitle: "The Book",
         author: "A Reader",
         chapterTitle: "First chapter",
+        sentenceIndex: 0,
+        sentenceCount: 2,
         playbackStatus: "paused"
       }
     });
