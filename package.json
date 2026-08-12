@@ -35,6 +35,8 @@
     "spike:narration:kokoro-export": "node scripts/setup-kokoro-reference.mjs --export-onnx",
     "spike:narration:kokoro-corpus": "node scripts/setup-kokoro-reference.mjs --corpus",
     "spike:narration:local-catalog": "node scripts/setup-kokoro-reference.mjs --local-engine-catalog",
+    "spike:narration:supertonic-int8": "node scripts/prepare-supertonic-int8.mjs",
+    "spike:narration:supertonic-int8:verify": "node scripts/prepare-supertonic-int8.mjs --verify-only",
     "spike:narration:native-lifecycle": "node scripts/run-narration-native-spike.mjs",
     "qa:narration-providers": "node scripts/run-narration-provider-smoke.mjs",
     "check": "pnpm typecheck && pnpm test && pnpm format",

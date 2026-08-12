@@ -187,5 +187,17 @@ SONELLE_QA_EPUBS="$HOME/Downloads/books/industrial-society-and-its-future.epub;$
 SONELLE_QA_EPUBS="$HOME/Downloads/books/industrial-society-and-its-future.epub;$HOME/Downloads/books/the-selfish-gene.epub;$HOME/Downloads/books/basic-economics-thomas-sowell.epub" pnpm perf:large-books
 ```
 
+Prepare and verify the exact Supertonic INT8 candidate described in
+[Android Supertonic INT8 candidate](android-supertonic-int8-candidate.md) before #102 capture:
+
+```sh
+pnpm spike:narration:supertonic-int8
+pnpm spike:narration:supertonic-int8:verify
+```
+
+Copy the candidate revision, artifact-set SHA-256, quantization format, and individual artifact
+hashes into the device evidence. Regenerating an apparently equivalent candidate without recording
+its new identity invalidates comparisons.
+
 These commands validate inputs and shared native behavior. They do not replace physical-device
 Android results.
