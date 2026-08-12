@@ -58,6 +58,10 @@ fabricated time duration. System previous and next actions map to the gateway's 
 seek intents. Play and pause callbacks are idempotent against the last native projection, while each
 previous or next action remains a deliberate navigation request.
 
+Wired and Bluetooth media buttons use those same media-session callbacks. Android's active-output
+disconnect broadcast maps once to `output-disconnected`, immediately marks the native session paused,
+and stays suppressed until an explicit playback restart. Reconnection never implies resume.
+
 ## Ownership
 
 - `MediaSessionGateway` owns now-playing publication, external control delivery, and platform-session

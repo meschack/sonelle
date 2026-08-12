@@ -40,3 +40,19 @@ class LockScreenControlPolicyTest {
     assertFalse(decision.playing)
   }
 }
+
+class OutputDisconnectPolicyTest {
+  @Test
+  fun `rapid disconnect callbacks emit once until playback starts again`() {
+    val policy = OutputDisconnectPolicy()
+
+    assertFalse(policy.disconnect())
+    policy.project(playing = true)
+    assertTrue(policy.disconnect())
+    assertFalse(policy.disconnect())
+    policy.project(playing = false)
+    assertFalse(policy.disconnect())
+    policy.project(playing = true)
+    assertTrue(policy.disconnect())
+  }
+}

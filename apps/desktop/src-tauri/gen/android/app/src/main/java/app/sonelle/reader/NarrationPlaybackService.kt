@@ -5,8 +5,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
@@ -14,6 +18,7 @@ import android.os.Build
 import android.os.IBinder
 import android.graphics.drawable.Icon
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 
 internal data class LockScreenControlDecision(
   val emit: String? = null,
@@ -47,6 +52,23 @@ internal class LockScreenControlPolicy(initiallyPlaying: Boolean = false) {
   }
 }
 
+internal class OutputDisconnectPolicy {
+  private var handled = false
+  private var playing = false
+
+  fun project(playing: Boolean) {
+    this.playing = playing
+    if (playing) handled = false
+  }
+
+  fun disconnect(): Boolean {
+    if (!playing || handled) return false
+    playing = false
+    handled = true
+    return true
+  }
+}
+
 class NarrationPlaybackService : Service() {
   private var bookTitle = "Sonelle"
   private var author = ""
@@ -54,12 +76,24 @@ class NarrationPlaybackService : Service() {
   private var sentenceIndex = 0
   private var sentenceCount = 0
   private val controlPolicy = LockScreenControlPolicy()
+  private val outputDisconnectPolicy = OutputDisconnectPolicy()
   private lateinit var mediaSession: MediaSession
+  private val noisyOutputReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+      if (intent.action != AudioManager.ACTION_AUDIO_BECOMING_NOISY) return
+      if (!outputDisconnectPolicy.disconnect()) return
+      controlPolicy.project(false)
+      broadcastControl("output-disconnected")
+      publishSession()
+    }
+  }
 
   override fun onCreate() {
     super.onCreate()
     createNotificationChannel()
     mediaSession = MediaSession(this, "SonelleNarration").apply {
+      @Suppress("DEPRECATION")
+      setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
       setCallback(object : MediaSession.Callback() {
         override fun onPlay() = handleControl("play")
         override fun onPause() = handleControl("pause")
@@ -69,6 +103,12 @@ class NarrationPlaybackService : Service() {
       })
       isActive = true
     }
+    ContextCompat.registerReceiver(
+      this,
+      noisyOutputReceiver,
+      IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
+      ContextCompat.RECEIVER_NOT_EXPORTED
+    )
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -81,6 +121,7 @@ class NarrationPlaybackService : Service() {
         sentenceIndex = intent.getIntExtra(EXTRA_SENTENCE_INDEX, 0).coerceAtLeast(0)
         sentenceCount = intent.getIntExtra(EXTRA_SENTENCE_COUNT, 0).coerceAtLeast(0)
         controlPolicy.project(intent.getBooleanExtra(EXTRA_PLAYING, false))
+        outputDisconnectPolicy.project(controlPolicy.playing)
         publishSession()
       }
     }
@@ -90,6 +131,7 @@ class NarrationPlaybackService : Service() {
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onDestroy() {
+    unregisterReceiver(noisyOutputReceiver)
     mediaSession.isActive = false
     mediaSession.release()
     super.onDestroy()
@@ -97,13 +139,16 @@ class NarrationPlaybackService : Service() {
 
   private fun handleControl(control: String) {
     val decision = controlPolicy.accept(control)
-    decision.emit?.let {
-      sendBroadcast(Intent(CONTROL_EVENT).apply {
-        setPackage(packageName)
-        putExtra(EXTRA_CONTROL, it)
-      })
-    }
+    outputDisconnectPolicy.project(decision.playing)
+    decision.emit?.let(::broadcastControl)
     if (decision.stop) stopPlaybackService() else publishSession()
+  }
+
+  private fun broadcastControl(control: String) {
+    sendBroadcast(Intent(CONTROL_EVENT).apply {
+      setPackage(packageName)
+      putExtra(EXTRA_CONTROL, control)
+    })
   }
 
   private fun publishSession() {
