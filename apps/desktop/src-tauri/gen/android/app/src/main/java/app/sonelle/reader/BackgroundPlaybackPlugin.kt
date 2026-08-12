@@ -157,6 +157,9 @@ class BackgroundPlaybackPlugin(private val activity: Activity) : Plugin(activity
       put("sentenceOffset", 1)
       put("source", "platform")
     }
+    "output-disconnected" -> JSObject().apply {
+      put("type", "output-disconnected")
+    }
     "play", "pause", "stop" -> JSObject().apply {
       put("type", control)
       put("source", "platform")

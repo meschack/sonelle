@@ -5,6 +5,7 @@
 - Keeping an active Android narration process in the foreground while audio is playing.
 - The low-importance narration notification and Android media session.
 - Lock-screen resume, pause, stop, previous-sentence, and next-sentence actions.
+- Wired-headset and Bluetooth media-button delivery plus safe active-output disconnection handling.
 - Translating notification actions into `MediaSessionGateway` intents.
 - Releasing the foreground service when playback ends, the reader closes, or the user stops it.
 
@@ -33,6 +34,12 @@ Previous and next therefore move exactly one sentence through the shared bounded
 Repeated play or pause callbacks are suppressed after the first state change; repeated previous and
 next actions remain meaningful user navigation.
 
+Headset and Bluetooth media buttons enter through the same Android media-session callbacks, so they
+cannot grow accessory-specific reader branches. While narration is playing, Android's
+`ACTION_AUDIO_BECOMING_NOISY` signal emits one `output-disconnected` intent and immediately projects
+the native session as paused. Duplicate disconnect broadcasts are ignored until the user deliberately
+starts playback again. Reconnecting an output emits nothing and never resumes narration.
+
 The service never edits reader state. This prevents notification state and the visible reader from
 becoming competing authorities.
 
@@ -60,6 +67,8 @@ domain lifecycle.
   clear behavior.
 - JVM tests cover start, update, pause, end, and notification-stop service policy.
 - Lock-screen policy tests cover idempotent play/pause, explicit stop, and sentence navigation.
+- Output-disconnect policy tests cover inactive output changes, duplicate broadcasts, and explicit
+  playback restart.
 - An Android instrumented test verifies the service is private and declares `mediaPlayback`.
 - Reader integration coverage verifies backgrounding flushes reading position without pausing.
 - Physical background, lock-screen, notification-permission, and vendor battery-policy QA remains a
