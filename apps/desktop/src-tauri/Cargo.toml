@@ -27,7 +27,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 flate2 = "1"
-regex = "=1.13.0"
+regex = "=1.13.1"
 roxmltree = "0.21.1"
 rusqlite = { version = "0.40.1", default-features = false, features = ["bundled"] }
 sha2 = "0.11.0"
@@ -36,15 +36,15 @@ zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2
 tauri-plugin-opener = "2"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
-anyhow = "=1.0.103"
-fontdb = "=0.23.0"
+anyhow = "=1.0.104"
+fontdb = "=0.24.0"
 grapheme_to_phoneme = "=0.1.0"
 hound = "=3.5.1"
 misaki-rs = { version = "=0.3.0", default-features = false }
 ndarray = { version = "=0.17.2", features = ["rayon"] }
-ort = "=2.0.0-rc.12"
-rand = "=0.8.7"
-rand_distr = "=0.4.3"
+ort = "=2.0.0-rc.13"
+rand = "=0.10.2"
+rand_distr = "=0.6.0"
 tar = "0.4"
 tauri-plugin-single-instance = "2"
 ureq = "3.3.0"
