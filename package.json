@@ -44,10 +44,10 @@
     "format:write": "prettier --write ."
   },
   "devDependencies": {
-    "prettier": "^3.7.4",
-    "solid-js": "^1.9.14",
-    "typescript": "^6.0.3",
-    "vite-plugin-solid": "^2.11.12",
+    "prettier": "^3.9.6",
+    "solid-js": "^1.9.15",
+    "typescript": "^7.0.2",
+    "vite-plugin-solid": "^2.11.14",
     "vitest": "^4.1.10"
   }
 }
