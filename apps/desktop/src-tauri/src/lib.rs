@@ -34,6 +34,7 @@ mod narration_manifest;
 pub mod narration_pack;
 #[cfg(desktop)]
 mod narration_rendered_audio;
+mod narration_storage;
 #[cfg(desktop)]
 mod narration_wav;
 mod storage;
@@ -120,6 +121,7 @@ pub fn run() {
         book_open_request::take_pending_book_open_requests,
         commands::import_epub,
         commands::install_narration_engine,
+        commands::inspect_narration_storage,
         commands::list_bookmarks,
         commands::list_books,
         commands::list_system_fonts,
@@ -127,6 +129,7 @@ pub fn run() {
         commands::prepare_manifest_narration,
         commands::prepare_sentence_audio,
         commands::report_app_error,
+        commands::remove_narration_storage_target,
         commands::play_sentence_audio,
         commands::save_bookmark,
         commands::save_reading_position,
@@ -148,6 +151,7 @@ pub fn run() {
         commands::delete_bookmark,
         commands::export_book_data,
         commands::get_audio_cache_stats,
+        commands::inspect_narration_storage,
         book_open_request::take_pending_book_open_requests,
         commands::import_epub,
         commands::list_bookmarks,
@@ -157,6 +161,7 @@ pub fn run() {
         commands::probe_book_import_source,
         commands::publish_android_background_playback,
         commands::report_app_error,
+        commands::remove_narration_storage_target,
         commands::save_bookmark,
         commands::save_reading_position,
         commands::search_library,

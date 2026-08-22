@@ -13,6 +13,7 @@ export interface PreparedAudioStorageEntry {
 
 export interface VoicePackStorageEntry {
   packId: string;
+  revision: string;
   sizeBytes: number;
   verified: boolean;
 }
@@ -45,10 +46,11 @@ export type VoicePackInstallationPreflight =
 
 export type NarrationStorageRemovalRequest =
   | { kind: "prepared-audio"; bookId: string; confirmed: boolean }
-  | { kind: "voice-pack"; packId: string; confirmed: boolean };
+  | { kind: "voice-pack"; packId: string; revision: string; confirmed: boolean };
 
 export type NarrationStorageRemovalTarget =
-  { kind: "prepared-audio"; bookId: string } | { kind: "voice-pack"; packId: string };
+  | { kind: "prepared-audio"; bookId: string }
+  | { kind: "voice-pack"; packId: string; revision: string };
 
 export type NarrationStorageRemovalPlan =
   | { status: "needs-confirmation"; message: string }
@@ -108,8 +110,17 @@ export function planNarrationStorageRemoval(
     };
   }
 
-  const pack = snapshot.voicePacks.find((candidate) => candidate.packId === request.packId);
-  if (pack == null) return { status: "not-found" };
+  const matchingPacks = snapshot.voicePacks.filter(
+    (candidate) => candidate.packId === request.packId && candidate.revision === request.revision
+  );
+  if (matchingPacks.length === 0) return { status: "not-found" };
+  if (matchingPacks.length > 1) {
+    return {
+      status: "needs-attention",
+      message: "Sonelle can't tell which copy of this offline voice is safe to remove."
+    };
+  }
+  const pack = matchingPacks[0];
   if (!pack.verified) {
     return {
       status: "needs-attention",
@@ -130,7 +141,7 @@ export function planNarrationStorageRemoval(
   }
   return {
     status: "approved",
-    target: { kind: "voice-pack", packId: request.packId },
+    target: { kind: "voice-pack", packId: request.packId, revision: request.revision },
     expectedReclaimedBytes: validByteCount(pack.sizeBytes)
   };
 }

@@ -27,10 +27,12 @@ use crate::library_import::{prepare_epub_import, BookImportPhase, BookImportProg
 #[cfg(mobile)]
 use crate::mobile_shell::{empty_audio_cache_stats, MobileAudioCacheStats};
 #[cfg(desktop)]
+use crate::narration_cache::with_prepared_audio_lock;
+#[cfg(desktop)]
 use crate::narration_cache::NarrationChapterCacheStats;
 #[cfg(desktop)]
 use crate::narration_engine_pack::{
-    engine_status, install_engine, NarrationEngineInstallationStatus,
+    engine_status, install_engine, with_engine_installation_lock, NarrationEngineInstallationStatus,
 };
 #[cfg(desktop)]
 use crate::narration_manifest::{
@@ -38,6 +40,10 @@ use crate::narration_manifest::{
     manifest_cache_summary, manifest_chapter_cache_summary,
     prepare_manifest_narration as prepare_manifest_narration_asset, ManifestNarrationRequest,
     PreparedManifestNarration,
+};
+use crate::narration_storage::{
+    inspect_storage_at, remove_prepared_audio_at, NarrationStorageRemovalTargetDto,
+    NarrationStorageSnapshotDto,
 };
 
 #[cfg(desktop)]
@@ -385,6 +391,84 @@ fn book_audio_cache_summary(app: &AppHandle, book_id: &str) -> Result<AudioCache
         sentence_count: legacy.sentence_count + manifest.covered_sentence_count,
         size_bytes: legacy.size_bytes + manifest.size_bytes,
     })
+}
+
+#[tauri::command]
+pub async fn inspect_narration_storage(
+    app: AppHandle,
+) -> Result<NarrationStorageSnapshotDto, String> {
+    run_blocking("narration-storage.inspect", move || {
+        inspect_storage_at(&narration_app_data_root(&app)?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn remove_narration_storage_target(
+    app: AppHandle,
+    target: NarrationStorageRemovalTargetDto,
+) -> Result<NarrationStorageSnapshotDto, String> {
+    run_blocking("narration-storage.remove", move || {
+        let root = narration_app_data_root(&app)?;
+        run_narration_removal(&root, target)
+    })
+    .await
+}
+
+fn narration_app_data_root(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    use tauri::Manager as _;
+    app.path()
+        .app_data_dir()
+        .map_err(|_| "Sonelle couldn't open its storage folder.".to_string())
+}
+
+/// Executes one approved removal. Desktop deletion shares the owner lock with
+/// prepared-audio writes and pack installation; nothing else may interleave.
+#[cfg(desktop)]
+fn run_narration_removal(
+    root: &std::path::Path,
+    target: NarrationStorageRemovalTargetDto,
+) -> Result<NarrationStorageSnapshotDto, String> {
+    match target {
+        NarrationStorageRemovalTargetDto::PreparedAudio { book_id } => {
+            with_prepared_audio_lock(|| {
+                settle_narration_removal(root, remove_prepared_audio_at(root, &book_id))
+            })
+        }
+        NarrationStorageRemovalTargetDto::VoicePack { pack_id, revision } => {
+            with_engine_installation_lock(|| {
+                settle_narration_removal(
+                    root,
+                    crate::narration_storage::remove_voice_pack_at(root, &pack_id, &revision),
+                )
+            })
+        }
+    }
+}
+
+/// Mobile has no accepted narration pack storage yet. Prepared-audio roots are
+/// absent today, so removal is an honest no-op until #110 supplies them.
+#[cfg(not(desktop))]
+fn run_narration_removal(
+    root: &std::path::Path,
+    target: NarrationStorageRemovalTargetDto,
+) -> Result<NarrationStorageSnapshotDto, String> {
+    match target {
+        NarrationStorageRemovalTargetDto::PreparedAudio { book_id } => {
+            settle_narration_removal(root, remove_prepared_audio_at(root, &book_id))
+        }
+        NarrationStorageRemovalTargetDto::VoicePack { .. } => {
+            Err("Offline voice files aren't stored on this device yet.".to_string())
+        }
+    }
+}
+
+fn settle_narration_removal(
+    root: &std::path::Path,
+    outcome: Result<Option<u64>, String>,
+) -> Result<NarrationStorageSnapshotDto, String> {
+    outcome?;
+    inspect_storage_at(root)
 }
 
 #[tauri::command]

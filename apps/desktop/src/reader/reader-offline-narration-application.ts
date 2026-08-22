@@ -91,7 +91,6 @@ export interface ReaderOfflineNarrationApplication {
   requestNarrationProfile(profileId: OfflineNarrationProfileId): void;
   refreshNarrationFiles(): Promise<void>;
   refreshPreparedAudio(): Promise<void>;
-  clearPreparedAudio(): void;
 }
 
 export function createReaderOfflineNarrationApplication(
@@ -142,7 +141,6 @@ export function createReaderOfflineNarrationApplication(
 
   const handleClearRequested = async (event: DomainEvent<"PreparedNarrationClearingRequested">) => {
     try {
-      await dependencies.narration.stop();
       const stats = await dependencies.audioCache.clear(event.payload.bookId);
       await dependencies.eventDispatcher.dispatch(
         createDomainEvent("PreparedNarrationCleared", { bookId: event.payload.bookId, ...stats })
@@ -228,17 +226,12 @@ export function createReaderOfflineNarrationApplication(
       engineWorkflow.request(offlineNarrationProfiles[profileId].engineId);
     },
     refreshNarrationFiles,
-    refreshPreparedAudio,
-    clearPreparedAudio() {
-      void dependencies.eventDispatcher
-        .dispatch(
-          createDomainEvent("PreparedNarrationClearingRequested", {
-            bookId: options.currentBookId()
-          })
-        )
-        .catch((error) => options.projectAudioCacheNotice(dependencies.friendlyError(error)));
-    }
+    refreshPreparedAudio
   };
+}
+
+export function offlineNarrationEngineId(profileId: OfflineNarrationProfileId): NarrationEngineId {
+  return offlineNarrationProfiles[profileId].engineId;
 }
 
 export function createCheckingOfflineNarrationProfiles(): Record<

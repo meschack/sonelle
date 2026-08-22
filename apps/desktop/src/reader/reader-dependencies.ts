@@ -59,6 +59,10 @@ import {
 } from "../audio/android-device-voice-repository";
 import { createNarrationRepository } from "../audio/narration-repository";
 import {
+  createNarrationStorageMaintenanceRepository,
+  type NarrationStorageMaintenanceRepository
+} from "../audio/narration-storage-maintenance-repository";
+import {
   createVoiceInstallationRepository,
   type VoiceInstallationRepository
 } from "../audio/voice-installation-repository";
@@ -166,6 +170,7 @@ export interface ReaderExperienceDependencies {
   librarySearch: LibrarySearch;
   mediaSession: MediaSessionGateway;
   narration: ReaderNarrationService;
+  narrationStorageRepository: NarrationStorageMaintenanceRepository;
   quoteImageExporter: QuoteImageExporter;
   readerShellViewport: ReaderShellViewport;
   readerPreferencesRepository: ReaderPreferencesRepository;
@@ -326,7 +331,8 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
     readerShellViewport: createReaderShellViewport(),
     readerPreferencesRepository: createReaderPreferencesRepository(),
     readingPositionStore: createReadingPositionStore(),
-    voiceInstallationRepository: createVoiceInstallationRepository()
+    voiceInstallationRepository: createVoiceInstallationRepository(),
+    narrationStorageRepository: createNarrationStorageMaintenanceRepository()
   };
 }
 

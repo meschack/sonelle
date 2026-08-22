@@ -13,6 +13,8 @@ import type {
   LibraryBookmarkDto,
   UpdateBookMetadataInput
 } from "../library/library-contracts";
+import type { RemovableNarrationVoicePack } from "./reader-narration-storage-application";
+import { offlineNarrationEngineId } from "./reader-offline-narration-application";
 import { formatBytes } from "./reader-formatting";
 import { DictionaryStatus, StateBlock } from "./reader-feedback";
 import type { InspectorTab } from "./reader-experience-types";
@@ -327,6 +329,11 @@ export interface ReaderSettingsInspectorModel {
   systemFontFamilies: readonly string[];
   audioCacheStats: PreparedAudioView | null;
   audioCacheNotice: string | null;
+  narrationStorage: {
+    removableVoicePacks: readonly RemovableNarrationVoicePack[];
+    notice: string | null;
+    busy: boolean;
+  };
   bookNarrationReadiness: BookNarrationReadiness | null;
   bookNarrationProgress: BookNarrationProgressView | null;
   sessionLimit: ReaderSessionLimit;
@@ -344,6 +351,7 @@ export interface ReaderSettingsInspectorModel {
   onResetAudioSettings: () => void;
   onRefreshCache: () => void;
   onClearCache: () => void;
+  onRequestVoicePackRemoval: (packId: string, revision: string) => void;
   onPrepareBook: () => void;
   onCancelBookPreparation: () => void;
   onSessionLimitChange: (limit: ReaderSessionLimit) => void;
@@ -451,8 +459,11 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
       <Show when={props.offlineLibrary === "language-pack"}>
         <OfflineNarrationFilesPanel
           profiles={props.offlineNarrationProfiles}
+          removablePacks={removablePacksByProfile(props.narrationStorage.removableVoicePacks)}
+          busy={props.narrationStorage.busy}
           onInstall={props.onInstallNarrationProfile}
           onRefresh={props.onRefreshEngines}
+          onRemovePack={props.onRequestVoicePackRemoval}
         />
       </Show>
       <SessionControls limit={props.sessionLimit} onChange={props.onSessionLimitChange} />
@@ -462,6 +473,8 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
         canPrepare={props.canPrepareBook}
         fallbackStats={props.audioCacheStats}
         notice={props.audioCacheNotice}
+        storageNotice={props.narrationStorage.notice}
+        storageBusy={props.narrationStorage.busy}
         onPrepare={props.onPrepareBook}
         onCancel={props.onCancelBookPreparation}
         onRefresh={props.onRefreshCache}
@@ -534,8 +547,11 @@ export function MobileNarrationControls(componentProps: { model: ReaderSettingsI
       <Show when={props.offlineLibrary === "language-pack"}>
         <OfflineNarrationFilesPanel
           profiles={props.offlineNarrationProfiles}
+          removablePacks={removablePacksByProfile(props.narrationStorage.removableVoicePacks)}
+          busy={props.narrationStorage.busy}
           onInstall={props.onInstallNarrationProfile}
           onRefresh={props.onRefreshEngines}
+          onRemovePack={props.onRequestVoicePackRemoval}
         />
       </Show>
       <SessionControls limit={props.sessionLimit} onChange={props.onSessionLimitChange} />
@@ -558,6 +574,8 @@ export function MobileNarrationControls(componentProps: { model: ReaderSettingsI
         canPrepare={props.canPrepareBook}
         fallbackStats={props.audioCacheStats}
         notice={props.audioCacheNotice}
+        storageNotice={props.narrationStorage.notice}
+        storageBusy={props.narrationStorage.busy}
         onPrepare={props.onPrepareBook}
         onCancel={props.onCancelBookPreparation}
         onRefresh={props.onRefreshCache}
@@ -737,6 +755,8 @@ function BookReadinessPanel(props: {
   canPrepare: boolean;
   fallbackStats: PreparedAudioView | null;
   notice: string | null;
+  storageNotice: string | null;
+  storageBusy: boolean;
   onPrepare(): void;
   onCancel(): void;
   onRefresh(): void;
@@ -835,14 +855,40 @@ function BookReadinessPanel(props: {
         <button class="secondary-tool-button" type="button" onClick={props.onRefresh}>
           Refresh
         </button>
-        <button class="secondary-tool-button mini-danger" type="button" onClick={props.onClear}>
-          Clear audio
+        <button
+          class="secondary-tool-button mini-danger"
+          type="button"
+          disabled={props.storageBusy}
+          onClick={props.onClear}
+        >
+          Remove prepared audio
         </button>
       </div>
       <Show when={props.notice}>{(notice) => <p class="library-notice">{notice()}</p>}</Show>
+      <Show when={props.storageNotice}>
+        {(notice) => (
+          <p class="library-notice" role="status" aria-live="polite">
+            {notice()}
+          </p>
+        )}
+      </Show>
     </div>
   );
 }
+
+function removablePacksByProfile(
+  packs: readonly RemovableNarrationVoicePack[]
+): Partial<Record<OfflineNarrationProfileId, RemovableNarrationVoicePack>> {
+  const byEngine = new Map(packs.map((pack) => [pack.packId, pack]));
+  const byProfile: Partial<Record<OfflineNarrationProfileId, RemovableNarrationVoicePack>> = {};
+  for (const profileId of offlineNarrationProfileIds) {
+    const pack = byEngine.get(offlineNarrationEngineId(profileId));
+    if (pack != null) byProfile[profileId] = pack;
+  }
+  return byProfile;
+}
+
+const offlineNarrationProfileIds = ["english", "multilingual"] as const;
 
 function ReadingColorSettings(props: {
   narrationColor: string;
@@ -893,8 +939,11 @@ function ReaderColorControl(props: {
 
 function OfflineNarrationFilesPanel(props: {
   profiles: Record<OfflineNarrationProfileId, OfflineNarrationProfileView>;
+  removablePacks: Partial<Record<OfflineNarrationProfileId, RemovableNarrationVoicePack>>;
+  busy: boolean;
   onInstall: (profileId: OfflineNarrationProfileId) => void;
   onRefresh: () => void;
+  onRemovePack: (packId: string, revision: string) => void;
 }) {
   return (
     <div class="tool-card offline-narration-files-card">
@@ -911,7 +960,13 @@ function OfflineNarrationFilesPanel(props: {
               installation={profile}
               label={profile.label}
               description={profile.description}
+              removablePack={props.removablePacks[profile.id]}
+              busy={props.busy}
               onInstall={() => props.onInstall(profile.id)}
+              onRemovePack={() => {
+                const pack = props.removablePacks[profile.id];
+                if (pack != null) props.onRemovePack(pack.packId, pack.revision);
+              }}
             />
           )}
         </For>
@@ -924,7 +979,10 @@ function OfflineNarrationFileCard(props: {
   installation: OfflineNarrationProfileView;
   label: string;
   description: string;
+  removablePack?: RemovableNarrationVoicePack;
+  busy: boolean;
   onInstall: () => void;
+  onRemovePack: () => void;
 }) {
   const isPreparing = () => props.installation.status === "preparing";
   const isReady = () => props.installation.status === "ready";
@@ -971,6 +1029,18 @@ function OfflineNarrationFileCard(props: {
           {actionLabel()}
           {sizeLabel()}
         </button>
+      </Show>
+      <Show when={props.removablePack}>
+        {(pack) => (
+          <button
+            class="secondary-tool-button mini-danger"
+            type="button"
+            disabled={props.busy}
+            onClick={props.onRemovePack}
+          >
+            Remove offline voice · {formatBytes(pack().sizeBytes)}
+          </button>
+        )}
       </Show>
     </section>
   );

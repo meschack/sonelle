@@ -93,11 +93,22 @@ import { createReaderLibraryApplication } from "./reader-library-application";
 import { createReaderLibrarySearchWorkflow } from "./reader-library-search-workflow";
 import {
   createCheckingOfflineNarrationProfiles,
+  offlineNarrationEngineId,
   offlineNarrationReadinessMessage,
   createReaderOfflineNarrationApplication,
+  type OfflineNarrationProfileId,
   type OfflineVoiceView,
   type PreparedAudioView
 } from "./reader-offline-narration-application";
+import {
+  createReaderNarrationStorageApplication,
+  removableNarrationVoicePacks,
+  type NarrationStorageRemovalPrompt,
+  type NarrationVoicePackInstallationDescriptor
+} from "./reader-narration-storage-application";
+import { ReaderNarrationStorageDialog } from "./reader-narration-storage-dialog";
+import type { NarrationStorageSnapshot } from "@sonelle/audio/narration";
+import { routeNarrationEngine } from "@sonelle/audio/narration";
 import { createReaderNavigationApplication } from "./reader-navigation-application";
 import { createReaderOpeningWorkflow } from "./reader-opening-workflow";
 import { createReaderPlaybackApplication } from "./reader-playback-application";
@@ -279,6 +290,12 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   );
   const [audioCacheStats, setAudioCacheStats] = createSignal<PreparedAudioView | null>(null);
   const [audioCacheNotice, setAudioCacheNotice] = createSignal<string | null>(null);
+  const [storagePrompt, setStoragePrompt] = createSignal<NarrationStorageRemovalPrompt | null>(
+    null
+  );
+  const [storageNotice, setStorageNotice] = createSignal<string | null>(null);
+  const [storageBusy, setStorageBusy] = createSignal(false);
+  const [storageSnapshot, setStorageSnapshot] = createSignal<NarrationStorageSnapshot | null>(null);
   const [bookNarrationReadiness, setBookNarrationReadiness] =
     createSignal<BookNarrationReadiness | null>(null);
   const [bookNarrationProgress, setBookNarrationProgress] =
@@ -513,6 +530,46 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       projectVoiceInstallation: setVoiceInstallation
     }
   );
+  const narrationStorageActivity = createMemo(() => ({
+    playback: narrationPreparing()
+      ? ("preparing" as const)
+      : playback().status === "playing"
+        ? ("playing" as const)
+        : playback().status === "idle"
+          ? ("idle" as const)
+          : ("paused" as const),
+    activeBookId: reader().book.id,
+    activeVoicePackId: usesLanguagePacks
+      ? routeNarrationEngine(reader().book.language, { mode: "hybrid-v1" }).engineId
+      : null
+  }));
+  const narrationStorageApplication = createReaderNarrationStorageApplication(
+    {
+      repository: dependencies.narrationStorageRepository,
+      eventDispatcher,
+      friendlyError: toFriendlyNarrationError
+    },
+    {
+      currentActivity: narrationStorageActivity,
+      projectPrompt: setStoragePrompt,
+      projectNotice: setStorageNotice,
+      projectBusy: setStorageBusy,
+      projectSnapshot: setStorageSnapshot
+    }
+  );
+  const requestNarrationProfileWithSpaceCheck = (profileId: OfflineNarrationProfileId) => {
+    const profile = offlineNarrationProfiles()[profileId];
+    const descriptor: NarrationVoicePackInstallationDescriptor = {
+      packId: offlineNarrationEngineId(profileId),
+      downloadSizeBytes: profile.downloadSizeBytes,
+      stagedBytes: profile.downloadedBytes > 0 ? profile.downloadedBytes : undefined
+    };
+    void narrationStorageApplication
+      .requestVoicePackInstallation(descriptor, () =>
+        offlineNarrationApplication.requestNarrationProfile(profileId)
+      )
+      .catch((error) => reportAppError("narration-storage.preflight", error, [profileId]));
+  };
   const bookNarrationPreparationApplication = createReaderBookNarrationPreparationApplication(
     {
       audioCache: dependencies.audioCacheRepository,
@@ -786,6 +843,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     let disposed = false;
     let stopLibraryApplication: (() => void) | undefined;
     let stopOfflineNarrationApplication: (() => void) | undefined;
+    let stopNarrationStorageRefresh: (() => void) | undefined;
     const disconnectNarration = narrationGateway.connect();
     const stopNarrationSettingsWorkflow = narrationSettingsWorkflow.start();
     const stopTypographyWorkflow = typographyWorkflow.start();
@@ -814,6 +872,8 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       if (disposed) stop();
       else stopOfflineNarrationApplication = stop;
     });
+    stopNarrationStorageRefresh = narrationStorageApplication.start();
+    void narrationStorageApplication.refresh().catch(reportEventReactionFailure);
     void dependencies.fontCatalog
       .listFamilies()
       .then((families) => {
@@ -834,6 +894,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       stopAppLifecycle();
       stopLibraryApplication?.();
       stopOfflineNarrationApplication?.();
+      stopNarrationStorageRefresh?.();
       disconnectNarration();
       stopNarrationSettingsWorkflow();
       stopTypographyWorkflow();
@@ -1424,6 +1485,16 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       get audioCacheNotice() {
         return audioCacheNotice();
       },
+      get narrationStorage() {
+        return {
+          removableVoicePacks: removableNarrationVoicePacks(
+            storageSnapshot(),
+            narrationStorageActivity()
+          ),
+          notice: storageNotice(),
+          busy: storageBusy()
+        };
+      },
       get bookNarrationReadiness() {
         const readiness = bookNarrationReadiness();
         return readiness?.bookId === reader().book.id ? readiness : null;
@@ -1449,8 +1520,21 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         return exportNotice();
       },
       onAudioSettingsChange: updateAudioSettings,
-      onInstallVoice: offlineNarrationApplication.requestSelectedVoice,
-      onInstallNarrationProfile: offlineNarrationApplication.requestNarrationProfile,
+      onInstallVoice: () => {
+        const installation = voiceInstallation();
+        void narrationStorageApplication
+          .requestVoicePackInstallation(
+            {
+              packId: installation.voiceId,
+              downloadSizeBytes: installation.downloadSizeBytes,
+              stagedBytes:
+                installation.downloadedBytes > 0 ? installation.downloadedBytes : undefined
+            },
+            offlineNarrationApplication.requestSelectedVoice
+          )
+          .catch((error) => reportAppError("narration-storage.preflight", error));
+      },
+      onInstallNarrationProfile: requestNarrationProfileWithSpaceCheck,
       onRefreshEngines: offlineNarrationApplication.refreshNarrationFiles,
       onReaderContentFontSizeChange: updateReaderContentFontSize,
       onReaderContentFontFamilyChange: updateReaderContentFontFamily,
@@ -1464,7 +1548,12 @@ export function ReaderExperience(props: ReaderExperienceProps) {
           bookNarrationPreparationApplication.refresh()
         ]);
       },
-      onClearCache: offlineNarrationApplication.clearPreparedAudio,
+      onClearCache: () => {
+        void narrationStorageApplication.requestPreparedAudioRemoval();
+      },
+      onRequestVoicePackRemoval: (packId, revision) => {
+        void narrationStorageApplication.requestVoicePackRemoval(packId, revision);
+      },
       onPrepareBook: bookNarrationPreparationApplication.request,
       onCancelBookPreparation: bookNarrationPreparationApplication.cancel,
       onSessionLimitChange: sessionControlApplication.set,
@@ -1734,6 +1823,21 @@ export function ReaderExperience(props: ReaderExperienceProps) {
             quoteImageWorkflow.request(sentenceIds);
           }}
         />
+      </Show>
+      <Show when={storagePrompt()}>
+        {(prompt) => (
+          <ReaderNarrationStorageDialog
+            title={prompt().title}
+            body={prompt().body}
+            confirmAction={prompt().confirmAction}
+            cancelAction={prompt().cancelAction}
+            busy={storageBusy()}
+            onConfirm={() => {
+              void narrationStorageApplication.confirmRemoval();
+            }}
+            onCancel={() => narrationStorageApplication.cancelRemoval()}
+          />
+        )}
       </Show>
       <Show when={activeView() !== "reader" || !mobileReaderShell()}>
         <LibraryRail model={libraryRailModel} />

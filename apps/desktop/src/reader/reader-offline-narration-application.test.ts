@@ -91,11 +91,13 @@ describe("reader offline narration application", () => {
     );
     application.requestSelectedVoice();
     await vi.waitFor(() => expect(install).toHaveBeenCalledWith("voice-1"));
-    application.clearPreparedAudio();
+    await dispatcher.dispatch(
+      createDomainEvent("PreparedNarrationClearingRequested", { bookId: "book-1" })
+    );
     await vi.waitFor(() => expect(clear).toHaveBeenCalledOnce());
 
     expect(setOutput).not.toHaveBeenCalled();
-    expect(reset).toHaveBeenCalledOnce();
+    expect(reset).not.toHaveBeenCalled();
     expect(clear).toHaveBeenCalledWith("book-1");
     expect(getStats).toHaveBeenCalledWith("book-1");
     expect(events.map((event) => event.name)).toEqual(

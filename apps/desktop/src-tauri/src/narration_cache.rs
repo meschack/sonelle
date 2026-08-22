@@ -9,6 +9,18 @@ use serde::{Deserialize, Serialize};
 
 static NARRATION_CACHE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
+/// Runs `work` while holding the same lock that guards prepared-audio writes,
+/// so narration cleanup cannot interleave with an in-flight cache write.
+pub(crate) fn with_prepared_audio_lock<T>(
+    work: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    let _guard = NARRATION_CACHE_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .map_err(|_| "We couldn't update prepared audio.".to_string())?;
+    work()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PreparedNarrationManifest {
@@ -97,44 +109,41 @@ impl NarrationAssetCache {
             return Err("Prepared narration audio cannot be empty.".to_string());
         }
 
-        let _guard = NARRATION_CACHE_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .map_err(|_| "We couldn't save prepared audio.".to_string())?;
-        let destination = self.asset_dir(&manifest.asset_id)?;
-        let temporary = destination.with_extension("writing");
-        if temporary.exists() {
-            fs::remove_dir_all(&temporary)
-                .map_err(|_| "We couldn't refresh prepared audio.".to_string())?;
-        }
-        fs::create_dir_all(&temporary)
-            .map_err(|_| "We couldn't save prepared audio.".to_string())?;
+        with_prepared_audio_lock(|| {
+            let destination = self.asset_dir(&manifest.asset_id)?;
+            let temporary = destination.with_extension("writing");
+            if temporary.exists() {
+                fs::remove_dir_all(&temporary)
+                    .map_err(|_| "We couldn't refresh prepared audio.".to_string())?;
+            }
+            fs::create_dir_all(&temporary)
+                .map_err(|_| "We couldn't save prepared audio.".to_string())?;
 
-        fs::write(temporary.join("audio.wav"), audio_bytes)
-            .map_err(|_| "We couldn't save prepared audio.".to_string())?;
-        let audio_path = destination.join("audio.wav");
-        let mut stored_manifest = manifest.clone();
-        stored_manifest.source_url = audio_path.to_string_lossy().into_owned();
-        write_manifest(&temporary.join("manifest.json"), &stored_manifest)?;
+            fs::write(temporary.join("audio.wav"), audio_bytes)
+                .map_err(|_| "We couldn't save prepared audio.".to_string())?;
+            let audio_path = destination.join("audio.wav");
+            let mut stored_manifest = manifest.clone();
+            stored_manifest.source_url = audio_path.to_string_lossy().into_owned();
+            write_manifest(&temporary.join("manifest.json"), &stored_manifest)?;
 
-        if destination.exists() {
-            fs::remove_dir_all(&destination)
-                .map_err(|_| "We couldn't replace prepared audio.".to_string())?;
-        }
-        fs::rename(&temporary, &destination)
-            .map_err(|_| "We couldn't finish prepared audio.".to_string())?;
+            if destination.exists() {
+                fs::remove_dir_all(&destination)
+                    .map_err(|_| "We couldn't replace prepared audio.".to_string())?;
+            }
+            fs::rename(&temporary, &destination)
+                .map_err(|_| "We couldn't finish prepared audio.".to_string())?;
 
-        Ok(PreparedNarrationAsset {
-            manifest: stored_manifest,
-            audio_path,
+            Ok(PreparedNarrationAsset {
+                manifest: stored_manifest,
+                audio_path,
+            })
         })
     }
-
     pub fn clear(&self) -> Result<NarrationCacheStats, String> {
-        let _guard = NARRATION_CACHE_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .map_err(|_| "We couldn't clear prepared audio.".to_string())?;
+        with_prepared_audio_lock(|| self.clear_locked())
+    }
+
+    fn clear_locked(&self) -> Result<NarrationCacheStats, String> {
         if self.root.exists() {
             fs::remove_dir_all(&self.root)
                 .map_err(|_| "We couldn't clear prepared audio.".to_string())?;
@@ -147,10 +156,10 @@ impl NarrationAssetCache {
     }
 
     pub fn clear_book(&self, book_id: &str) -> Result<NarrationCacheStats, String> {
-        let _guard = NARRATION_CACHE_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .map_err(|_| "We couldn't clear prepared audio.".to_string())?;
+        with_prepared_audio_lock(|| self.clear_book_locked(book_id))
+    }
+
+    fn clear_book_locked(&self, book_id: &str) -> Result<NarrationCacheStats, String> {
         if !self.root.exists() {
             return Ok(empty_stats());
         }

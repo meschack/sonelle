@@ -19,6 +19,65 @@ const ENGINE_INSTALLATION_PROGRESS_EVENT: &str = "narration-engine-installation-
 
 static ENGINE_INSTALLATION_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
+/// Runs `work` while holding the same lock that guards engine-pack
+/// installation, so narration cleanup cannot interleave with an installer.
+pub(crate) fn with_engine_installation_lock<T>(
+    work: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    let _guard = ENGINE_INSTALLATION_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .map_err(|_| "Narration setup is already busy. Please try again.".to_string())?;
+    work()
+}
+
+/// The trusted catalog source for storage maintenance. Storage code never
+/// parses renderer data as a catalog.
+pub(crate) fn trusted_catalog_json_for_storage() -> Result<String, String> {
+    engine_catalog_json()
+}
+
+/// Every engine id in one parsed catalog.
+pub(crate) fn catalog_ids_from(catalog_json: &str) -> Result<Vec<String>, String> {
+    let catalog: EngineCatalog = serde_json::from_str(catalog_json)
+        .map_err(|_| "Offline narration catalog is invalid.".to_string())?;
+    Ok(catalog.engines.into_iter().map(|entry| entry.id).collect())
+}
+
+/// The catalog pack for one engine id, or `None` when the id is unknown.
+pub(crate) fn catalog_pack_from(
+    catalog_json: &str,
+    engine_id: &str,
+) -> Result<Option<NarrationPack>, String> {
+    let catalog: EngineCatalog = serde_json::from_str(catalog_json)
+        .map_err(|_| "Offline narration catalog is invalid.".to_string())?;
+    Ok(catalog
+        .engines
+        .into_iter()
+        .find(|entry| entry.id == engine_id)
+        .map(|entry| NarrationPack {
+            id: entry.id,
+            revision: entry.model.revision.clone(),
+            artifacts: entry
+                .model
+                .artifacts
+                .into_iter()
+                .map(|artifact| NarrationPackArtifact {
+                    id: artifact.target_path.clone(),
+                    relative_path: PathBuf::from(&artifact.target_path),
+                    url: artifact.url.unwrap_or_else(|| {
+                        format!(
+                            "https://huggingface.co/{}/resolve/{}/{}",
+                            entry.model.repository, entry.model.revision, artifact.remote_path
+                        )
+                    }),
+                    sha256: artifact.sha256,
+                    size_bytes: artifact.size_bytes,
+                })
+                .collect(),
+        }))
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct NarrationEngineInstallationStatus {

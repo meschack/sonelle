@@ -1858,6 +1858,18 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       getStatus: vi.fn().mockResolvedValue(readyVoice),
       install: vi.fn().mockResolvedValue(readyVoice),
       listen: vi.fn().mockResolvedValue(spies.stopVoiceEvents)
+    },
+    narrationStorageRepository: {
+      inspect: vi.fn().mockResolvedValue({
+        availableBytes: 0,
+        preparedAudio: [],
+        voicePacks: []
+      }),
+      remove: vi.fn().mockResolvedValue({
+        availableBytes: 0,
+        preparedAudio: [],
+        voicePacks: []
+      })
     }
   };
 }
