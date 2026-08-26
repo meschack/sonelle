@@ -68,7 +68,7 @@ interface ReaderOfflineNarrationDependencies {
   engineInstallations: EngineInstallationRepository;
   eventDispatcher: DomainEventDispatcher;
   narration: NarrationGateway;
-  offlineLibrary: "individual-voice" | "language-pack";
+  offlineLibrary: "individual-voice" | "language-pack" | "unavailable";
   voiceInstallations: VoiceInstallationRepository;
   friendlyError(error: unknown): string;
   reportPreparedAudioError?(error: unknown, bookId: string): void;
@@ -135,9 +135,11 @@ export function createReaderOfflineNarrationApplication(
   const refreshPreparedAudio = () => refreshPreparedAudioForBook(options.currentBookId());
 
   const refreshNarrationFiles = () =>
-    Promise.all(narrationEngineIds.map((engineId) => engineWorkflow.refresh(engineId))).then(
-      () => undefined
-    );
+    dependencies.offlineLibrary === "unavailable"
+      ? Promise.resolve()
+      : Promise.all(narrationEngineIds.map((engineId) => engineWorkflow.refresh(engineId))).then(
+          () => undefined
+        );
 
   const handleClearRequested = async (event: DomainEvent<"PreparedNarrationClearingRequested">) => {
     try {
@@ -197,6 +199,9 @@ export function createReaderOfflineNarrationApplication(
         })
       ];
       await refreshPreparedAudio();
+      if (dependencies.offlineLibrary === "unavailable") {
+        return () => subscriptions.forEach((unsubscribe) => unsubscribe());
+      }
       try {
         if (dependencies.offlineLibrary === "individual-voice") {
           const stop = await voiceWorkflow.start();
@@ -220,9 +225,11 @@ export function createReaderOfflineNarrationApplication(
       }
     },
     requestSelectedVoice() {
+      if (dependencies.offlineLibrary === "unavailable") return;
       voiceWorkflow.request(options.selectedVoiceId());
     },
     requestNarrationProfile(profileId) {
+      if (dependencies.offlineLibrary === "unavailable") return;
       engineWorkflow.request(offlineNarrationProfiles[profileId].engineId);
     },
     refreshNarrationFiles,

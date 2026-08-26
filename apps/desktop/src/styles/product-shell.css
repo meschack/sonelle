@@ -1939,6 +1939,16 @@
   overflow: hidden;
 }
 
+.mobile-reader-shell button,
+.mobile-reader-shell [role="button"],
+.mobile-reader-shell .word-token {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-reader-shell button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
 .mobile-reader-header {
   align-items: center;
   background: color-mix(in srgb, var(--surface) 94%, white);
@@ -2045,16 +2055,26 @@
   height: 100%;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 26px max(22px, env(safe-area-inset-right)) 42px max(22px, env(safe-area-inset-left));
+  padding: 22px max(20px, env(safe-area-inset-right)) 34px max(20px, env(safe-area-inset-left));
 }
 
 .mobile-reader-content-slot .page {
+  line-height: 1.7;
   max-width: 680px;
 }
 
 .mobile-reader-content-slot .article-title {
-  font-size: clamp(32px, 9vw, 44px);
-  margin-bottom: 30px;
+  font-size: clamp(27px, 7.5vw, 34px);
+  line-height: 1.12;
+  margin-bottom: 24px;
+}
+
+.mobile-reader-content-slot .reader-paragraph {
+  hyphens: none;
+  margin-bottom: 22px;
+  text-align: left;
+  text-align-last: auto;
+  word-spacing: normal;
 }
 
 .mobile-reader-content-slot .word-token {
@@ -2133,7 +2153,6 @@
   width: var(--mobile-touch-target);
 }
 
-.mobile-narration-dock button:hover:not(:disabled),
 .mobile-narration-dock button:focus-visible {
   background: var(--green-soft);
   color: var(--green);
@@ -2156,10 +2175,21 @@
   width: 52px;
 }
 
-.mobile-narration-dock .mobile-narration-play:hover:not(:disabled),
 .mobile-narration-dock .mobile-narration-play:focus-visible {
   background: var(--ink);
   color: var(--surface);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mobile-narration-dock button:hover:not(:disabled) {
+    background: var(--green-soft);
+    color: var(--green);
+  }
+
+  .mobile-narration-dock .mobile-narration-play:hover:not(:disabled) {
+    background: var(--ink);
+    color: var(--surface);
+  }
 }
 
 .mobile-narration-stop-glyph {
@@ -2422,6 +2452,13 @@
 .mobile-reader-tools-slot select,
 .mobile-reader-tools-slot summary {
   min-height: var(--mobile-touch-target);
+}
+
+.mobile-reader-tools-slot button {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .mobile-narration-sheet {

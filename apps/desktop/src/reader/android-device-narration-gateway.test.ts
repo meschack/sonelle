@@ -9,7 +9,7 @@ import {
 } from "./android-device-narration-gateway";
 
 describe("Android device narration gateway", () => {
-  it("publishes one sentence lifecycle for an explicitly selected voice", async () => {
+  it("reads from the selected sentence through the end of the chapter before ending playback", async () => {
     const eventDispatcher = createDomainEventDispatcher();
     const events: string[] = [];
     for (const name of [
@@ -22,9 +22,9 @@ describe("Android device narration gateway", () => {
         events.push(name);
       });
     }
-    let finishSpeaking!: () => void;
+    const completions: Array<() => void> = [];
     const repository = repositoryFake(
-      () => new Promise<void>((resolve) => (finishSpeaking = resolve))
+      () => new Promise<void>((resolve) => completions.push(resolve))
     );
     const gateway = createGateway(repository, eventDispatcher);
 
@@ -36,14 +36,23 @@ describe("Android device narration gateway", () => {
         voiceId: deviceVoiceId("reader")
       })
     );
-    finishSpeaking();
+    completions[0]();
+    await vi.waitFor(() => expect(repository.speak).toHaveBeenCalledTimes(2));
+    expect(events).not.toContain("NarrationPlaybackEnded");
+    completions[1]();
+    await vi.waitFor(() => expect(repository.speak).toHaveBeenCalledTimes(3));
+    expect(events).not.toContain("NarrationPlaybackEnded");
+    completions[2]();
     await vi.waitFor(() => expect(events[events.length - 1]).toBe("NarrationPlaybackEnded"));
-    expect(events).toEqual([
-      "NarrationPreparationStarted",
-      "PassageNarrationReady",
-      "NarrationSentenceEntered",
-      "NarrationPlaybackEnded"
-    ]);
+    expect(repository.speak).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ text: "It reads every sentence." })
+    );
+    expect(repository.speak).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ text: "Then the chapter is complete." })
+    );
+    expect(events.filter((event) => event === "NarrationPlaybackEnded")).toHaveLength(1);
   });
 
   it("stops stale completion and resumes from the same sentence", async () => {
@@ -70,10 +79,34 @@ describe("Android device narration gateway", () => {
     gateway.resume();
     await vi.waitFor(() => expect(repository.speak).toHaveBeenCalledTimes(2));
     completions[1]();
-    await vi.waitFor(() => expect(ended).toEqual(["sentence-1"]));
+    await vi.waitFor(() => expect(repository.speak).toHaveBeenCalledTimes(3));
+    completions[2]();
+    await vi.waitFor(() => expect(repository.speak).toHaveBeenCalledTimes(4));
+    completions[3]();
+    await vi.waitFor(() => expect(ended).toEqual(["sentence-3"]));
 
     expect(interrupted).toEqual(["sentence-1"]);
     expect(repository.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("pauses after the current sentence when auto-advance is off", async () => {
+    const eventDispatcher = createDomainEventDispatcher();
+    const paused: string[] = [];
+    eventDispatcher.subscribe("NarrationPlaybackPaused", (event) => {
+      paused.push(event.payload.sentenceId);
+    });
+    let finishSpeaking!: () => void;
+    const repository = repositoryFake(
+      () => new Promise<void>((resolve) => (finishSpeaking = resolve))
+    );
+    const gateway = createGateway(repository, eventDispatcher, false);
+
+    gateway.start("sentence-1");
+    await vi.waitFor(() => expect(repository.speak).toHaveBeenCalledOnce());
+    finishSpeaking();
+    await vi.waitFor(() => expect(paused).toEqual(["sentence-1"]));
+
+    expect(repository.speak).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the book readable and reports device voice failure", async () => {
@@ -117,7 +150,8 @@ describe("Android device narration gateway", () => {
 
 function createGateway(
   repository: AndroidDeviceVoiceRepository,
-  eventDispatcher: ReturnType<typeof createDomainEventDispatcher>
+  eventDispatcher: ReturnType<typeof createDomainEventDispatcher>,
+  autoAdvance = true
 ) {
   return createAndroidDeviceNarrationGateway(
     { eventDispatcher, repository },
@@ -126,14 +160,18 @@ function createGateway(
         ({
           book: { id: "book-1", language: "en-US" },
           chapter: { id: "chapter-1" },
-          sentences: [{ id: "sentence-1", index: 0, text: "The device voice remains optional." }]
+          sentences: [
+            { id: "sentence-1", index: 0, text: "The device voice remains optional." },
+            { id: "sentence-2", index: 1, text: "It reads every sentence." },
+            { id: "sentence-3", index: 2, text: "Then the chapter is complete." }
+          ]
         }) as never,
       currentSettings: () => ({
         voiceId: deviceVoiceId("reader"),
         playbackRate: 1,
         volume: 0.8,
         voicePreferences: {},
-        autoAdvance: true
+        autoAdvance
       })
     }
   );

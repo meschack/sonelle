@@ -318,7 +318,7 @@ export interface ReaderSettingsInspectorModel {
   bookMetadataNotice: BookMetadataNotice | null;
   audioSettings: AudioSettings;
   voiceInstallation: OfflineVoiceView;
-  offlineLibrary: "individual-voice" | "language-pack";
+  offlineLibrary: "individual-voice" | "language-pack" | "unavailable";
   narrationVoices: readonly NarrationVoice[];
   offlineNarrationProfiles: Record<OfflineNarrationProfileId, OfflineNarrationProfileView>;
   readerContentFontSize: number;
@@ -438,7 +438,11 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
         voiceId={props.audioSettings.voiceId}
         voices={props.narrationVoices}
         sourceLabel={
-          props.offlineLibrary === "language-pack" ? "Offline narration" : "Local narration"
+          props.offlineLibrary === "language-pack"
+            ? "Offline narration"
+            : props.offlineLibrary === "unavailable"
+              ? "Device voice"
+              : "Local narration"
         }
         onChange={(voiceId) => props.onAudioSettingsChange({ voiceId })}
       />
@@ -465,6 +469,15 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
           onRefresh={props.onRefreshEngines}
           onRemovePack={props.onRequestVoicePackRemoval}
         />
+      </Show>
+      <Show when={props.offlineLibrary === "unavailable"}>
+        <div class="tool-card mobile-offline-narration-notice">
+          <span class="inspector-section-title">Sonelle offline voice</span>
+          <p>
+            The mobile offline voice is still being prepared. Choose an Android device voice for
+            now.
+          </p>
+        </div>
       </Show>
       <SessionControls limit={props.sessionLimit} onChange={props.onSessionLimitChange} />
       <BookReadinessPanel
@@ -534,7 +547,11 @@ export function MobileNarrationControls(componentProps: { model: ReaderSettingsI
         voiceId={props.audioSettings.voiceId}
         voices={props.narrationVoices}
         sourceLabel={
-          props.offlineLibrary === "language-pack" ? "Offline narration" : "Local narration"
+          props.offlineLibrary === "language-pack"
+            ? "Offline narration"
+            : props.offlineLibrary === "unavailable"
+              ? "Device voice"
+              : "Local narration"
         }
         onChange={(voiceId) => props.onAudioSettingsChange({ voiceId })}
       />
@@ -553,6 +570,15 @@ export function MobileNarrationControls(componentProps: { model: ReaderSettingsI
           onRefresh={props.onRefreshEngines}
           onRemovePack={props.onRequestVoicePackRemoval}
         />
+      </Show>
+      <Show when={props.offlineLibrary === "unavailable"}>
+        <div class="tool-card mobile-offline-narration-notice">
+          <span class="inspector-section-title">Sonelle offline voice</span>
+          <p>
+            The mobile offline voice is still being prepared. Choose an Android device voice for
+            now.
+          </p>
+        </div>
       </Show>
       <SessionControls limit={props.sessionLimit} onChange={props.onSessionLimitChange} />
       <label class="toggle-row settings-toggle">

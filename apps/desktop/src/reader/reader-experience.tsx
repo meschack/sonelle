@@ -438,9 +438,11 @@ export function ReaderExperience(props: ReaderExperienceProps) {
           ? null
           : usesLanguagePacks
             ? offlineNarrationReadinessMessage(offlineNarrationProfiles(), reader().book.language)
-            : voiceInstallation().status === "ready"
-              ? null
-              : "Download this voice to listen offline.",
+            : narrationService.capabilities.offlineLibrary === "unavailable"
+              ? "Choose an Android device voice to listen on this phone."
+              : voiceInstallation().status === "ready"
+                ? null
+                : "Download this voice to listen offline.",
       projectPlayback: setPlayback,
       projectNotice: (message) => {
         if (message != null) setInspectorTab("settings");
@@ -1781,6 +1783,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       <Show when={activeView() !== "reader" || !mobileReaderShell()}>
         <ProductBar
           showQuoteImageAction={activeView() === "reader"}
+          showShortcutReference={!mobileReaderShell()}
           canSaveQuoteImage={
             reader().sentences.length > 0 && quoteImageNotice()?.tone !== "pending"
           }

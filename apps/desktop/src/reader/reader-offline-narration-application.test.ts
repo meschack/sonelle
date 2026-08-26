@@ -8,6 +8,62 @@ import type { NarrationGateway } from "@sonelle/audio/narration";
 import { createReaderOfflineNarrationApplication } from "./reader-offline-narration-application";
 
 describe("reader offline narration application", () => {
+  it("does not inspect or install desktop narration files when offline narration is unavailable", async () => {
+    const getEngineStatus = vi.fn();
+    const installEngine = vi.fn();
+    const listenForEngines = vi.fn();
+    const getVoiceStatus = vi.fn();
+    const installVoice = vi.fn();
+    const listenForVoices = vi.fn();
+    const dispatcher = createDomainEventDispatcher();
+    const application = createReaderOfflineNarrationApplication(
+      {
+        audioCache: {
+          getStats: vi.fn().mockResolvedValue({ sentenceCount: 0, sizeBytes: 0 }),
+          getChapterStats: vi.fn().mockResolvedValue([]),
+          clear: vi.fn().mockResolvedValue({ sentenceCount: 0, sizeBytes: 0 })
+        },
+        engineInstallations: {
+          getStatus: getEngineStatus,
+          install: installEngine,
+          listen: listenForEngines
+        },
+        eventDispatcher: dispatcher,
+        narration: fakeNarrationGateway(),
+        offlineLibrary: "unavailable",
+        voiceInstallations: {
+          getStatus: getVoiceStatus,
+          install: installVoice,
+          listen: listenForVoices
+        },
+        friendlyError: () => "Narration needs attention."
+      },
+      {
+        currentBookId: () => "book-1",
+        selectedVoiceId: () => "kokoro:af-heart",
+        projectAudioCache: vi.fn(),
+        projectAudioCacheNotice: vi.fn(),
+        projectEngineInstallation: vi.fn(),
+        projectNarrationProfile: vi.fn(),
+        projectNarrationNotice: vi.fn(),
+        projectVoiceInstallation: vi.fn()
+      }
+    );
+
+    const stop = await application.start();
+    application.requestNarrationProfile("english");
+    application.requestSelectedVoice();
+    await Promise.resolve();
+
+    expect(getEngineStatus).not.toHaveBeenCalled();
+    expect(installEngine).not.toHaveBeenCalled();
+    expect(listenForEngines).not.toHaveBeenCalled();
+    expect(getVoiceStatus).not.toHaveBeenCalled();
+    expect(installVoice).not.toHaveBeenCalled();
+    expect(listenForVoices).not.toHaveBeenCalled();
+    stop();
+  });
+
   it("owns selected-voice installation and event-driven prepared audio maintenance", async () => {
     const install = vi.fn().mockResolvedValue(undefined);
     const getStatus = vi.fn().mockResolvedValue({

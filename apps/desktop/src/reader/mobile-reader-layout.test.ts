@@ -8,10 +8,20 @@ const productShellCss = readFileSync(
 );
 const readerBaseCss = readFileSync(new URL("../styles/reader-base.css", import.meta.url), "utf8");
 const appDocument = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
+const androidActivity = readFileSync(
+  new URL(
+    "../../src-tauri/gen/android/app/src/main/java/app/sonelle/reader/MainActivity.kt",
+    import.meta.url
+  ),
+  "utf8"
+);
 
 describe("mobile reader layout contract", () => {
   it("keeps portrait and narrow controls touchable without ignoring cutouts", () => {
     expect(appDocument).toContain("viewport-fit=cover");
+    expect(androidActivity).toContain("WindowCompat.setDecorFitsSystemWindows(window, true)");
+    expect(androidActivity).toContain("override fun onWindowFocusChanged(hasFocus: Boolean)");
+    expect(androidActivity).not.toContain("enableEdgeToEdge()");
     expect(productShellCss).toContain("--mobile-touch-target: 48px");
     expect(productShellCss).toContain("calc(8px + env(safe-area-inset-top))");
     expect(productShellCss).toContain("env(safe-area-inset-bottom)");
@@ -25,6 +35,16 @@ describe("mobile reader layout contract", () => {
     expect(productShellCss).toContain(".mobile-reader-content-slot .reader-layout");
     expect(productShellCss).toContain("overflow: auto");
     expect(productShellCss).toContain(".mobile-reader-tools-slot button");
+    expect(productShellCss).toContain(".mobile-reader-content-slot .reader-paragraph");
+    expect(productShellCss).toContain("text-align: left");
+    expect(productShellCss).toContain("hyphens: none");
+    expect(productShellCss).toContain("line-height: 1.7");
+  });
+
+  it("uses deliberate touch feedback without sticky mobile hover states", () => {
+    expect(productShellCss).toContain("-webkit-tap-highlight-color: transparent");
+    expect(productShellCss).toContain("@media (hover: hover) and (pointer: fine)");
+    expect(productShellCss).toContain(".mobile-reader-shell button:active:not(:disabled)");
   });
 
   it("provides a short-landscape layout instead of clipping mobile chrome", () => {

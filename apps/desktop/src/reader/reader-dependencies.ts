@@ -126,9 +126,11 @@ export interface ReaderBookNarrationIdentity {
   modelRevision: string;
 }
 
+export type OfflineNarrationLibrary = "individual-voice" | "language-pack" | "unavailable";
+
 export interface ReaderNarrationService {
   capabilities: {
-    offlineLibrary: "individual-voice" | "language-pack";
+    offlineLibrary: OfflineNarrationLibrary;
     preparesAcrossChapters: boolean;
   };
   activateSettings(settings: AudioSettings, language: string | null): AudioSettings;
@@ -195,13 +197,17 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
   );
   const bookCatalog = createBookCatalog(mediaSources);
   const usesLanguagePacks = narrationSessionRoutingMode === "hybrid-v1";
+  const androidRuntime = isAndroidRuntime();
+  const offlineLibrary = resolveOfflineNarrationLibrary(androidRuntime, usesLanguagePacks);
   const engineInstallations: Partial<Record<NarrationEngineId, EngineInstallationState>> = {};
   const deviceVoices = createAndroidDeviceVoiceRepository();
   let availableDeviceVoices: readonly AndroidDeviceVoice[] = [];
   const voicesForLanguage = (language: string | null): readonly NarrationVoice[] => {
-    const sonelleVoices = usesLanguagePacks
-      ? availableHybridNarrationVoicesForLanguage(language, engineInstallations)
-      : SUPPORTED_NARRATION_VOICES;
+    const sonelleVoices = androidRuntime
+      ? []
+      : usesLanguagePacks
+        ? availableHybridNarrationVoicesForLanguage(language, engineInstallations)
+        : SUPPORTED_NARRATION_VOICES;
     const languageCode = normalizeLanguageCode(language);
     const matchingDeviceVoices = availableDeviceVoices.filter(
       (voice) => languageCode == null || normalizeLanguageCode(voice.locale) === languageCode
@@ -230,15 +236,15 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
     externalLinkOpener: createExternalLinkOpener(),
     fontCatalog: createSystemFontCatalog(),
     librarySearch: createLibrarySearch(),
-    mediaSession: isAndroidRuntime()
+    mediaSession: androidRuntime
       ? createAndroidMediaSessionGateway({
           reportError: (error) => void reportAppError("android.audio-focus", error)
         })
       : createNoopMediaSessionGateway(),
     narration: {
       capabilities: {
-        offlineLibrary: usesLanguagePacks ? "language-pack" : "individual-voice",
-        preparesAcrossChapters: usesLanguagePacks
+        offlineLibrary,
+        preparesAcrossChapters: usesLanguagePacks && !androidRuntime
       },
       activateSettings(settings, language) {
         return usesLanguagePacks
@@ -293,7 +299,7 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
         );
       },
       bookIdentity(document, voiceId) {
-        if (isAndroidDeviceVoiceId(voiceId)) return null;
+        if (androidRuntime || isAndroidDeviceVoiceId(voiceId)) return null;
         const chapter = document.chapters[0];
         if (chapter == null) return null;
         const sessionChapter = createReaderNarrationSessionChapter(
@@ -308,6 +314,9 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
         };
       },
       async prepareBook(document, voiceId, options) {
+        if (androidRuntime) {
+          throw new Error("Book narration preparation is not available on Android yet.");
+        }
         if (isAndroidDeviceVoiceId(voiceId)) {
           throw new Error("Device voices read while the book is open.");
         }
@@ -347,6 +356,14 @@ export function availableHybridNarrationVoicesForLanguage(
 
 export function resolveDevelopmentNarrationSessionRoutingMode(mode: unknown): NarrationRoutingMode {
   return mode === "legacy-piper" ? mode : "hybrid-v1";
+}
+
+export function resolveOfflineNarrationLibrary(
+  androidRuntime: boolean,
+  usesLanguagePacks: boolean
+): OfflineNarrationLibrary {
+  if (androidRuntime) return "unavailable";
+  return usesLanguagePacks ? "language-pack" : "individual-voice";
 }
 
 export function createNarrationPreparationAdapterForMode(

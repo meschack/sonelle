@@ -43,15 +43,16 @@ export function createAndroidDeviceNarrationGateway(
 
   const start = (sentenceId: string) => {
     const reader = options.currentReader();
-    const sentence = reader.sentences.find((candidate) => candidate.id === sentenceId);
-    if (sentence == null) return;
+    const firstSentenceIndex = reader.sentences.findIndex(
+      (candidate) => candidate.id === sentenceId
+    );
+    if (firstSentenceIndex < 0) return;
     const settings = options.currentSettings();
     const currentRun = ++run;
     const previousSentenceId = activeSentenceId;
     activeSentenceId = sentenceId;
     lastSentenceId = sentenceId;
     readiness = "preparing";
-    const currentPassageId = passageId(reader, sentenceId);
 
     void (async () => {
       if (previousSentenceId != null) {
@@ -66,68 +67,96 @@ export function createAndroidDeviceNarrationGateway(
         );
       }
       if (currentRun !== run) return;
-      await publish(
-        createDomainEvent("NarrationPreparationStarted", {
-          bookId: reader.book.id,
-          chapterId: reader.chapter.id,
-          sentenceId,
-          passageId: currentPassageId
-        })
-      );
-      await publish(
-        createDomainEvent("PassageNarrationReady", {
-          bookId: reader.book.id,
-          chapterId: reader.chapter.id,
-          passageId: currentPassageId,
-          firstSentenceId: sentenceId,
-          lastSentenceId: sentenceId,
-          voiceId: settings.voiceId,
-          engineId: "android-device",
-          source: "prepared"
-        })
-      );
-      readiness = "ready";
-      await publish(
-        createDomainEvent("NarrationSentenceEntered", {
-          bookId: reader.book.id,
-          chapterId: reader.chapter.id,
-          sentenceId,
-          passageId: currentPassageId
-        })
-      );
-      try {
-        await dependencies.repository.speak({
-          utteranceId: `${sentenceId}:${currentRun}`,
-          text: sentence.text,
-          voiceId: settings.voiceId,
-          locale: reader.book.language ?? "und",
-          playbackRate: settings.playbackRate,
-          volume: Math.min(1, settings.volume)
-        });
-        if (currentRun !== run || activeSentenceId !== sentenceId) return;
-        activeSentenceId = null;
+      for (let index = firstSentenceIndex; index < reader.sentences.length; index += 1) {
+        const sentence = reader.sentences[index];
+        if (sentence == null || currentRun !== run) return;
+        const currentSentenceId = sentence.id;
+        const currentPassageId = passageId(reader, currentSentenceId);
+        activeSentenceId = currentSentenceId;
+        lastSentenceId = currentSentenceId;
+        readiness = "preparing";
+
         await publish(
-          createDomainEvent("NarrationPlaybackEnded", {
+          createDomainEvent("NarrationPreparationStarted", {
+            bookId: reader.book.id,
+            chapterId: reader.chapter.id,
+            sentenceId: currentSentenceId,
+            passageId: currentPassageId
+          })
+        );
+        await publish(
+          createDomainEvent("PassageNarrationReady", {
             bookId: reader.book.id,
             chapterId: reader.chapter.id,
             passageId: currentPassageId,
-            lastSentenceId: sentenceId
+            firstSentenceId: currentSentenceId,
+            lastSentenceId: currentSentenceId,
+            voiceId: settings.voiceId,
+            engineId: "android-device",
+            source: "prepared"
           })
         );
-      } catch {
-        if (currentRun !== run) return;
-        activeSentenceId = null;
-        readiness = "needs-attention";
+        readiness = "ready";
         await publish(
-          createDomainEvent("NarrationPlaybackFailed", {
+          createDomainEvent("NarrationSentenceEntered", {
             bookId: reader.book.id,
             chapterId: reader.chapter.id,
-            sentenceId,
-            passageId: currentPassageId,
-            reason: "This device voice needs attention."
+            sentenceId: currentSentenceId,
+            passageId: currentPassageId
           })
         );
+
+        try {
+          await dependencies.repository.speak({
+            utteranceId: `${currentSentenceId}:${currentRun}`,
+            text: sentence.text,
+            voiceId: settings.voiceId,
+            locale: reader.book.language ?? "und",
+            playbackRate: settings.playbackRate,
+            volume: Math.min(1, settings.volume)
+          });
+        } catch {
+          if (currentRun !== run) return;
+          activeSentenceId = null;
+          readiness = "needs-attention";
+          await publish(
+            createDomainEvent("NarrationPlaybackFailed", {
+              bookId: reader.book.id,
+              chapterId: reader.chapter.id,
+              sentenceId: currentSentenceId,
+              passageId: currentPassageId,
+              reason: "This device voice needs attention."
+            })
+          );
+          return;
+        }
+
+        if (currentRun !== run || activeSentenceId !== currentSentenceId) return;
+        if (!settings.autoAdvance && index < reader.sentences.length - 1) {
+          activeSentenceId = null;
+          await publish(
+            createDomainEvent("NarrationPlaybackPaused", {
+              bookId: reader.book.id,
+              chapterId: reader.chapter.id,
+              sentenceId: currentSentenceId,
+              passageId: currentPassageId
+            })
+          );
+          return;
+        }
       }
+
+      if (currentRun !== run || activeSentenceId == null || lastSentenceId == null) return;
+      const finalSentenceId = lastSentenceId;
+      activeSentenceId = null;
+      await publish(
+        createDomainEvent("NarrationPlaybackEnded", {
+          bookId: reader.book.id,
+          chapterId: reader.chapter.id,
+          passageId: passageId(reader, finalSentenceId),
+          lastSentenceId: finalSentenceId
+        })
+      );
     })();
   };
 

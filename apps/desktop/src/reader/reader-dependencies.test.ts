@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   availableHybridNarrationVoicesForLanguage,
   createNarrationPreparationAdapterForMode,
-  resolveDevelopmentNarrationSessionRoutingMode
+  resolveDevelopmentNarrationSessionRoutingMode,
+  resolveOfflineNarrationLibrary
 } from "./reader-dependencies";
 
 describe("reader narration session dependency selection", () => {
@@ -31,6 +32,13 @@ describe("reader narration session dependency selection", () => {
     expect(resolveDevelopmentNarrationSessionRoutingMode("hybrid-v1")).toBe("hybrid-v1");
     expect(resolveDevelopmentNarrationSessionRoutingMode("")).toBe("hybrid-v1");
     expect(resolveDevelopmentNarrationSessionRoutingMode("kokoro")).toBe("hybrid-v1");
+  });
+
+  it("keeps desktop narration packs out of the Android capability surface", () => {
+    expect(resolveOfflineNarrationLibrary(true, true)).toBe("unavailable");
+    expect(resolveOfflineNarrationLibrary(true, false)).toBe("unavailable");
+    expect(resolveOfflineNarrationLibrary(false, true)).toBe("language-pack");
+    expect(resolveOfflineNarrationLibrary(false, false)).toBe("individual-voice");
   });
 
   it("uses the native manifest adapter for hybrid mode inside Tauri", () => {

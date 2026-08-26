@@ -18,6 +18,7 @@ import { containMobileDialogFocus } from "./mobile-dialog-focus";
 
 interface ProductBarProps {
   showQuoteImageAction: boolean;
+  showShortcutReference: boolean;
   canSaveQuoteImage: boolean;
   onSaveQuoteImage: () => void;
   onOpenShortcutReference: () => void;
@@ -45,16 +46,18 @@ export function ProductBar(props: ProductBarProps) {
             <ShareIcon />
           </button>
         </Show>
-        <button
-          class="product-icon-action"
-          type="button"
-          aria-label="Keyboard shortcuts"
-          aria-keyshortcuts="?"
-          title="Keyboard shortcuts (?)"
-          onClick={props.onOpenShortcutReference}
-        >
-          <HelpIcon />
-        </button>
+        <Show when={props.showShortcutReference}>
+          <button
+            class="product-icon-action"
+            type="button"
+            aria-label="Keyboard shortcuts"
+            aria-keyshortcuts="?"
+            title="Keyboard shortcuts (?)"
+            onClick={props.onOpenShortcutReference}
+          >
+            <HelpIcon />
+          </button>
+        </Show>
       </div>
     </header>
   );

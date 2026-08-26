@@ -449,6 +449,16 @@ describe("ReaderExperience integration", () => {
     );
     expect(container.querySelector(".mobile-reader-title")?.textContent).toContain("Another Book");
 
+    container.querySelector<HTMLButtonElement>('[aria-label="Open library"]')?.click();
+    await vi.waitFor(() =>
+      expect(container.querySelector('[role="dialog"][aria-label="Library"]')).not.toBeNull()
+    );
+    container
+      .querySelector<HTMLButtonElement>(".mobile-reader-library-sheet > footer button")
+      ?.click();
+    await vi.waitFor(() => expect(container.querySelector(".product-bar")).not.toBeNull());
+    expect(container.querySelector('[aria-label="Keyboard shortcuts"]')).toBeNull();
+
     dispose();
     container.remove();
   });
@@ -1675,6 +1685,38 @@ describe("ReaderExperience integration", () => {
     dispose();
     container.remove();
   });
+
+  it("offers device voices without desktop narration downloads when Android packs are unavailable", async () => {
+    const requestPlayback = vi.fn();
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      requestPlayback,
+      offlineLibrary: "unavailable"
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    clickInspectorTab(container, "Tools");
+    await vi.waitFor(() => expect(container.textContent).toContain("Sonelle offline voice"));
+    expect(container.textContent).toContain("Choose an Android device voice for now.");
+    expect(container.textContent).not.toContain("Download files");
+    container.querySelector<HTMLButtonElement>('[aria-label="Play"]')?.click();
+
+    await vi.waitFor(() => {
+      expect(requestPlayback).not.toHaveBeenCalled();
+      expect(container.textContent).toContain(
+        "Choose an Android device voice to listen on this phone."
+      );
+    });
+
+    dispose();
+    container.remove();
+  });
 });
 
 function clickInspectorTab(container: HTMLElement, label: string) {
@@ -1695,7 +1737,7 @@ interface DependencySpies {
   saveAudioSettings?: (settings: AudioSettings) => void;
   requestPlayback?: (sentenceId: string) => void;
   engineStatus?: "ready" | "not-installed";
-  offlineLibrary?: "individual-voice" | "language-pack";
+  offlineLibrary?: "individual-voice" | "language-pack" | "unavailable";
   readerPreferences?: ReaderPreferences;
   exportQuoteImage?: (content: {
     sentenceTexts: string[];
