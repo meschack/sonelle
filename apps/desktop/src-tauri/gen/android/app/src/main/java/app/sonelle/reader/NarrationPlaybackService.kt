@@ -184,7 +184,16 @@ class NarrationPlaybackService : Service() {
       else android.R.drawable.ic_media_play
     val toggleLabel = if (controlPolicy.playing) "Pause" else "Resume"
     val subtitle = listOf(chapterTitle, author).filter(String::isNotBlank).joinToString(" · ")
-    val notification = Notification.Builder(this, CHANNEL_ID)
+    val builder =
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Notification.Builder(this, CHANNEL_ID)
+      } else {
+        // Notification channels only exist on API 26+; the channel is created
+        // there, so pre-O devices use the legacy builder without a channel id.
+        @Suppress("DEPRECATION")
+        Notification.Builder(this)
+      }
+    val notification = builder
       .setSmallIcon(android.R.drawable.ic_media_play)
       .setContentTitle(bookTitle)
       .setContentText(subtitle.ifBlank { "Reading with Sonelle" })

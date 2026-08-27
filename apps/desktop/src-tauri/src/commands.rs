@@ -446,8 +446,8 @@ fn run_narration_removal(
     }
 }
 
-/// Mobile has no accepted narration pack storage yet. Prepared-audio roots are
-/// absent today, so removal is an honest no-op until #110 supplies them.
+/// Mobile has no accepted narration storage ownership yet. Both target kinds
+/// stay unavailable until their platform work deliberately enables them.
 #[cfg(not(desktop))]
 fn run_narration_removal(
     root: &std::path::Path,

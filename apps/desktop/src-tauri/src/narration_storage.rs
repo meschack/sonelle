@@ -23,9 +23,11 @@
 use std::{
     collections::BTreeMap,
     fs,
-    io::ErrorKind,
     path::{Path, PathBuf},
 };
+
+#[cfg(desktop)]
+use std::io::ErrorKind;
 
 use serde::{Deserialize, Serialize};
 
@@ -93,7 +95,10 @@ pub(crate) fn available_bytes(app_data: &Path) -> Result<u64, String> {
 pub(crate) fn inspect_storage_at(app_data: &Path) -> Result<NarrationStorageSnapshotDto, String> {
     let snapshot = NarrationStorageSnapshotDto {
         available_bytes: available_bytes(app_data)?,
-        prepared_audio: prepared_audio_inventory(&prepared_audio_root(app_data)),
+        prepared_audio: prepared_audio_inventory_for_platform(
+            &prepared_audio_root(app_data),
+            cfg!(desktop),
+        ),
         // Android has no accepted pack storage yet, so this stays honestly
         // empty until #104 supplies verified artifacts and a real root.
         voice_packs: inspect_voice_packs_at(&engine_packs_root(app_data))?,
@@ -112,9 +117,10 @@ fn inspect_voice_packs_at(_engines_root: &Path) -> Result<Vec<VoicePackStorageEn
 }
 
 pub(crate) fn remove_prepared_audio_at(app_data: &Path, book_id: &str) -> RemovalOutcome {
-    remove_prepared_book(&prepared_audio_root(app_data), book_id)
+    remove_prepared_audio_for_platform(&prepared_audio_root(app_data), book_id, cfg!(desktop))
 }
 
+#[cfg(desktop)]
 pub(crate) fn remove_voice_pack_at(
     app_data: &Path,
     pack_id: &str,
@@ -130,15 +136,6 @@ fn remove_verified_voice_pack_at(
     revision: &str,
 ) -> RemovalOutcome {
     remove_verified_voice_pack(engines_root, &trusted_catalog_json()?, pack_id, revision)
-}
-
-#[cfg(not(desktop))]
-fn remove_verified_voice_pack_at(
-    _engines_root: &Path,
-    _pack_id: &str,
-    _revision: &str,
-) -> RemovalOutcome {
-    Err("Offline voice files aren't stored on this device yet.".to_string())
 }
 
 #[cfg(desktop)]
@@ -164,6 +161,27 @@ fn prepared_audio_inventory(root: &Path) -> Vec<PreparedAudioStorageEntryDto> {
             size_bytes,
         })
         .collect()
+}
+
+fn prepared_audio_inventory_for_platform(
+    root: &Path,
+    prepared_audio_supported: bool,
+) -> Vec<PreparedAudioStorageEntryDto> {
+    if !prepared_audio_supported {
+        return Vec::new();
+    }
+    prepared_audio_inventory(root)
+}
+
+fn remove_prepared_audio_for_platform(
+    root: &Path,
+    book_id: &str,
+    prepared_audio_supported: bool,
+) -> RemovalOutcome {
+    if !prepared_audio_supported {
+        return Err("Prepared audio isn't stored on this device yet.".to_string());
+    }
+    remove_prepared_book(root, book_id)
 }
 
 /// Walks the prepared-audio root without following symlinks and returns the
@@ -336,6 +354,7 @@ fn verified_pack_destination(
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(desktop)]
 enum SafePathError {
     /// The identity was invalid, escaped its root, involved a symlink, or was
     /// not a real directory.
@@ -343,6 +362,7 @@ enum SafePathError {
     Io,
 }
 
+#[cfg(desktop)]
 impl SafePathError {
     fn into_outcome<T>(self) -> Result<T, String> {
         Err(match self {
@@ -371,6 +391,7 @@ fn is_safe_component(value: &str) -> bool {
 /// Resolves `components` under `root`, rejecting missing directories, symlinked
 /// segments, non-directories, and anything whose canonical location escapes
 /// the canonical root.
+#[cfg(desktop)]
 fn contained_descendant(root: &Path, components: &[&str]) -> Result<Option<PathBuf>, String> {
     if !components
         .iter()
@@ -421,6 +442,7 @@ fn contained_directory(target: &Path, canonical_root: &Path) -> Result<PathBuf, 
 
 /// Accepts only real (non-symlink) directories and returns their canonical
 /// path, so every later comparison uses one shared spelling.
+#[cfg(desktop)]
 fn ensure_real_directory(path: &Path) -> Result<PathBuf, SafePathError> {
     let metadata = fs::symlink_metadata(path).map_err(|error| match error.kind() {
         ErrorKind::NotFound => SafePathError::Unsafe,
@@ -611,6 +633,22 @@ mod tests {
             vec!["book-a".to_string()]
         );
         assert_eq!(prepared_audio_inventory(&root)[0].size_bytes, kept);
+        let _ = fs::remove_dir_all(app_data);
+    }
+
+    #[test]
+    fn mobile_capability_boundary_hides_and_refuses_provisional_prepared_audio() {
+        let app_data = temp_root("mobile-prepared-boundary");
+        let root = prepared_audio_root(&app_data);
+        make_prepared_book(&root, "asset-a", "book-a", 100);
+
+        assert!(prepared_audio_inventory_for_platform(&root, false).is_empty());
+        assert_eq!(
+            remove_prepared_audio_for_platform(&root, "book-a", false),
+            Err("Prepared audio isn't stored on this device yet.".to_string())
+        );
+        assert!(root.join("asset-a/audio.wav").exists());
+
         let _ = fs::remove_dir_all(app_data);
     }
 

@@ -141,6 +141,12 @@ jobs:
             --ci \
             --config "$RUNNER_TEMP/android-store.conf.json"
 
+      - name: Verify generated manifest and Android lint
+        run: |
+          pnpm check:android-manifest
+          cd apps/desktop/src-tauri/gen/android
+          ./gradlew lintUniversalRelease
+
       - name: Verify and collect store candidate
         run: |
           AAB_PATH=$(find apps/desktop/src-tauri/gen/android/app/build/outputs/bundle -type f -name '*release*.aab' -print -quit)

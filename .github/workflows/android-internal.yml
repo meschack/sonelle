@@ -105,6 +105,12 @@ jobs:
           export NDK_HOME="$ANDROID_HOME/ndk/27.1.12297006"
           pnpm --filter @sonelle/desktop tauri android build --target aarch64 --apk --ci
 
+      - name: Verify generated manifest and Android lint
+        run: |
+          pnpm check:android-manifest
+          cd apps/desktop/src-tauri/gen/android
+          ./gradlew lintArm64Release
+
       - name: Verify and describe artifact
         id: artifact
         run: |
