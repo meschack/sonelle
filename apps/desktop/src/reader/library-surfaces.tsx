@@ -31,6 +31,7 @@ export interface LibraryCollectionModel {
   query: string;
   filter: LibraryBookFilter;
   importing: boolean;
+  mutationsDisabled: boolean;
   notice: string | null;
   onQueryChange: (query: string) => void;
   onFilterChange: (filter: LibraryBookFilter) => void;
@@ -216,7 +217,7 @@ function NavigationRail(componentProps: { model: LibraryNavigationModel }) {
         <button
           class="import-button"
           type="button"
-          disabled={collection.importing}
+          disabled={collection.importing || collection.mutationsDisabled}
           aria-keyshortcuts="Control+O Meta+O"
           title="Add EPUB (Ctrl/Cmd+O)"
           onClick={collection.onImport}
@@ -369,7 +370,7 @@ export function LibraryWorkspace(componentProps: { model: LibraryWorkspaceModel 
           <button
             class="library-add-button"
             type="button"
-            disabled={props.importing}
+            disabled={props.importing || props.mutationsDisabled}
             aria-keyshortcuts="Control+O Meta+O"
             title="Add EPUB (Ctrl/Cmd+O)"
             onClick={props.onImport}
@@ -383,7 +384,7 @@ export function LibraryWorkspace(componentProps: { model: LibraryWorkspaceModel 
           <button
             class="library-drop-zone"
             type="button"
-            disabled={props.importing}
+            disabled={props.importing || props.mutationsDisabled}
             aria-keyshortcuts="Control+O Meta+O"
             title="Choose an EPUB (Ctrl/Cmd+O)"
             onClick={props.onImport}

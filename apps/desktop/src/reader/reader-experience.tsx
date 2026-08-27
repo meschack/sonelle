@@ -182,6 +182,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const eventDispatcher = dependencies.eventDispatcher;
   const readerPreferences = readerPreferencesRepository.load();
   const sampleReader = buildFixtureReaderView();
+  const restoresLibraryOnStartup = dependencies.startupMode === "restore-library";
 
   const [reader, setReader] = createSignal<ReaderView>(sampleReader);
   const [libraryBooks, setLibraryBooks] = createSignal<LibraryBookSummary[]>([]);
@@ -233,7 +234,9 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const [inspectorRailWidth, setInspectorRailWidth] = createSignal(
     readerPreferences.inspectorRailWidth
   );
-  const [activeView, setActiveView] = createSignal<AppView>("reader");
+  const [activeView, setActiveView] = createSignal<AppView>(
+    restoresLibraryOnStartup ? "library" : "reader"
+  );
   const [mobileReaderShell, setMobileReaderShell] = createSignal(
     dependencies.readerShellViewport.isMobile()
   );
@@ -256,12 +259,17 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const [librarySidebarCollapsed, setLibrarySidebarCollapsed] = createSignal(false);
   const [inspectorSidebarCollapsed, setInspectorSidebarCollapsed] = createSignal(false);
   const [libraryRailMode, setLibraryRailMode] = createSignal(
-    createLibraryRailMode(sampleReader.book.id)
+    restoresLibraryOnStartup
+      ? transitionLibraryRailMode(createLibraryRailMode(sampleReader.book.id), {
+          type: "library-opened"
+        })
+      : createLibraryRailMode(sampleReader.book.id)
   );
   const sendLibraryRailEvent = (event: LibraryRailEvent) => {
     setLibraryRailMode((current) => transitionLibraryRailMode(current, event));
   };
-  const [isLibraryLoading, setIsLibraryLoading] = createSignal(false);
+  const [isLibraryLoading, setIsLibraryLoading] = createSignal(restoresLibraryOnStartup);
+  const [startupReady, setStartupReady] = createSignal(!restoresLibraryOnStartup);
   const [isLibrarySearching, setIsLibrarySearching] = createSignal(false);
   const [isImporting, setIsImporting] = createSignal(false);
   const [isLibraryDropTarget, setIsLibraryDropTarget] = createSignal(false);
@@ -864,11 +872,17 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         void reportAppError(scope, error, details);
       }
     );
-    void libraryApplication.start().then((stop) => {
-      if (disposed) stop();
-      else stopLibraryApplication = stop;
-    });
-    void libraryApplication.refresh();
+    void (async () => {
+      if (restoresLibraryOnStartup) await libraryApplication.refresh();
+      const stop = await libraryApplication.start();
+      if (disposed) {
+        stop();
+        return;
+      }
+      stopLibraryApplication = stop;
+      setStartupReady(true);
+      if (!restoresLibraryOnStartup) void libraryApplication.refresh();
+    })();
     void libraryApplication.refreshBookmarks();
     void offlineNarrationApplication.start().then((stop) => {
       if (disposed) stop();
@@ -998,18 +1012,22 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   });
 
   createEffect(() => {
+    if (!startupReady()) return;
     onCleanup(playbackApplication.playbackChanged());
   });
 
   createEffect(() => {
+    if (!startupReady()) return;
     playbackApplication.autoAdvanceChanged();
   });
 
   createEffect(() => {
+    if (!startupReady()) return;
     playbackApplication.prefetchChanged();
   });
 
   createEffect(() => {
+    if (!startupReady()) return;
     playbackApplication.positionChanged();
   });
 
@@ -1096,7 +1114,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         openAppView("library");
         break;
       case "import-book":
-        void libraryApplication.importFromDialog();
+        if (startupReady()) void libraryApplication.importFromDialog();
         break;
       case "focus-library-search":
         document
@@ -1330,12 +1348,17 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     get importing() {
       return isImporting();
     },
+    get mutationsDisabled() {
+      return !startupReady();
+    },
     get notice() {
       return libraryNotice();
     },
     onQueryChange: setLibraryQuery,
     onFilterChange: setLibraryFilter,
-    onImport: libraryApplication.importFromDialog,
+    onImport: () => {
+      if (startupReady()) void libraryApplication.importFromDialog();
+    },
     onOpenBook: libraryApplication.open,
     onRetryLibrary: libraryApplication.refresh,
     onOpenSample: openSampleReader
@@ -1390,9 +1413,13 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       return librarySearchResults();
     },
     onOpenSearchResult: openLibrarySearchResult,
-    onDragEnter: () => setIsLibraryDropTarget(true),
+    onDragEnter: () => {
+      if (startupReady()) setIsLibraryDropTarget(true);
+    },
     onDragLeave: () => setIsLibraryDropTarget(false),
-    onDropFiles: libraryApplication.handleBrowserDrop
+    onDropFiles: (files) => {
+      if (startupReady()) libraryApplication.handleBrowserDrop(files);
+    }
   } satisfies LibraryWorkspaceModel;
 
   const inspectorModel = {

@@ -151,6 +151,8 @@ export interface ReaderNarrationService {
   ): Promise<{ sentenceCount: number }>;
 }
 
+export type ReaderStartupMode = "sample-preview" | "restore-library";
+
 export interface ReaderExperienceDependencies {
   appLifecycle: AppLifecycleGateway;
   appWindow: AppWindowController;
@@ -177,6 +179,7 @@ export interface ReaderExperienceDependencies {
   readerShellViewport: ReaderShellViewport;
   readerPreferencesRepository: ReaderPreferencesRepository;
   readingPositionStore: ReadingPositionStore;
+  startupMode: ReaderStartupMode;
   voiceInstallationRepository: VoiceInstallationRepository;
 }
 
@@ -340,6 +343,7 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
     readerShellViewport: createReaderShellViewport(),
     readerPreferencesRepository: createReaderPreferencesRepository(),
     readingPositionStore: createReadingPositionStore(),
+    startupMode: isTauriRuntime() ? "restore-library" : "sample-preview",
     voiceInstallationRepository: createVoiceInstallationRepository(),
     narrationStorageRepository: createNarrationStorageMaintenanceRepository()
   };

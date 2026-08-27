@@ -57,6 +57,13 @@ position without pausing playback. On a cold start, the library application open
 latest persisted reading activity; native storage remains the authority for its chapter and sentence
 fallback.
 
+The composition root makes that startup policy explicit. Native desktop and Android builds begin on
+the Library's loading surface until the catalog restores a saved book or resolves to an empty library;
+the sample reader is never painted or published to the platform media session as a temporary stand-in
+for persisted state. Imports and platform open/drop listeners remain unavailable during that bounded
+restore, preventing a slower startup open from replacing a book the reader just chose. Browser previews
+opt into the sample immediately so their fixture remains deliberate rather than leaking into native boot.
+
 The responsive reader exposes the stored EPUB contents through a temporary touch-safe panel. Its
 entries preserve nesting through indentation and route valid chapter or anchor selections through
 the shared navigation application. Closing the panel returns to the unchanged reader; unavailable

@@ -13,6 +13,7 @@ import { createSavedDictionary } from "@sonelle/learning";
 import {
   createNoopMediaSessionGateway,
   createReaderPreferences,
+  type MediaSessionGateway,
   type ReaderPreferences
 } from "@sonelle/reader";
 import type { ReaderExperienceDependencies } from "./reader-dependencies";
@@ -36,6 +37,71 @@ beforeAll(() => {
 });
 
 describe("ReaderExperience integration", () => {
+  it("keeps native startup on the library surface until the saved book is restored", async () => {
+    const savedBook = createLibraryBook("saved-book", "Saved Book", 3);
+    let resolveBooks!: (books: LibraryBookSummary[]) => void;
+    const listBooks = vi.fn(
+      () =>
+        new Promise<LibraryBookSummary[]>((resolve) => {
+          resolveBooks = resolve;
+        })
+    );
+    const openBook = vi.fn(async (bookId: string) => createReaderDocument(bookId));
+    const importBook = vi.fn().mockResolvedValue({ status: "cancelled" as const });
+    const publishMediaSession = vi.fn();
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      listBooks,
+      openBook,
+      importBook,
+      mediaSession: {
+        publish: publishMediaSession,
+        subscribe: () => () => undefined,
+        clear: vi.fn()
+      },
+      startupMode: "restore-library"
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    try {
+      expect(container.querySelector(".reader-surface")).toBeNull();
+      expect(container.textContent).toContain("Opening library");
+      expect(container.textContent).not.toContain("Failure helps Mara notice the room");
+      expect(publishMediaSession).not.toHaveBeenCalled();
+      expect(container.querySelector<HTMLButtonElement>(".library-add-button")?.disabled).toBe(
+        true
+      );
+
+      dispatchShortcut("o", { ctrlKey: true });
+      expect(importBook).not.toHaveBeenCalled();
+
+      resolveBooks([savedBook]);
+
+      await vi.waitFor(() => expect(openBook).toHaveBeenCalledWith("saved-book", undefined));
+      await vi.waitFor(() =>
+        expect(container.querySelector(".reader-surface")?.textContent).toContain(
+          "Opened from the Library."
+        )
+      );
+      await vi.waitFor(() =>
+        expect(publishMediaSession).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            book: expect.objectContaining({ id: "saved-book" })
+          })
+        )
+      );
+    } finally {
+      dispose();
+      container.remove();
+    }
+  });
+
   it("drives narration settings and chapter navigation through keyboard shortcuts", async () => {
     const saveAudioSettings = vi.fn();
     const dependencies = createDependencies({
@@ -1749,6 +1815,7 @@ interface DependencySpies {
   getAudioCacheStats?: (bookId: string) => Promise<{ sentenceCount: number; sizeBytes: number }>;
   toggleFullscreen?: () => Promise<void>;
   libraryBooks?: LibraryBookSummary[];
+  listBooks?: () => Promise<LibraryBookSummary[]>;
   openBook?: (bookId: string, chapterId?: string) => Promise<ReaderDocumentDto>;
   searchLibrary?: LibrarySearch["search"];
   chooseBookCover?: BookMetadataEditor["chooseCover"];
@@ -1760,6 +1827,8 @@ interface DependencySpies {
   bookmarkStore?: BookmarkStore;
   mobileReaderShell?: boolean;
   lookupWord?: DictionaryRepository["lookupWord"];
+  startupMode?: ReaderExperienceDependencies["startupMode"];
+  mediaSession?: MediaSessionGateway;
 }
 
 function createDependencies(spies: DependencySpies): ReaderExperienceDependencies {
@@ -1806,7 +1875,7 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       save: spies.saveAudioSettings ?? vi.fn()
     },
     bookCatalog: {
-      list: vi.fn().mockResolvedValue(spies.libraryBooks ?? []),
+      list: spies.listBooks ?? vi.fn().mockResolvedValue(spies.libraryBooks ?? []),
       open: spies.openBook ?? vi.fn().mockRejectedValue(new Error("No library book selected"))
     },
     bookDropAdapter: { listen: vi.fn().mockResolvedValue(spies.stopDrops) },
@@ -1866,7 +1935,7 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
     },
     fontCatalog: { listFamilies: vi.fn().mockResolvedValue(["Inter", "Literata"]) },
     librarySearch: { search: spies.searchLibrary ?? vi.fn().mockResolvedValue([]) },
-    mediaSession: createNoopMediaSessionGateway(),
+    mediaSession: spies.mediaSession ?? createNoopMediaSessionGateway(),
     narration: {
       capabilities: {
         offlineLibrary: spies.offlineLibrary ?? "individual-voice",
@@ -1896,6 +1965,7 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
     readingPositionStore: {
       save: spies.saveReadingPosition ?? vi.fn().mockResolvedValue(undefined)
     },
+    startupMode: spies.startupMode ?? "sample-preview",
     voiceInstallationRepository: {
       getStatus: vi.fn().mockResolvedValue(readyVoice),
       install: vi.fn().mockResolvedValue(readyVoice),
