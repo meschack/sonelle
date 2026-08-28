@@ -890,22 +890,34 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     );
     void (async () => {
       if (restoresLibraryOnStartup) await libraryApplication.refresh();
-      const stop = await libraryApplication.start();
+      let stop: (() => void) | undefined;
+      try {
+        stop = await libraryApplication.start();
+      } catch (error) {
+        setLibraryNotice(toFriendlyLibraryError(error));
+        reportEventReactionFailure(error);
+      }
       if (disposed) {
-        stop();
+        stop?.();
         return;
       }
       stopLibraryApplication = stop;
       setStartupReady(true);
       if (!restoresLibraryOnStartup) void libraryApplication.refresh();
+
+      void libraryApplication.refreshBookmarks();
+      const stopStorage = narrationStorageApplication.start();
+      if (disposed) {
+        stopStorage();
+        return;
+      } else {
+        stopNarrationStorageRefresh = stopStorage;
+        void narrationStorageApplication.refresh().catch(reportEventReactionFailure);
+      }
+      const stopOfflineNarration = await offlineNarrationApplication.start();
+      if (disposed) stopOfflineNarration();
+      else stopOfflineNarrationApplication = stopOfflineNarration;
     })();
-    void libraryApplication.refreshBookmarks();
-    void offlineNarrationApplication.start().then((stop) => {
-      if (disposed) stop();
-      else stopOfflineNarrationApplication = stop;
-    });
-    stopNarrationStorageRefresh = narrationStorageApplication.start();
-    void narrationStorageApplication.refresh().catch(reportEventReactionFailure);
     void dependencies.fontCatalog
       .listFamilies()
       .then((families) => {
@@ -1006,6 +1018,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   });
 
   createEffect(() => {
+    if (!startupReady()) return;
     const language = reader().book.language;
     setNarrationVoices(narrationService.voices(language));
     let current = true;

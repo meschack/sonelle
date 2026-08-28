@@ -11,6 +11,7 @@ mod background_process;
 #[cfg(any(mobile, test))]
 mod book_import_source;
 mod book_open_request;
+mod build_identity;
 mod commands;
 mod epub_import;
 mod error_log;
@@ -117,9 +118,19 @@ use tauri::Manager;
 use crate::library_migration::migrate_legacy_library;
 use crate::storage::SonelleStore;
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppStatus {
+    status: &'static str,
+    build: build_identity::BuildIdentity,
+}
+
 #[tauri::command]
-fn app_status() -> &'static str {
-    "ready"
+fn app_status() -> AppStatus {
+    AppStatus {
+        status: "ready",
+        build: build_identity::current(),
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

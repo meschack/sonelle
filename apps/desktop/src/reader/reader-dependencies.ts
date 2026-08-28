@@ -129,10 +129,7 @@ export interface ReaderBookNarrationIdentity {
 }
 
 export type OfflineNarrationLibrary =
-  | "individual-voice"
-  | "language-pack"
-  | "mobile-standard"
-  | "unavailable";
+  "individual-voice" | "language-pack" | "mobile-standard" | "unavailable";
 
 export interface ReaderNarrationService {
   capabilities: {
@@ -259,8 +256,8 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
         return androidRuntime
           ? activateMobileAudioSettings(settings, language)
           : usesLanguagePacks
-          ? activateHybridAudioSettingsForLanguage(settings, language)
-          : activateAudioSettingsForLanguage(settings, language);
+            ? activateHybridAudioSettingsForLanguage(settings, language)
+            : activateAudioSettingsForLanguage(settings, language);
       },
       voices(language) {
         return voicesForLanguage(language);

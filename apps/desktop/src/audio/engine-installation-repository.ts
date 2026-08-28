@@ -4,11 +4,7 @@ import { isTauriRuntime } from "../platform/tauri-runtime";
 
 export type NarrationEngineId = "kokoro" | "supertonic";
 export type EngineInstallationReadiness =
-  | "not-installed"
-  | "preparing"
-  | "ready"
-  | "failed"
-  | "unavailable";
+  "not-installed" | "preparing" | "ready" | "failed" | "unavailable";
 
 export interface EngineInstallationState {
   engineId: NarrationEngineId;

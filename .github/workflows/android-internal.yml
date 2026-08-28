@@ -79,7 +79,11 @@ jobs:
           git fetch --force --tags
           node scripts/prepare-release-version.mjs
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "catalog_sha256=$(sha256sum tools/narration-spike/engines.json | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "catalog_sha256=$(sha256sum tools/narration-spike/android-supertonic-candidate.json | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "model_revision=$(jq -r '.engines[] | select(.id == \"supertonic\") | .model.revision' tools/narration-spike/android-supertonic-candidate.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Audit offline-voice candidate dependencies and disclosures
+        run: pnpm audit:android-release -- --profile offline-voice-candidate
 
       - name: Require and configure Android signing
         env:
@@ -100,10 +104,16 @@ jobs:
       - name: Build signed release-like APK
         env:
           SONELLE_BUILD_COMMIT: ${{ steps.build.outputs.commit }}
+          SONELLE_BUILD_TYPE: internal-release
           SONELLE_NARRATION_CATALOG_SHA256: ${{ steps.build.outputs.catalog_sha256 }}
+          SONELLE_NARRATION_MODEL_REVISION: ${{ steps.build.outputs.model_revision }}
         run: |
           export NDK_HOME="$ANDROID_HOME/ndk/27.1.12297006"
-          pnpm --filter @sonelle/desktop tauri android build --target aarch64 --apk --ci
+          pnpm --filter @sonelle/desktop tauri android build \
+            --target aarch64 \
+            --features android-offline-voice-candidate \
+            --apk \
+            --ci
 
       - name: Verify generated manifest and Android lint
         run: |
@@ -117,11 +127,16 @@ jobs:
           APK_PATH=$(find apps/desktop/src-tauri/gen/android/app/build/outputs/apk -type f -name '*release*.apk' ! -name '*unsigned*' -print -quit)
           test -n "$APK_PATH"
           "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify --verbose "$APK_PATH"
+          unzip -l "$APK_PATH" | grep 'lib/arm64-v8a/libsonelle_lib.so' >/dev/null
+          unzip -p "$APK_PATH" lib/arm64-v8a/libsonelle_lib.so | strings | grep -F '${{ steps.build.outputs.model_revision }}' >/dev/null
           mkdir -p artifacts/android-internal
-          cp "$APK_PATH" artifacts/android-internal/sonelle-internal-arm64.apk
+          cp "$APK_PATH" artifacts/android-internal/sonelle-offline-voice-candidate-arm64.apk
           node scripts/create-android-build-metadata.mjs \
-            --artifact artifacts/android-internal/sonelle-internal-arm64.apk \
+            --artifact artifacts/android-internal/sonelle-offline-voice-candidate-arm64.apk \
             --commit "${{ steps.build.outputs.commit }}" \
+            --abi arm64-v8a \
+            --build-type internal-release \
+            --profile offline-voice-candidate \
             --output artifacts/android-internal/build-metadata.json
 
       - name: Upload signed internal build

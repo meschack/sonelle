@@ -45,7 +45,7 @@ history is silently cleared.
 
 ```bash
 pnpm stability:android -- \
-  --artifact artifacts/android-internal/sonelle-internal-arm64.apk \
+  --artifact artifacts/android-internal/sonelle-offline-voice-candidate-arm64.apk \
   --metadata artifacts/android-internal/build-metadata.json \
   --serial <adb-serial> \
   --device-role midrange \

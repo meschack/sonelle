@@ -17,11 +17,7 @@ const narrationEngineIds: readonly NarrationEngineId[] = ["kokoro", "supertonic"
 
 export type OfflineNarrationProfileId = "english" | "multilingual" | "standard";
 export type OfflineNarrationReadiness =
-  | "not-installed"
-  | "preparing"
-  | "ready"
-  | "failed"
-  | "unavailable";
+  "not-installed" | "preparing" | "ready" | "failed" | "unavailable";
 
 export interface OfflineNarrationProfileView {
   id: OfflineNarrationProfileId;

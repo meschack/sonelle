@@ -49,6 +49,16 @@ describe("ReaderExperience integration", () => {
     const openBook = vi.fn(async (bookId: string) => createReaderDocument(bookId));
     const importBook = vi.fn().mockResolvedValue({ status: "cancelled" as const });
     const publishMediaSession = vi.fn();
+    const getAudioCacheStats = vi.fn().mockResolvedValue({ sentenceCount: 0, sizeBytes: 0 });
+    const getEngineStatus = vi.fn(async (engineId: "kokoro" | "supertonic") => ({
+      engineId,
+      status: "ready" as const,
+      modelRevision: `${engineId}-test`,
+      downloadSizeBytes: 0,
+      downloadedBytes: 0,
+      progress: 100,
+      message: "Ready"
+    }));
     const dependencies = createDependencies({
       dispatcher: createDomainEventDispatcher(),
       pause: vi.fn().mockResolvedValue(undefined),
@@ -58,6 +68,9 @@ describe("ReaderExperience integration", () => {
       listBooks,
       openBook,
       importBook,
+      getAudioCacheStats,
+      getEngineStatus,
+      offlineLibrary: "language-pack",
       mediaSession: {
         publish: publishMediaSession,
         subscribe: () => () => undefined,
@@ -74,6 +87,8 @@ describe("ReaderExperience integration", () => {
       expect(container.textContent).toContain("Opening library");
       expect(container.textContent).not.toContain("Failure helps Mara notice the room");
       expect(publishMediaSession).not.toHaveBeenCalled();
+      expect(getAudioCacheStats).not.toHaveBeenCalled();
+      expect(getEngineStatus).not.toHaveBeenCalled();
       expect(container.querySelector<HTMLButtonElement>(".library-add-button")?.disabled).toBe(
         true
       );
@@ -96,6 +111,39 @@ describe("ReaderExperience integration", () => {
           })
         )
       );
+      await vi.waitFor(() => expect(getAudioCacheStats).toHaveBeenCalledWith("saved-book"));
+      expect(getEngineStatus).toHaveBeenCalled();
+    } finally {
+      dispose();
+      container.remove();
+    }
+  });
+
+  it("unblocks the library when a native startup listener cannot attach", async () => {
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      startDropsError: new Error("drop listener unavailable"),
+      libraryBooks: [],
+      startupMode: "restore-library"
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    try {
+      await vi.waitFor(() =>
+        expect(container.querySelector<HTMLButtonElement>(".library-add-button")?.disabled).toBe(
+          false
+        )
+      );
+      expect(container.querySelector(".library-workspace")?.textContent).not.toContain(
+        "Opening library"
+      );
+      expect(container.textContent).not.toContain("Failure helps Mara notice the room");
     } finally {
       dispose();
       container.remove();
@@ -1897,6 +1945,7 @@ interface DependencySpies {
   }) => Promise<string>;
   importBook?: BookImportGateway["importBook"];
   getAudioCacheStats?: (bookId: string) => Promise<{ sentenceCount: number; sizeBytes: number }>;
+  getEngineStatus?: ReaderExperienceDependencies["engineInstallationRepository"]["getStatus"];
   toggleFullscreen?: () => Promise<void>;
   libraryBooks?: LibraryBookSummary[];
   listBooks?: () => Promise<LibraryBookSummary[]>;
@@ -1913,6 +1962,7 @@ interface DependencySpies {
   lookupWord?: DictionaryRepository["lookupWord"];
   startupMode?: ReaderExperienceDependencies["startupMode"];
   mediaSession?: MediaSessionGateway;
+  startDropsError?: Error;
 }
 
 function createDependencies(spies: DependencySpies): ReaderExperienceDependencies {
@@ -1962,7 +2012,12 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       list: spies.listBooks ?? vi.fn().mockResolvedValue(spies.libraryBooks ?? []),
       open: spies.openBook ?? vi.fn().mockRejectedValue(new Error("No library book selected"))
     },
-    bookDropAdapter: { listen: vi.fn().mockResolvedValue(spies.stopDrops) },
+    bookDropAdapter: {
+      listen:
+        spies.startDropsError == null
+          ? vi.fn().mockResolvedValue(spies.stopDrops)
+          : vi.fn().mockRejectedValue(spies.startDropsError)
+    },
     bookOpenRequestAdapter: { listen: vi.fn().mockResolvedValue(() => undefined) },
     bookExporter: {
       exportData: vi.fn().mockRejectedValue(new Error("No library book selected"))
@@ -1990,20 +2045,22 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       saveSavedDictionary: vi.fn()
     },
     engineInstallationRepository: {
-      getStatus: vi.fn(async (engineId) => ({
-        engineId,
-        status: spies.engineStatus ?? "ready",
-        modelRevision: `${engineId}-test`,
-        downloadSizeBytes: spies.engineStatus === "not-installed" ? 100 : 0,
-        downloadedBytes: 0,
-        progress: spies.engineStatus === "not-installed" ? null : 100,
-        message:
-          spies.engineStatus === "not-installed"
-            ? "Download narration files to listen offline."
-            : spies.engineStatus === "unavailable"
-              ? "This build does not include Sonelle's experimental offline voice."
-              : "Ready"
-      })),
+      getStatus:
+        spies.getEngineStatus ??
+        vi.fn(async (engineId) => ({
+          engineId,
+          status: spies.engineStatus ?? "ready",
+          modelRevision: `${engineId}-test`,
+          downloadSizeBytes: spies.engineStatus === "not-installed" ? 100 : 0,
+          downloadedBytes: 0,
+          progress: spies.engineStatus === "not-installed" ? null : 100,
+          message:
+            spies.engineStatus === "not-installed"
+              ? "Download narration files to listen offline."
+              : spies.engineStatus === "unavailable"
+                ? "This build does not include Sonelle's experimental offline voice."
+                : "Ready"
+        })),
       install: vi.fn(async (engineId) => ({
         engineId,
         status: "ready" as const,

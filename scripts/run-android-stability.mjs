@@ -64,10 +64,14 @@ export function parseThermalStatus(output) {
 
 export function verifyBuildMetadata(metadata, artifact) {
   const errors = [];
-  if (metadata.schemaVersion !== 1) errors.push("unsupported metadata schema");
+  if (metadata.schemaVersion !== 2) errors.push("unsupported metadata schema");
   if (metadata.applicationId !== applicationId) errors.push("wrong application ID");
   if (metadata.buildType !== "internal-release") errors.push("not an internal release build");
   if (metadata.abi !== "arm64-v8a") errors.push("not an ARM64 build");
+  if (metadata.narration?.profile !== "offline-voice-candidate")
+    errors.push("not an offline-voice candidate build");
+  if (metadata.narration?.candidateStatus !== "candidate-not-accepted")
+    errors.push("offline-voice candidate status is missing");
   if (metadata.artifact?.fileName !== basename(artifact.path))
     errors.push("artifact filename mismatch");
   if (metadata.artifact?.sizeBytes !== artifact.sizeBytes) errors.push("artifact size mismatch");

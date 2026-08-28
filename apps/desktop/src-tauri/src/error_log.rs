@@ -8,6 +8,8 @@ use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
+use crate::build_identity;
+
 const ERROR_LOG_VERSION: u8 = 1;
 const MAX_SCOPE_CHARS: usize = 120;
 const MAX_MESSAGE_CHARS: usize = 4_000;
@@ -58,6 +60,14 @@ struct ErrorLogEntry {
     build_commit: String,
     #[serde(default = "local_build_identity")]
     narration_catalog_sha256: String,
+    #[serde(default = "local_build_identity")]
+    build_type: String,
+    #[serde(default = "local_build_identity")]
+    abi: String,
+    #[serde(default = "local_build_identity")]
+    narration_profile: String,
+    #[serde(default = "local_build_identity")]
+    narration_model_revision: String,
     platform: String,
     process_id: u32,
 }
@@ -77,6 +87,17 @@ pub fn initialize(app: &AppHandle) -> Result<PathBuf, String> {
     initialize_document(&path)?;
     let _ = ERROR_LOG_PATH.set(path.clone());
     install_panic_reporter();
+    let build = build_identity::current();
+    eprintln!(
+        "[sonelle][startup] version={} commit={} build_type={} abi={} narration_profile={} narration_model_revision={} catalog_sha256={}",
+        build.version,
+        build.commit_revision,
+        build.build_type,
+        build.abi,
+        build.narration_profile,
+        build.narration_model_revision,
+        build.narration_catalog_sha256
+    );
     eprintln!("[sonelle][diagnostics] error_log={}", path.display());
     Ok(path)
 }
@@ -122,6 +143,7 @@ impl ErrorLogEntry {
         stack: Option<&str>,
         details: Option<&str>,
     ) -> Self {
+        let identity = build_identity::current();
         Self {
             timestamp: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
             source: sanitize(source, 32),
@@ -135,12 +157,12 @@ impl ErrorLogEntry {
             } else {
                 "production".to_string()
             },
-            build_commit: option_env!("SONELLE_BUILD_COMMIT")
-                .unwrap_or("local")
-                .to_string(),
-            narration_catalog_sha256: option_env!("SONELLE_NARRATION_CATALOG_SHA256")
-                .unwrap_or("local")
-                .to_string(),
+            build_commit: identity.commit_revision.to_string(),
+            narration_catalog_sha256: identity.narration_catalog_sha256.to_string(),
+            build_type: identity.build_type.to_string(),
+            abi: identity.abi.to_string(),
+            narration_profile: identity.narration_profile.to_string(),
+            narration_model_revision: identity.narration_model_revision.to_string(),
             platform: std::env::consts::OS.to_string(),
             process_id: std::process::id(),
         }
@@ -286,6 +308,10 @@ mod tests {
         assert_eq!(document.errors[0].scope, "audio.playback");
         assert!(!document.errors[0].build_commit.is_empty());
         assert!(!document.errors[0].narration_catalog_sha256.is_empty());
+        assert!(!document.errors[0].build_type.is_empty());
+        assert!(!document.errors[0].abi.is_empty());
+        assert!(!document.errors[0].narration_profile.is_empty());
+        assert!(!document.errors[0].narration_model_revision.is_empty());
         assert_eq!(document.errors[1].source, "native");
 
         let _ = fs::remove_dir_all(root);
@@ -335,5 +361,9 @@ mod tests {
 
         assert_eq!(document.errors[0].build_commit, "local");
         assert_eq!(document.errors[0].narration_catalog_sha256, "local");
+        assert_eq!(document.errors[0].build_type, "local");
+        assert_eq!(document.errors[0].abi, "local");
+        assert_eq!(document.errors[0].narration_profile, "local");
+        assert_eq!(document.errors[0].narration_model_revision, "local");
     }
 }

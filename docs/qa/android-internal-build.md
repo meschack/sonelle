@@ -1,7 +1,8 @@
 # Android Internal Build
 
-The `Android Internal Build` GitHub workflow produces a signed, release-like ARM64 APK for device
-QA. It is an internal artifact, not a Play Store release and not a substitute for the device matrix.
+The `Android Internal Build` GitHub workflow produces a signed, release-like ARM64 APK containing
+the explicitly gated Supertonic INT8 candidate. It is an internal artifact, not a Play Store release,
+model acceptance, or a substitute for the device matrix.
 
 ## One-time repository setup
 
@@ -29,23 +30,25 @@ The workflow:
    pinned Node, Rust, Android, Java, and NDK toolchain;
 2. derives the next internal version from the existing release tags;
 3. reconstructs signing files only inside the runner;
-4. builds the production frontend and Android/Rust release profiles for ARM64;
+4. audits the candidate dependency graph and builds the production frontend plus Android/Rust
+   release profiles for ARM64 with `android-offline-voice-candidate`;
 5. rejects an unsigned APK with Android Build Tools' `apksigner`;
 6. uploads the signed APK and `build-metadata.json` for 14 days;
 7. removes the temporary keystore and signing properties.
 
-`build-metadata.json` records application ID, version, exact commit, release build type, ABI, APK
-size and SHA-256, narration-catalog SHA-256, and each pinned model revision. The same commit and
-catalog identity are compiled into local error diagnostics. This lets device reports identify the
-binary without exposing signing material or reader data.
+`build-metadata.json` schema 2 records application ID, version, exact commit, release build type,
+ABI, APK size and SHA-256, narration profile, candidate status, narration-catalog SHA-256, and the
+pinned Supertonic revision. The same identity is returned by the native `app_status` command, printed
+at startup, and stored with local error diagnostics. This lets device reports identify the binary
+without exposing signing material or reader data.
 
 ## Device QA
 
 Download both files from the workflow artifact. Verify the APK again before installation:
 
 ```bash
-apksigner verify --verbose sonelle-internal-arm64.apk
-sha256sum sonelle-internal-arm64.apk
+apksigner verify --verbose sonelle-offline-voice-candidate-arm64.apk
+sha256sum sonelle-offline-voice-candidate-arm64.apk
 ```
 
 Compare the hash with `build-metadata.json`, then run the physical-device procedure in
@@ -58,7 +61,11 @@ compatibility or background narration.
 The existing release-like Android build command remains available for local work:
 
 ```bash
-pnpm --filter @sonelle/desktop tauri android build --target aarch64 --apk --ci
+pnpm --filter @sonelle/desktop tauri android build \
+  --target aarch64 \
+  --features android-offline-voice-candidate \
+  --apk \
+  --ci
 ```
 
 Local signing may use `apksigner` as documented in

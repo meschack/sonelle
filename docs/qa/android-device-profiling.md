@@ -23,7 +23,11 @@ release profiles; a debug APK is not performance evidence.
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm --filter @sonelle/desktop tauri android build --target aarch64 --apk --ci
+pnpm --filter @sonelle/desktop tauri android build \
+  --target aarch64 \
+  --features android-offline-voice-candidate \
+  --apk \
+  --ci
 ```
 
 The Android release artifact is unsigned unless a release signing configuration is supplied. For a
