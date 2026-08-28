@@ -427,11 +427,11 @@ describe("ReaderExperience integration", () => {
     expect(container.querySelector(".mobile-reader-playback-slot .audio-rail")).toBeNull();
     expect(container.querySelector(".mobile-reader-title")?.textContent).toContain("Pocket Reader");
 
-    container.querySelector<HTMLButtonElement>('[aria-label="Open narration controls"]')?.click();
+    expect(container.querySelector('[aria-label="Open narration controls"]')).toBeNull();
+    expect(container.querySelector(".mobile-narration-copy")).toBeNull();
+    container.querySelector<HTMLButtonElement>('[aria-label="Open reading tools"]')?.click();
     await vi.waitFor(() =>
-      expect(
-        container.querySelector('[role="dialog"][aria-label="Narration controls"]')
-      ).not.toBeNull()
+      expect(container.querySelector('[role="dialog"][aria-label="Reading tools"]')).not.toBeNull()
     );
     expect(container.querySelector('[aria-label="Narration voice"]')).not.toBeNull();
     const mobileVolume = container.querySelector<HTMLInputElement>(
@@ -441,11 +441,12 @@ describe("ReaderExperience integration", () => {
     expect(mobileVolume?.value).toBe("1.2");
     expect(mobileVolume?.getAttribute("aria-valuetext")).toBe("120 percent");
     expect(container.querySelector('[aria-label="Narration stop setting"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="Book text size"]')).toBeNull();
-    expect(container.textContent).not.toContain("Book details");
-    container.querySelector<HTMLButtonElement>(".mobile-narration-sheet > header button")?.click();
+    expect(container.querySelector('[aria-label="Book text size"]')).not.toBeNull();
+    container
+      .querySelector<HTMLButtonElement>(".mobile-reader-tools-sheet > header button")
+      ?.click();
     await vi.waitFor(() =>
-      expect(container.querySelector('[role="dialog"][aria-label="Narration controls"]')).toBeNull()
+      expect(container.querySelector('[role="dialog"][aria-label="Reading tools"]')).toBeNull()
     );
 
     const chapter = container.querySelector<HTMLSelectElement>(
@@ -1534,9 +1535,7 @@ describe("ReaderExperience integration", () => {
     const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
 
     const browse = await vi.waitFor(() => {
-      const button = Array.from(container.querySelectorAll("button")).find(
-        (candidate) => candidate.textContent?.trim() === "Browse contents"
-      );
+      const button = container.querySelector<HTMLButtonElement>('[aria-label="Browse contents"]');
       expect(button).not.toBeUndefined();
       return button;
     });

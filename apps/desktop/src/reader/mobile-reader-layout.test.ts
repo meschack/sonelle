@@ -25,8 +25,8 @@ describe("mobile reader layout contract", () => {
     expect(productShellCss).toContain("--mobile-touch-target: 48px");
     expect(productShellCss).toContain("calc(8px + env(safe-area-inset-top))");
     expect(productShellCss).toContain("env(safe-area-inset-bottom)");
-    expect(productShellCss).toContain('"copy settings"');
-    expect(productShellCss).toContain('"transport transport"');
+    expect(productShellCss).toContain(".reader-chapter-controls");
+    expect(productShellCss).toContain("justify-content: center");
   });
 
   it("keeps the reading surface ordered and reachable under large text", () => {

@@ -1,9 +1,8 @@
 import { createUniqueId, Show } from "solid-js";
 import type { PlaybackStatus, ReaderProgress } from "@sonelle/reader";
-import { NextIcon, PauseIcon, PlayIcon, PreviousIcon, SettingsIcon } from "./reader-icons";
+import { NextIcon, PauseIcon, PlayIcon, PreviousIcon } from "./reader-icons";
 
 interface MobileNarrationDockProps {
-  chapterTitle: string;
   progress: ReaderProgress;
   sentenceCount: number;
   status: PlaybackStatus;
@@ -13,7 +12,6 @@ interface MobileNarrationDockProps {
   onToggle(): void;
   onNext(): void;
   onStop(): void;
-  onOpenControls(): void;
 }
 
 export function MobileNarrationDock(props: MobileNarrationDockProps) {
@@ -42,13 +40,9 @@ export function MobileNarrationDock(props: MobileNarrationDockProps) {
       aria-label="Narration controls"
       aria-describedby={statusId}
     >
-      <div class="mobile-narration-copy">
-        <span id={statusId}>{statusLabel()}</span>
-        <strong title={props.chapterTitle}>{props.chapterTitle}</strong>
-        <small>
-          Sentence {props.progress.chapterSentenceNumber} of {props.progress.chapterSentenceCount}
-        </small>
-      </div>
+      <span id={statusId} class="reader-visually-hidden">
+        {statusLabel()}
+      </span>
       <div class="mobile-narration-transport" role="group" aria-label="Narration transport">
         <button
           type="button"
@@ -84,17 +78,6 @@ export function MobileNarrationDock(props: MobileNarrationDockProps) {
           <span class="mobile-narration-stop-glyph" aria-hidden="true" />
         </button>
       </div>
-      <button
-        classList={{
-          "mobile-narration-settings": true,
-          attention: props.notice != null
-        }}
-        type="button"
-        aria-label={props.notice == null ? "Open narration controls" : "Open narration recovery"}
-        onClick={props.onOpenControls}
-      >
-        <SettingsIcon />
-      </button>
       <Show when={props.notice}>
         {(notice) => (
           <span class="reader-visually-hidden" role="alert">

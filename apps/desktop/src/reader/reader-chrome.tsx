@@ -3,6 +3,7 @@ import type { PlaybackStatus, ReaderProgress } from "@sonelle/reader";
 import type { ReaderChapterNavigationItem, ReaderContentsItem } from "./reader-view";
 import {
   BookmarkIcon,
+  ContentsIcon,
   FocusIcon,
   HelpIcon,
   NextIcon,
@@ -219,11 +220,13 @@ export function ReaderContentsNavigator(props: ReaderContentsNavigatorProps) {
           ref={trigger}
           class="mobile-contents-trigger"
           type="button"
+          aria-label="Browse contents"
+          title="Browse contents"
           aria-expanded={open()}
           aria-controls="reader-contents-panel"
           onClick={openContents}
         >
-          Browse contents
+          <ContentsIcon />
         </button>
       </Show>
       <Show when={open()}>

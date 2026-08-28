@@ -61,11 +61,7 @@ import { ReaderToast } from "./reader-feedback";
 import type { LibraryBookSummary } from "../library/library-models";
 import type { AppView, InspectorTab, SelectedWord } from "./reader-experience-types";
 import { cssFontFamilyStack, isTypingTarget } from "./reader-formatting";
-import {
-  MobileNarrationControls,
-  ReaderInspector,
-  type ReaderInspectorModel
-} from "./reader-inspector";
+import { ReaderInspector, type ReaderInspectorModel } from "./reader-inspector";
 import {
   clampSidebarWidth,
   getSidebarResizeBounds,
@@ -241,13 +237,11 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     dependencies.readerShellViewport.isMobile()
   );
   const [mobileToolsOpen, setMobileToolsOpen] = createSignal(false);
-  const [mobileNarrationOpen, setMobileNarrationOpen] = createSignal(false);
   onCleanup(
     dependencies.readerShellViewport.listen((mobile) => {
       setMobileReaderShell(mobile);
       if (!mobile) {
         setMobileToolsOpen(false);
-        setMobileNarrationOpen(false);
       }
     })
   );
@@ -1634,7 +1628,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   } satisfies ReaderContentInteractions;
 
   const readerNavigation = () => (
-    <>
+    <div class="reader-chapter-controls">
       <ChapterNavigator
         chapters={reader().chapters}
         activeChapterId={reader().chapter.id}
@@ -1647,7 +1641,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         activeChapterId={reader().chapter.id}
         onOpenLocation={navigationApplication.openLocation}
       />
-    </>
+    </div>
   );
 
   const readerReadingColumn = () => (
@@ -1728,7 +1722,6 @@ export function ReaderExperience(props: ReaderExperienceProps) {
 
   const mobileNarrationDock = () => (
     <MobileNarrationDock
-      chapterTitle={reader().chapter.title}
       progress={readerProgress()}
       sentenceCount={reader().sentences.length}
       status={playback().status}
@@ -1738,9 +1731,6 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       onToggle={togglePlayback}
       onNext={() => moveSentence(1)}
       onStop={() => void stopReaderPlayback()}
-      onOpenControls={() => {
-        setMobileNarrationOpen(true);
-      }}
     />
   );
 
@@ -1780,7 +1770,6 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         setActiveView("library");
         setDistractionFree(false);
         setMobileToolsOpen(false);
-        setMobileNarrationOpen(false);
         sendLibraryRailEvent({ type: "library-opened" });
       });
     }),
@@ -1921,12 +1910,10 @@ export function ReaderExperience(props: ReaderExperienceProps) {
             navigation={readerNavigation()}
             content={readerReadingColumn()}
             tools={<ReaderInspector model={inspectorModel} />}
-            narration={<MobileNarrationControls model={inspectorModel.settings} />}
             playback={mobileNarrationDock()}
             libraryBooks={libraryBooks()}
             activeBookId={reader().book.id}
             toolsOpen={mobileToolsOpen()}
-            narrationOpen={mobileNarrationOpen()}
             onOpenBook={(bookId) => libraryApplication.open(bookId)}
             onOpenFullLibrary={() => openAppView("library")}
             onOpenSearch={() => {
@@ -1938,7 +1925,6 @@ export function ReaderExperience(props: ReaderExperienceProps) {
               setMobileToolsOpen(true);
             }}
             onCloseTools={() => setMobileToolsOpen(false)}
-            onCloseNarration={() => setMobileNarrationOpen(false)}
           />
         </Show>
         {readerFeedback()}
