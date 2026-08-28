@@ -706,6 +706,63 @@ describe("ReaderExperience integration", () => {
     container.remove();
   });
 
+  it("offers one relevant recovery action and retries the failed sentence", async () => {
+    const requestPlayback = vi.fn();
+    let projectNarration: ((event: ReaderNarrationProjectionEvent) => void) | undefined;
+    const reader = buildFixtureReaderView();
+    const failedSentence = reader.sentences[1];
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      requestPlayback,
+      captureNarrationProjection: (project) => {
+        projectNarration = project;
+      }
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+    await vi.waitFor(() => expect(projectNarration).toBeTypeOf("function"));
+    await vi.waitFor(() => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Play"]')?.click();
+      expect(requestPlayback).toHaveBeenCalled();
+    });
+    requestPlayback.mockClear();
+
+    projectNarration?.(
+      createDomainEvent("NarrationPlaybackFailed", {
+        bookId: reader.book.id,
+        chapterId: reader.chapter.id,
+        sentenceId: failedSentence.id,
+        passageId: "failed-passage",
+        outcome: "preparation-failed",
+        reason: "Narration couldn't be prepared. Please try again."
+      })
+    );
+
+    const retry = await vi.waitFor(() => {
+      const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+        (candidate) => candidate.textContent?.trim() === "Retry narration"
+      );
+      expect(button).not.toBeUndefined();
+      return button;
+    });
+    expect(container.textContent).not.toContain("Repair voice");
+    expect(container.querySelector(".sentence.active")?.textContent).toContain(failedSentence.text);
+
+    retry?.click();
+    await vi.waitFor(() =>
+      expect(requestPlayback).toHaveBeenCalledExactlyOnceWith(failedSentence.id)
+    );
+    expect(container.querySelector(".sentence.active")?.textContent).toContain(failedSentence.text);
+
+    dispose();
+    container.remove();
+  });
+
   it("adds, removes, and opens persisted Android bookmarks through the reader", async () => {
     const bookId = "book-android-bookmarks";
     const targetChapterId = `${bookId}-chapter-2`;

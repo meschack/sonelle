@@ -214,6 +214,7 @@ function fakePlayback(
     prefetchChanged: vi.fn(),
     positionChanged: vi.fn(),
     toggle: vi.fn(),
+    retryNarration: vi.fn(),
     move: vi.fn(),
     select: vi.fn(),
     activate: vi.fn(),

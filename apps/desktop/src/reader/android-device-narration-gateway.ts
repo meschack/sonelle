@@ -125,7 +125,8 @@ export function createAndroidDeviceNarrationGateway(
               chapterId: reader.chapter.id,
               sentenceId: currentSentenceId,
               passageId: currentPassageId,
-              reason: "This device voice needs attention."
+              outcome: "device-voice-unavailable",
+              reason: "This device voice isn't available. Choose another voice."
             })
           );
           return;

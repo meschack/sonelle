@@ -1267,6 +1267,35 @@
   color: #42675e;
 }
 
+.reader-toast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.reader-toast-actions button {
+  background: #7f241b;
+  border: 1px solid #7f241b;
+  border-radius: 7px;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 40px;
+  padding: 6px 10px;
+}
+
+.reader-toast-actions button + button {
+  background: transparent;
+  color: #7f241b;
+}
+
+.reader-toast-actions button:focus-visible {
+  outline: 2px solid #c75c4e;
+  outline-offset: 2px;
+}
+
 .reader-toast-close {
   align-items: center;
   background: transparent;

@@ -123,7 +123,9 @@ describe("Android device narration gateway", () => {
     );
 
     gateway.start("sentence-1");
-    await vi.waitFor(() => expect(failures).toEqual(["This device voice needs attention."]));
+    await vi.waitFor(() =>
+      expect(failures).toEqual(["This device voice isn't available. Choose another voice."])
+    );
     expect(gateway.readiness()).toBe("needs-attention");
   });
 

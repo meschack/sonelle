@@ -6,6 +6,7 @@ interface ReaderToastProps {
   message: string;
   title?: string;
   tone?: "error" | "warning" | "pending" | "success";
+  actions?: readonly { label: string; onSelect(): void }[];
   onDismiss?: () => void;
 }
 
@@ -42,6 +43,15 @@ export function ReaderToast(props: ReaderToastProps) {
         <div class="reader-toast-copy">
           <strong>{title()}</strong>
           <p>{props.message}</p>
+          <Show when={props.actions != null && props.actions.length > 0}>
+            <div class="reader-toast-actions">
+              {props.actions?.map((action) => (
+                <button type="button" onClick={action.onSelect}>
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </Show>
         </div>
         <Show when={props.onDismiss != null}>
           <button

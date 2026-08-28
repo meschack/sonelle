@@ -1,6 +1,6 @@
 import type { AudioSettings } from "@sonelle/audio";
 import type { NarrationGateway } from "@sonelle/audio/narration";
-import type { DomainEvent, DomainEventDispatcher } from "@sonelle/domain";
+import type { DomainEvent, DomainEventDispatcher, NarrationFailureOutcome } from "@sonelle/domain";
 import {
   createReadingPositionScheduler,
   movePlayback,
@@ -42,6 +42,7 @@ interface ReaderPlaybackApplicationOptions {
   allowsChapterTransition(): boolean;
   projectPlayback(update: (current: ReaderPlaybackState) => ReaderPlaybackState): void;
   projectNotice(message: string | null): void;
+  projectRecovery(outcome: NarrationFailureOutcome | null): void;
   projectAudible(audible: boolean): void;
   projectPreparing(preparing: boolean): void;
   projectJump(update: (current: ReaderPlaybackState) => ReaderPlaybackState): void;
@@ -58,6 +59,7 @@ export interface ReaderPlaybackApplication {
   prefetchChanged(): void;
   positionChanged(): void;
   toggle(): void;
+  retryNarration(): void;
   move(direction: -1 | 1): void;
   select(sentenceIndex: number): void;
   activate(
@@ -95,6 +97,7 @@ export function createReaderPlaybackApplication(
   let narrationControlRun = 0;
   let pendingNarrationControls = 0;
   let narrationControlSettled = Promise.resolve();
+  let retryTarget: { bookId: string; chapterId: string; sentenceId: string } | null = null;
 
   const settleNarrationControl = (control: () => Promise<void>): Promise<void> => {
     narrationControlRun += 1;
@@ -153,9 +156,18 @@ export function createReaderPlaybackApplication(
       return;
     }
     if (options.currentPlayback().status === "playing" || options.narrationAudible()) return;
-    options.projectPlayback((current) =>
-      playPlayback(current, options.currentReader().sentences.length)
-    );
+    const reader = options.currentReader();
+    const retrySentenceIndex =
+      retryTarget?.bookId === reader.book.id && retryTarget.chapterId === reader.chapter.id
+        ? reader.sentences.findIndex((sentence) => sentence.id === retryTarget?.sentenceId)
+        : -1;
+    options.projectPlayback((current) => {
+      const selected =
+        retrySentenceIndex < 0
+          ? current
+          : selectPlaybackSentence(current, reader.sentences.length, retrySentenceIndex);
+      return playPlayback(selected, reader.sentences.length);
+    });
   };
 
   const commitJump = (resolve: (current: ReaderPlaybackState) => ReaderPlaybackState) => {
@@ -169,6 +181,8 @@ export function createReaderPlaybackApplication(
     }
 
     const reader = options.currentReader();
+    retryTarget = null;
+    options.projectRecovery(null);
     const sentence = reader.sentences[next.activeSentenceIndex];
     const shouldResume = current.status === "playing" || options.narrationAudible();
     const run = ++jumpRun;
@@ -253,7 +267,11 @@ export function createReaderPlaybackApplication(
             void settleNarrationControl(() => dependencies.narration.stop());
         }),
         dependencies.eventDispatcher.subscribe("NarrationSettingsChanged", (event) => {
-          if (isUserVoiceChange(event)) options.projectNotice(null);
+          if (isUserVoiceChange(event)) {
+            retryTarget = null;
+            options.projectNotice(null);
+            options.projectRecovery(null);
+          }
         }),
         dependencies.eventDispatcher.subscribe("NarrationSettingsChanged", (event) => {
           if (isUserVoiceChange(event)) options.projectAudible(false);
@@ -354,6 +372,11 @@ export function createReaderPlaybackApplication(
       }
       requestPlayback();
     },
+    retryNarration() {
+      if (retryTarget == null) return;
+      sessionProjectedPlaybackChange = false;
+      requestPlayback();
+    },
     move(direction) {
       commitJump((current) =>
         movePlayback(current, options.currentReader().sentences.length, direction)
@@ -370,6 +393,8 @@ export function createReaderPlaybackApplication(
       playbackStatus = "idle"
     ) {
       positionScheduler.flush();
+      retryTarget = null;
+      options.projectRecovery(null);
       await positionSaveSettled;
       nextPositionSaveIntent = "immediate";
       options.clearSentenceElements();
@@ -390,6 +415,17 @@ export function createReaderPlaybackApplication(
         reader.chapter.id !== event.payload.chapterId
       ) {
         return;
+      }
+      if (event.name === "NarrationPlaybackFailed") {
+        retryTarget = {
+          bookId: event.payload.bookId,
+          chapterId: event.payload.chapterId,
+          sentenceId: event.payload.sentenceId
+        };
+        options.projectRecovery(event.payload.outcome);
+      } else if (event.name === "NarrationSentenceEntered") {
+        retryTarget = null;
+        options.projectRecovery(null);
       }
       nextPositionSaveIntent = event.name === "NarrationSentenceEntered" ? "playback" : "immediate";
       options.projectPreparing(false);
@@ -413,6 +449,8 @@ export function createReaderPlaybackApplication(
     },
     async stop() {
       cancelChapterTransition();
+      retryTarget = null;
+      options.projectRecovery(null);
       positionScheduler.flush();
       const pauseSettled = settleNarrationControl(async () => {
         await positionSaveSettled;
@@ -428,6 +466,7 @@ export function createReaderPlaybackApplication(
     },
     dispose() {
       narrationControlRun += 1;
+      retryTarget = null;
       cancelChapterTransition();
       positionScheduler.flush();
       dependencies.mediaSession.clear();

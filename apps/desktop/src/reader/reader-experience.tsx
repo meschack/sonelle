@@ -15,7 +15,11 @@ import {
   isAndroidDeviceVoiceId,
   type AudioSettings
 } from "@sonelle/audio";
-import { createDomainEvent, type AnyDomainEvent } from "@sonelle/domain";
+import {
+  createDomainEvent,
+  type AnyDomainEvent,
+  type NarrationFailureOutcome
+} from "@sonelle/domain";
 import {
   bookmarkedBookIds,
   filterLibraryBooks,
@@ -118,6 +122,10 @@ import {
   type BookNarrationReadiness
 } from "./reader-book-narration-preparation";
 import { createReaderNarrationSettingsWorkflow } from "./reader-narration-settings-workflow";
+import {
+  narrationRecoveryFor,
+  type NarrationRecoveryActionKind
+} from "./reader-narration-recovery";
 import { createReaderAppearanceWorkflow } from "./reader-appearance-workflow";
 import { createReaderTypographyWorkflow } from "./reader-typography-workflow";
 import {
@@ -269,6 +277,9 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const [isLibraryDropTarget, setIsLibraryDropTarget] = createSignal(false);
   const [playback, setPlayback] = createSignal(createPlaybackState());
   const [narrationNotice, setNarrationNotice] = createSignal<string | null>(null);
+  const [narrationRecovery, setNarrationRecovery] = createSignal<NarrationFailureOutcome | null>(
+    null
+  );
   const [narrationPreparing, setNarrationPreparing] = createSignal(false);
   const [showNarrationPreparation, setShowNarrationPreparation] = createSignal(false);
   const [narrationAudible, setNarrationAudible] = createSignal(false);
@@ -448,8 +459,10 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       projectPlayback: setPlayback,
       projectNotice: (message) => {
         if (message != null) setInspectorTab("settings");
+        if (message == null) setNarrationRecovery(null);
         setNarrationNotice(message);
       },
+      projectRecovery: setNarrationRecovery,
       projectAudible: setNarrationAudible,
       projectPreparing: setNarrationPreparing,
       projectJump(update) {
@@ -1213,6 +1226,65 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const togglePlayback = playbackApplication.toggle;
   const moveSentence = playbackApplication.move;
   const selectSentence = playbackApplication.select;
+  const openNarrationSettings = () => {
+    setInspectorTab("settings");
+    if (mobileReaderShell()) setMobileToolsOpen(true);
+  };
+  const requestActiveOfflineVoice = () => {
+    if (narrationService.capabilities.offlineLibrary === "language-pack") {
+      const engine = routeNarrationEngine(reader().book.language, { mode: "hybrid-v1" }).engineId;
+      requestNarrationProfileWithSpaceCheck(engine === "kokoro" ? "english" : "multilingual");
+      return;
+    }
+    if (narrationService.capabilities.offlineLibrary === "individual-voice") {
+      const installation = voiceInstallation();
+      void narrationStorageApplication
+        .requestVoicePackInstallation(
+          {
+            packId: installation.voiceId,
+            downloadSizeBytes: installation.downloadSizeBytes,
+            stagedBytes: installation.downloadedBytes > 0 ? installation.downloadedBytes : undefined
+          },
+          offlineNarrationApplication.requestSelectedVoice
+        )
+        .catch((error) => reportAppError("narration-storage.preflight", error));
+    }
+  };
+  const performNarrationRecovery = (kind: NarrationRecoveryActionKind) => {
+    setNarrationNotice(null);
+    setNarrationRecovery(null);
+    switch (kind) {
+      case "retry":
+        playbackApplication.retryNarration();
+        return;
+      case "install-voice":
+      case "repair-voice":
+        openNarrationSettings();
+        requestActiveOfflineVoice();
+        return;
+      case "manage-storage":
+        setStorageNotice("Remove unused narration files, then retry narration.");
+        openNarrationSettings();
+        return;
+      case "choose-voice":
+        openNarrationSettings();
+    }
+  };
+  const narrationRecoveryActions = createMemo(() => {
+    const outcome = narrationRecovery();
+    if (outcome == null) return [];
+    const recovery = narrationRecoveryFor(
+      outcome,
+      !isAndroidDeviceVoiceId(audioSettings().voiceId) &&
+        narrationVoices().some((voice) => isAndroidDeviceVoiceId(voice.id))
+    );
+    return [recovery.primary, recovery.secondary]
+      .filter((action) => action != null)
+      .map((action) => ({
+        label: action.label,
+        onSelect: () => performNarrationRecovery(action.kind)
+      }));
+  });
 
   const moveChapter = (direction: -1 | 1) => {
     const currentReader = reader();
@@ -1757,7 +1829,16 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         </Show>
       }
     >
-      {(notice) => <ReaderToast message={notice()} onDismiss={() => setNarrationNotice(null)} />}
+      {(notice) => (
+        <ReaderToast
+          message={notice()}
+          actions={narrationRecoveryActions()}
+          onDismiss={() => {
+            setNarrationNotice(null);
+            setNarrationRecovery(null);
+          }}
+        />
+      )}
     </Show>
   );
 
