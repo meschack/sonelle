@@ -34,9 +34,10 @@ supported non-English sentences into one manifest-backed WAV. Both providers reu
 sessions and accept terminable run options.
 
 The mobile candidate tool transforms the exact pinned Supertonic snapshot into a dynamic QInt8
-artifact set behind an ignored local catalog. Its manifest remains `candidate-not-accepted`; the
-production catalog cannot discover it implicitly. Candidate identity includes every measured size
-and SHA-256, and native synthesis must pass before the tool publishes the directory.
+artifact set. Its manifest remains `candidate-not-accepted`; the public application cannot discover
+it implicitly. An explicit internal arm64 Cargo feature compiles the Android Supertonic adapter and
+consumes a separate hosted-artifact catalog. Candidate identity includes every measured size and
+SHA-256, and native synthesis must pass before the tool publishes the directory.
 
 The session keeps three contextual Kokoro passages prepared. Supertonic groups at most two ordinary
 sentences per passage and keeps two passages prepared, while one reusable runtime and one ONNX thread
@@ -78,7 +79,9 @@ Prepared-audio removal stays event-driven: after approval the workflow publishes
 `PreparedNarrationClearingRequested`, so preparation is cancelled through the existing reaction
 before the desktop executor deletes files; it never stops playback automatically and refuses
 active or paused listening instead. Voice-pack removal runs directly through the repository's
-narrow native command while sharing the owner lock with pack installation.
+narrow native command while sharing the owner lock with pack installation. The internal arm64
+candidate uses this same storage boundary; builds without that capability report no owned model or
+prepared-audio storage.
 
 The native storage module derives two canonical narration roots from the application-data
 directory — `$APPDATA/narration-v3` for prepared narration and `$APPDATA/narration-engines` for
@@ -86,13 +89,13 @@ managed engines and packs — validates typed identifiers before joining paths, 
 traversal, and canonical escapes, measures directories with saturating arithmetic, and removes one
 authorized target under the shared owner lock. It refuses everything else in application data,
 including `sonelle.sqlite3`, covers, import sources, Piper runtime files, and device TTS. Android
-reports an honest empty voice-pack inventory until #104 supplies accepted artifacts.
+reports an honest empty voice-pack inventory unless the internal arm64 candidate owns a verified
+installation.
 
-## Production Gaps (deferred to #104/#110)
+## Production Gaps
 
-- Android installation-commit free-space recheck against real device storage (#104)
-- Accepted Android offline-pack inventory, verification, and installed-pack removal (#104)
-- Persisted prepared-audio inventory and its native executor on Android (#110)
+- acceptance of the Android model and runtime on the baseline devices (#102)
+- listening and pronunciation acceptance of the candidate voices (#103)
 - Device QA proofs: actual low-space install failure and recovery, deletion of real prepared
   narration, deletion of a real inactive accepted pack, playback races, and protected library
   state on hardware

@@ -64,6 +64,61 @@ describe("reader offline narration application", () => {
     stop();
   });
 
+  it("checks only the standard multilingual voice files on Android", async () => {
+    const getStatus = vi.fn(async (engineId: "kokoro" | "supertonic") => ({
+      engineId,
+      status: "not-installed" as const,
+      modelRevision: "mobile-candidate",
+      downloadSizeBytes: 102_975_099,
+      downloadedBytes: 0,
+      progress: null,
+      message: "Download Sonelle's offline voice."
+    }));
+    const projectNarrationProfile = vi.fn();
+    const application = createReaderOfflineNarrationApplication(
+      {
+        audioCache: {
+          getStats: vi.fn().mockResolvedValue({ sentenceCount: 0, sizeBytes: 0 }),
+          getChapterStats: vi.fn().mockResolvedValue([]),
+          clear: vi.fn().mockResolvedValue({ sentenceCount: 0, sizeBytes: 0 })
+        },
+        engineInstallations: {
+          getStatus,
+          install: vi.fn(),
+          listen: vi.fn().mockResolvedValue(() => undefined)
+        },
+        eventDispatcher: createDomainEventDispatcher(),
+        narration: fakeNarrationGateway(),
+        offlineLibrary: "mobile-standard",
+        voiceInstallations: {
+          getStatus: vi.fn(),
+          install: vi.fn(),
+          listen: vi.fn()
+        },
+        friendlyError: () => "Narration needs attention."
+      },
+      {
+        currentBookId: () => "book-1",
+        selectedVoiceId: () => "supertonic:F1",
+        projectAudioCache: vi.fn(),
+        projectAudioCacheNotice: vi.fn(),
+        projectEngineInstallation: vi.fn(),
+        projectNarrationProfile,
+        projectNarrationNotice: vi.fn(),
+        projectVoiceInstallation: vi.fn()
+      }
+    );
+
+    const stop = await application.start();
+
+    expect(getStatus).toHaveBeenCalledTimes(1);
+    expect(getStatus).toHaveBeenCalledWith("supertonic");
+    expect(projectNarrationProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "standard", label: "Sonelle offline voice" })
+    );
+    stop();
+  });
+
   it("owns selected-voice installation and event-driven prepared audio maintenance", async () => {
     const install = vi.fn().mockResolvedValue(undefined);
     const getStatus = vi.fn().mockResolvedValue({

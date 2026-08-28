@@ -35,8 +35,8 @@ describe("reader narration session dependency selection", () => {
   });
 
   it("keeps desktop narration packs out of the Android capability surface", () => {
-    expect(resolveOfflineNarrationLibrary(true, true)).toBe("unavailable");
-    expect(resolveOfflineNarrationLibrary(true, false)).toBe("unavailable");
+    expect(resolveOfflineNarrationLibrary(true, true)).toBe("mobile-standard");
+    expect(resolveOfflineNarrationLibrary(true, false)).toBe("mobile-standard");
     expect(resolveOfflineNarrationLibrary(false, true)).toBe("language-pack");
     expect(resolveOfflineNarrationLibrary(false, false)).toBe("individual-voice");
   });

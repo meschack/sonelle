@@ -1839,6 +1839,34 @@ describe("ReaderExperience integration", () => {
     dispose();
     container.remove();
   });
+
+  it("shows one honest Sonelle voice profile when the Android candidate is unavailable", async () => {
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      engineStatus: "unavailable",
+      offlineLibrary: "mobile-standard"
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    clickInspectorTab(container, "Tools");
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain(
+        "This build does not include Sonelle's experimental offline voice."
+      )
+    );
+    expect(container.textContent).toContain("Sonelle offline voice");
+    expect(container.textContent).not.toContain("English narration");
+    expect(container.textContent).not.toContain("Download files");
+
+    dispose();
+    container.remove();
+  });
 });
 
 function clickInspectorTab(container: HTMLElement, label: string) {
@@ -1858,8 +1886,8 @@ interface DependencySpies {
   savePreferences?: (preferences: ReaderPreferences) => void;
   saveAudioSettings?: (settings: AudioSettings) => void;
   requestPlayback?: (sentenceId: string) => void;
-  engineStatus?: "ready" | "not-installed";
-  offlineLibrary?: "individual-voice" | "language-pack" | "unavailable";
+  engineStatus?: "ready" | "not-installed" | "unavailable";
+  offlineLibrary?: "individual-voice" | "language-pack" | "mobile-standard" | "unavailable";
   readerPreferences?: ReaderPreferences;
   exportQuoteImage?: (content: {
     sentenceTexts: string[];
@@ -1972,7 +2000,9 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
         message:
           spies.engineStatus === "not-installed"
             ? "Download narration files to listen offline."
-            : "Ready"
+            : spies.engineStatus === "unavailable"
+              ? "This build does not include Sonelle's experimental offline voice."
+              : "Ready"
       })),
       install: vi.fn(async (engineId) => ({
         engineId,

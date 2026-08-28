@@ -7,8 +7,10 @@ import { createNoopMediaSessionGateway, type MediaSessionGateway } from "@sonell
 import {
   activateAudioSettingsForLanguage,
   activateHybridAudioSettingsForLanguage,
+  activateMobileAudioSettings,
   hybridNarrationVoicesForLanguage,
   isAndroidDeviceVoiceId,
+  mobileNarrationVoices,
   SUPPORTED_NARRATION_VOICES,
   type AudioSettings,
   type NarrationVoice
@@ -126,7 +128,11 @@ export interface ReaderBookNarrationIdentity {
   modelRevision: string;
 }
 
-export type OfflineNarrationLibrary = "individual-voice" | "language-pack" | "unavailable";
+export type OfflineNarrationLibrary =
+  | "individual-voice"
+  | "language-pack"
+  | "mobile-standard"
+  | "unavailable";
 
 export interface ReaderNarrationService {
   capabilities: {
@@ -185,29 +191,29 @@ export interface ReaderExperienceDependencies {
 
 export function createReaderExperienceDependencies(): ReaderExperienceDependencies {
   const eventDispatcher = createDomainEventDispatcher();
+  const androidRuntime = isAndroidRuntime();
   const mediaSources = createPlatformMediaSourceGateway();
   const htmlAudioPlayer = createHtmlAudioPlayer();
   const narrationRepository = createPrefetchingNarrationGateway(
     createNarrationRepository(mediaSources)
   );
-  const narrationSessionRoutingMode = resolveDevelopmentNarrationSessionRoutingMode(
-    import.meta.env.VITE_SONELLE_NARRATION_SESSION
-  );
+  const narrationSessionRoutingMode = androidRuntime
+    ? "mobile-supertonic-v1"
+    : resolveDevelopmentNarrationSessionRoutingMode(import.meta.env.VITE_SONELLE_NARRATION_SESSION);
   const narrationPreparationAdapter = createNarrationPreparationAdapterForMode(
     narrationSessionRoutingMode,
     narrationRepository,
     { createNativeAdapter: () => createNativeManifestNarrationAdapter({ mediaSources }) }
   );
   const bookCatalog = createBookCatalog(mediaSources);
-  const usesLanguagePacks = narrationSessionRoutingMode === "hybrid-v1";
-  const androidRuntime = isAndroidRuntime();
+  const usesLanguagePacks = narrationSessionRoutingMode !== "legacy-piper";
   const offlineLibrary = resolveOfflineNarrationLibrary(androidRuntime, usesLanguagePacks);
   const engineInstallations: Partial<Record<NarrationEngineId, EngineInstallationState>> = {};
   const deviceVoices = createAndroidDeviceVoiceRepository();
   let availableDeviceVoices: readonly AndroidDeviceVoice[] = [];
   const voicesForLanguage = (language: string | null): readonly NarrationVoice[] => {
     const sonelleVoices = androidRuntime
-      ? []
+      ? mobileNarrationVoices()
       : usesLanguagePacks
         ? availableHybridNarrationVoicesForLanguage(language, engineInstallations)
         : SUPPORTED_NARRATION_VOICES;
@@ -250,7 +256,9 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
         preparesAcrossChapters: usesLanguagePacks && !androidRuntime
       },
       activateSettings(settings, language) {
-        return usesLanguagePacks
+        return androidRuntime
+          ? activateMobileAudioSettings(settings, language)
+          : usesLanguagePacks
           ? activateHybridAudioSettingsForLanguage(settings, language)
           : activateAudioSettingsForLanguage(settings, language);
       },
@@ -366,7 +374,7 @@ export function resolveOfflineNarrationLibrary(
   androidRuntime: boolean,
   usesLanguagePacks: boolean
 ): OfflineNarrationLibrary {
-  if (androidRuntime) return "unavailable";
+  if (androidRuntime) return "mobile-standard";
   return usesLanguagePacks ? "language-pack" : "individual-voice";
 }
 
@@ -380,7 +388,7 @@ export function createNarrationPreparationAdapterForMode(
   } = {}
 ): NarrationPreparationAdapter {
   if (routingMode === "legacy-piper") return new PiperCompatibilityAdapter(narrationRepository);
-  if (routingMode === "hybrid-v1") {
+  if (routingMode === "hybrid-v1" || routingMode === "mobile-supertonic-v1") {
     const nativeRuntime = options.nativeRuntime ?? isTauriRuntime();
     if (nativeRuntime)
       return (options.createNativeAdapter ?? createNativeManifestNarrationAdapter)();

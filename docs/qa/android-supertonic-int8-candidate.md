@@ -18,7 +18,7 @@ before production integration.
 
 - claiming Android performance from host timings;
 - choosing the standard mobile voice styles;
-- publishing the candidate or adding it to the production narration catalog;
+- accepting the candidate for public builds;
 - replacing the two-device benchmark or listening and pronunciation review.
 
 ## Interface
@@ -39,14 +39,27 @@ The ignored output lives at
 `.sonelle/narration-spike/mobile-candidates/supertonic-android-int8/`. Its
 `candidate-manifest.json` records source revision, transformation, runtime compatibility, exact
 sizes, SHA-256 values, aggregate candidate revision, and the explicit
-`candidate-not-accepted` status. `engine-catalog.json` is a local test catalog; it is never consumed
-by production unless a developer opts into it explicitly.
+`candidate-not-accepted` status. `engine-catalog.json` is a local test catalog. The internal arm64
+application feature consumes the separately tracked, hosted-artifact projection at
+`tools/narration-spike/android-supertonic-candidate.json`; normal Android builds cannot discover or
+install it.
 
 Verify an existing candidate without regenerating it:
 
 ```sh
 pnpm spike:narration:supertonic-int8:verify
 ```
+
+Compile the native internal seam without producing an APK:
+
+```sh
+cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml \
+  --target aarch64-linux-android \
+  --features android-offline-voice-candidate
+```
+
+The feature is intentionally invalid as a release claim by itself. A physical arm64 build must still
+record the benchmark and listening evidence required by #102 and #103.
 
 Use `pnpm spike:narration:supertonic-int8 -- --replace` only when deliberately rebuilding the
 ignored candidate from the same pinned inputs or after changing the quantization contract.

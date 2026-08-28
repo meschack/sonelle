@@ -15,8 +15,13 @@ import { createReaderVoiceInstallationWorkflow } from "./reader-voice-installati
 
 const narrationEngineIds: readonly NarrationEngineId[] = ["kokoro", "supertonic"];
 
-export type OfflineNarrationProfileId = "english" | "multilingual";
-export type OfflineNarrationReadiness = "not-installed" | "preparing" | "ready" | "failed";
+export type OfflineNarrationProfileId = "english" | "multilingual" | "standard";
+export type OfflineNarrationReadiness =
+  | "not-installed"
+  | "preparing"
+  | "ready"
+  | "failed"
+  | "unavailable";
 
 export interface OfflineNarrationProfileView {
   id: OfflineNarrationProfileId;
@@ -60,6 +65,11 @@ const offlineNarrationProfiles: Readonly<
     engineId: "supertonic",
     label: "Multilingual narration",
     description: "Fallback voices for non-English books"
+  },
+  standard: {
+    engineId: "supertonic",
+    label: "Sonelle offline voice",
+    description: "Standard multilingual narration for this phone"
   }
 };
 
@@ -68,7 +78,7 @@ interface ReaderOfflineNarrationDependencies {
   engineInstallations: EngineInstallationRepository;
   eventDispatcher: DomainEventDispatcher;
   narration: NarrationGateway;
-  offlineLibrary: "individual-voice" | "language-pack" | "unavailable";
+  offlineLibrary: "individual-voice" | "language-pack" | "mobile-standard" | "unavailable";
   voiceInstallations: VoiceInstallationRepository;
   friendlyError(error: unknown): string;
   reportPreparedAudioError?(error: unknown, bookId: string): void;
@@ -111,7 +121,9 @@ export function createReaderOfflineNarrationApplication(
     repository: dependencies.engineInstallations,
     projectInstallation: (installation) => {
       options.projectEngineInstallation(installation);
-      options.projectNarrationProfile(projectOfflineNarrationProfile(installation));
+      options.projectNarrationProfile(
+        projectOfflineNarrationProfile(installation, dependencies.offlineLibrary)
+      );
     },
     projectNotice: options.projectNarrationNotice,
     friendlyError: dependencies.friendlyError
@@ -137,9 +149,12 @@ export function createReaderOfflineNarrationApplication(
   const refreshNarrationFiles = () =>
     dependencies.offlineLibrary === "unavailable"
       ? Promise.resolve()
-      : Promise.all(narrationEngineIds.map((engineId) => engineWorkflow.refresh(engineId))).then(
-          () => undefined
-        );
+      : Promise.all(
+          (dependencies.offlineLibrary === "mobile-standard"
+            ? (["supertonic"] as const)
+            : narrationEngineIds
+          ).map((engineId) => engineWorkflow.refresh(engineId))
+        ).then(() => undefined);
 
   const handleClearRequested = async (event: DomainEvent<"PreparedNarrationClearingRequested">) => {
     try {
@@ -247,16 +262,18 @@ export function createCheckingOfflineNarrationProfiles(): Record<
 > {
   return {
     english: checkingOfflineNarrationProfile("english"),
-    multilingual: checkingOfflineNarrationProfile("multilingual")
+    multilingual: checkingOfflineNarrationProfile("multilingual"),
+    standard: checkingOfflineNarrationProfile("standard")
   };
 }
 
 export function offlineNarrationReadinessMessage(
   profiles: Readonly<Record<OfflineNarrationProfileId, OfflineNarrationProfileView>>,
-  language: string | null
+  language: string | null,
+  profileId?: OfflineNarrationProfileId
 ): string | null {
   const engineId = routeNarrationEngine(language, { mode: "hybrid-v1" }).engineId;
-  const profile = profiles[engineId === "kokoro" ? "english" : "multilingual"];
+  const profile = profiles[profileId ?? (engineId === "kokoro" ? "english" : "multilingual")];
   if (profile.status === "ready") return null;
 
   if (profile.status === "preparing") {
@@ -265,6 +282,7 @@ export function offlineNarrationReadinessMessage(
   if (profile.status === "failed") {
     return `${profile.label} needs attention. Retry the download.`;
   }
+  if (profile.status === "unavailable") return profile.message;
   return `Download ${profile.label} to listen offline.`;
 }
 
@@ -286,9 +304,15 @@ function checkingOfflineNarrationProfile(
 }
 
 function projectOfflineNarrationProfile(
-  installation: EngineInstallationState
+  installation: EngineInstallationState,
+  offlineLibrary: ReaderOfflineNarrationDependencies["offlineLibrary"]
 ): OfflineNarrationProfileView {
-  const id = installation.engineId === "kokoro" ? "english" : "multilingual";
+  const id =
+    offlineLibrary === "mobile-standard"
+      ? "standard"
+      : installation.engineId === "kokoro"
+        ? "english"
+        : "multilingual";
   const profile = offlineNarrationProfiles[id];
   return {
     id,

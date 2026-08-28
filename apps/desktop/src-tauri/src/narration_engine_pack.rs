@@ -14,7 +14,15 @@ use crate::narration_pack::{
     NarrationPackDownloadClient, NarrationPackDownloadError,
 };
 
+#[cfg(desktop)]
 const ENGINE_CATALOG: &str = include_str!("../../../../tools/narration-spike/engines.json");
+#[cfg(all(
+    target_os = "android",
+    target_arch = "aarch64",
+    feature = "android-offline-voice-candidate"
+))]
+const ENGINE_CATALOG: &str =
+    include_str!("../../../../tools/narration-spike/android-supertonic-candidate.json");
 const ENGINE_INSTALLATION_PROGRESS_EVENT: &str = "narration-engine-installation-progress";
 
 static ENGINE_INSTALLATION_LOCK: OnceLock<Mutex<()>> = OnceLock::new();

@@ -180,6 +180,9 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const bookmarkStore = dependencies.bookmarkStore;
   const narrationService = dependencies.narration;
   const usesLanguagePacks = narrationService.capabilities.offlineLibrary === "language-pack";
+  const usesMobileStandardVoice =
+    narrationService.capabilities.offlineLibrary === "mobile-standard";
+  const usesEnginePacks = usesLanguagePacks || usesMobileStandardVoice;
   const dictionaryRepository = dependencies.dictionaryRepository;
   const audioSettingsRepository = dependencies.audioSettingsRepository;
   const readerPreferencesRepository = dependencies.readerPreferencesRepository;
@@ -449,8 +452,12 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       narrationReadinessMessage: () =>
         isAndroidDeviceVoiceId(audioSettings().voiceId)
           ? null
-          : usesLanguagePacks
-            ? offlineNarrationReadinessMessage(offlineNarrationProfiles(), reader().book.language)
+          : usesEnginePacks
+            ? offlineNarrationReadinessMessage(
+                offlineNarrationProfiles(),
+                reader().book.language,
+                usesMobileStandardVoice ? "standard" : undefined
+              )
             : narrationService.capabilities.offlineLibrary === "unavailable"
               ? "Choose an Android device voice to listen on this phone."
               : voiceInstallation().status === "ready"
@@ -556,8 +563,10 @@ export function ReaderExperience(props: ReaderExperienceProps) {
           ? ("idle" as const)
           : ("paused" as const),
     activeBookId: reader().book.id,
-    activeVoicePackId: usesLanguagePacks
-      ? routeNarrationEngine(reader().book.language, { mode: "hybrid-v1" }).engineId
+    activeVoicePackId: usesEnginePacks
+      ? routeNarrationEngine(reader().book.language, {
+          mode: usesMobileStandardVoice ? "mobile-supertonic-v1" : "hybrid-v1"
+        }).engineId
       : null
   }));
   const narrationStorageApplication = createReaderNarrationStorageApplication(
@@ -1231,9 +1240,13 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     if (mobileReaderShell()) setMobileToolsOpen(true);
   };
   const requestActiveOfflineVoice = () => {
-    if (narrationService.capabilities.offlineLibrary === "language-pack") {
-      const engine = routeNarrationEngine(reader().book.language, { mode: "hybrid-v1" }).engineId;
-      requestNarrationProfileWithSpaceCheck(engine === "kokoro" ? "english" : "multilingual");
+    if (usesEnginePacks) {
+      const engine = routeNarrationEngine(reader().book.language, {
+        mode: usesMobileStandardVoice ? "mobile-supertonic-v1" : "hybrid-v1"
+      }).engineId;
+      requestNarrationProfileWithSpaceCheck(
+        usesMobileStandardVoice ? "standard" : engine === "kokoro" ? "english" : "multilingual"
+      );
       return;
     }
     if (narrationService.capabilities.offlineLibrary === "individual-voice") {
@@ -1603,10 +1616,12 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       get canPrepareBook() {
         return (
           reader().source === "library" &&
-          (usesLanguagePacks
+          !usesMobileStandardVoice &&
+          (usesEnginePacks
             ? offlineNarrationReadinessMessage(
                 offlineNarrationProfiles(),
-                reader().book.language
+                reader().book.language,
+                usesMobileStandardVoice ? "standard" : undefined
               ) == null
             : voiceInstallation().status === "ready")
         );

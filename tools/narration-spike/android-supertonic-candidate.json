@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "engines": [
+    {
+      "id": "supertonic",
+      "source": {
+        "repository": "https://github.com/Supertone/supertonic-3.git",
+        "revision": "3cadd1ee6394adea1bd021217a0e650ede09a323"
+      },
+      "model": {
+        "repository": "meschack/sonelle",
+        "revision": "b362ed2d6f9bc9d255ea10fea2d64585ff997614",
+        "artifacts": [
+          {
+            "remotePath": "LICENSE",
+            "targetPath": "assets/LICENSE",
+            "sizeBytes": 15007,
+            "sha256": "0d944a9110fed9a9602d60e0423a272903e7bd21ab060490774efc77c2275e9f",
+            "url": "https://github.com/meschack/sonelle/releases/download/narration-supertonic-b362ed2d/LICENSE"
+          },
+          {
+            "remotePath": "config.json",
+            "targetPath": "assets/config.json",
+            "sizeBytes": 174,
+            "sha256": "4099082b107a9d4029849ac76b89eca65e03732660969c2babe5bf308c7357f2",
+            "url": "https://github.com/meschack/sonelle/releases/download/narration-supertonic-b362ed2d/config.json"
+          },
+          {
+            "remotePath": "onnx/duration_predictor.onnx",
+            "targetPath": "assets/onnx/duration_predictor.onnx",
+            "sizeBytes": 1281963,
+            "sha256": "e83ca3cadfcd91a3919c4dc62280cbfbe28c57a71319e7539e792a8d756bfe9e",
+            "url": "https://github.com/meschack/sonelle/releases/download/narration-supertonic-b362ed2d/duration_predictor.onnx"
+          },
+          {
+            "remotePath": "onnx/text_encoder.onnx",
+            "targetPath": "assets/onnx/text_encoder.onnx",
+            "sizeBytes": 9805085,
+            "sha256": "40cec03cc9944f1718a24b46089e4c56af7ada8972bf0f54b6e145ed6eeb595d",
+            "url": "https://github.com/meschack/sonelle/releases/download/narration-supertonic-b362ed2d/text_encoder.onnx"
+          },
+          {
+            "remotePath": "onnx/tts.json",
+            "targetPath": "assets/onnx/tts.json",
+            "sizeBytes": 8253,
+            "sha256": "42078d3aef1cd43ab43021f3c54f47d2d75ceb4e75f627f118890128b06a0d09",
+            "url": "https://github.com/meschack/sonelle/releases/download/narration-supertonic-b362ed2d/tts.json"
+          },
+          {
+            "remotePath": "onnx/unicode_indexer.json",
+            "targetPath": "assets/onnx/unicode_indexer.json",
+            "sizeBytes": 277676,
+            "sha256": "9bf7346e43883a81f8645c81224f786d43c5b57f3641f6e7671a7d6c493cb24f",
+            "url": "https://github.com/meschack/sonelle/releases/download/narration-supertonic-b362ed2d/unicode_indexer.json"
+          },
+          {
+            "remotePath": "onnx/vector_estimator.onnx",
+            "targetPath": "assets/onnx/vector_estimator.onnx",
+            "sizeBytes": 65360765,
+            "sha256": "23a2100f2984e0af8705a99664eded73979b6ef2398e8b28f3f65afe5b856846",
+            "url": "https://github.com/meschack/sonelle/releases/download/narration-supertonic-b362ed2d/vector_estimator.onnx"
+          },
+          {
+            "remotePath": "onnx/vocoder.onnx",
+            "targetPath": "assets/onnx/vocoder.onnx",
+            "sizeBytes": 25642382,
+            "sha256": "33ff71746dc1be4f9dafd31af6084b3badd7a4d5c871d539bfebe06dcb3dcb82",
+            "url": "https://github.com/meschack/sonelle/releases/download/narration-supertonic-b362ed2d/vocoder.onnx"
+          },
+          {
+            "remotePath": "voice_styles/F1.json",
+            "targetPath": "assets/voice_styles/F1.json",
+            "sizeBytes": 292046,
+            "sha256": "bbdec6ee00231c2c742ad05483df5334cab3b52fda3ba38e6a07059c4563dbc2",
+            "url": "https://github.com/meschack/sonelle/releases/download/narration-supertonic-b362ed2d/F1.json"
+          },
+          {
+            "remotePath": "voice_styles/M1.json",
+            "targetPath": "assets/voice_styles/M1.json",
+            "sizeBytes": 291748,
+            "sha256": "e35604687f5d23694b8e91593a93eec0e4eca6c0b02bb8ed69139ab2ea6b0a5b",
+            "url": "https://github.com/meschack/sonelle/releases/download/narration-supertonic-b362ed2d/M1.json"
+          }
+        ]
+      }
+    }
+  ]
+}

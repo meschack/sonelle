@@ -26,20 +26,49 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 use std::io::ErrorKind;
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 use crate::narration_engine_pack::{
     catalog_ids_from, catalog_pack_from, trusted_catalog_json_for_storage,
 };
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 use crate::narration_pack::{installed_pack_is_ready, NarrationPack};
 
 const PREPARED_AUDIO_DIR: &str = "narration-v3";
 const ENGINE_PACKS_DIR: &str = "narration-engines";
+const NATIVE_NARRATION_STORAGE: bool = cfg!(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+));
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -97,7 +126,7 @@ pub(crate) fn inspect_storage_at(app_data: &Path) -> Result<NarrationStorageSnap
         available_bytes: available_bytes(app_data)?,
         prepared_audio: prepared_audio_inventory_for_platform(
             &prepared_audio_root(app_data),
-            cfg!(desktop),
+            NATIVE_NARRATION_STORAGE,
         ),
         // Android has no accepted pack storage yet, so this stays honestly
         // empty until #104 supplies verified artifacts and a real root.
@@ -106,21 +135,46 @@ pub(crate) fn inspect_storage_at(app_data: &Path) -> Result<NarrationStorageSnap
     Ok(snapshot)
 }
 
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 fn inspect_voice_packs_at(engines_root: &Path) -> Result<Vec<VoicePackStorageEntryDto>, String> {
     verified_voice_pack_inventory(engines_root, &trusted_catalog_json()?)
 }
 
-#[cfg(not(desktop))]
+#[cfg(not(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+)))]
 fn inspect_voice_packs_at(_engines_root: &Path) -> Result<Vec<VoicePackStorageEntryDto>, String> {
     Ok(Vec::new())
 }
 
 pub(crate) fn remove_prepared_audio_at(app_data: &Path, book_id: &str) -> RemovalOutcome {
-    remove_prepared_audio_for_platform(&prepared_audio_root(app_data), book_id, cfg!(desktop))
+    remove_prepared_audio_for_platform(
+        &prepared_audio_root(app_data),
+        book_id,
+        NATIVE_NARRATION_STORAGE,
+    )
 }
 
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 pub(crate) fn remove_voice_pack_at(
     app_data: &Path,
     pack_id: &str,
@@ -129,7 +183,14 @@ pub(crate) fn remove_voice_pack_at(
     remove_verified_voice_pack_at(&engine_packs_root(app_data), pack_id, revision)
 }
 
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 fn remove_verified_voice_pack_at(
     engines_root: &Path,
     pack_id: &str,
@@ -138,7 +199,14 @@ fn remove_verified_voice_pack_at(
     remove_verified_voice_pack(engines_root, &trusted_catalog_json()?, pack_id, revision)
 }
 
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 fn trusted_catalog_json() -> Result<String, String> {
     trusted_catalog_json_for_storage()
 }
@@ -239,7 +307,14 @@ fn probe_manifest_book_id(manifest_path: &Path) -> Option<String> {
         .map(|probe| probe.book_id)
 }
 
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 fn verified_voice_pack_inventory(
     engines_root: &Path,
     catalog_json: &str,
@@ -302,7 +377,14 @@ fn remove_prepared_book(root: &Path, book_id: &str) -> RemovalOutcome {
     Ok(Some(total_bytes))
 }
 
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 fn remove_verified_voice_pack(
     engines_root: &Path,
     catalog_json: &str,
@@ -338,7 +420,14 @@ fn remove_verified_voice_pack(
 
 /// Returns the verified install destination for a catalog pack, or `None`
 /// when it is not installed as a real, contained directory.
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 fn verified_pack_destination(
     engines_root: &Path,
     pack: &NarrationPack,
@@ -354,7 +443,14 @@ fn verified_pack_destination(
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 enum SafePathError {
     /// The identity was invalid, escaped its root, involved a symlink, or was
     /// not a real directory.
@@ -362,7 +458,14 @@ enum SafePathError {
     Io,
 }
 
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 impl SafePathError {
     fn into_outcome<T>(self) -> Result<T, String> {
         Err(match self {
@@ -391,7 +494,14 @@ fn is_safe_component(value: &str) -> bool {
 /// Resolves `components` under `root`, rejecting missing directories, symlinked
 /// segments, non-directories, and anything whose canonical location escapes
 /// the canonical root.
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 fn contained_descendant(root: &Path, components: &[&str]) -> Result<Option<PathBuf>, String> {
     if !components
         .iter()
@@ -442,7 +552,14 @@ fn contained_directory(target: &Path, canonical_root: &Path) -> Result<PathBuf, 
 
 /// Accepts only real (non-symlink) directories and returns their canonical
 /// path, so every later comparison uses one shared spelling.
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 fn ensure_real_directory(path: &Path) -> Result<PathBuf, SafePathError> {
     let metadata = fs::symlink_metadata(path).map_err(|error| match error.kind() {
         ErrorKind::NotFound => SafePathError::Unsafe,
@@ -494,12 +611,26 @@ fn directory_size(path: &Path) -> Result<u64, String> {
 // parses renderer data as a catalog.
 // ---------------------------------------------------------------------------
 
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 fn catalog_ids(catalog_json: &str) -> Result<Vec<String>, String> {
     catalog_ids_from(catalog_json)
 }
 
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 fn catalog_pack(catalog_json: &str, engine_id: &str) -> Result<Option<NarrationPack>, String> {
     catalog_pack_from(catalog_json, engine_id)
 }

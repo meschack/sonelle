@@ -22,25 +22,87 @@ pub mod kokoro_narration;
 pub mod kokoro_text;
 mod library_import;
 mod library_migration;
-#[cfg(any(mobile, test))]
+#[cfg(any(
+    test,
+    all(
+        mobile,
+        not(all(target_arch = "aarch64", feature = "android-offline-voice-candidate"))
+    )
+))]
 mod mobile_shell;
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 pub mod narration_cache;
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 mod narration_engine_pack;
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 mod narration_manifest;
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 pub mod narration_pack;
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 mod narration_rendered_audio;
 mod narration_storage;
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 mod narration_wav;
 mod storage;
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 mod supertonic_helper;
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 mod supertonic_narration;
 #[cfg(desktop)]
 mod system_fonts;
@@ -143,6 +205,7 @@ pub fn run() {
     #[cfg(mobile)]
     let builder = builder.invoke_handler(tauri::generate_handler![
         app_status,
+        commands::cancel_manifest_narration,
         commands::cancel_book_import_source_copy,
         commands::clear_android_audio_focus,
         commands::clear_android_background_playback,
@@ -151,14 +214,17 @@ pub fn run() {
         commands::delete_bookmark,
         commands::export_book_data,
         commands::get_audio_cache_stats,
+        commands::get_narration_engine_status,
         commands::inspect_narration_storage,
         book_open_request::take_pending_book_open_requests,
         commands::import_epub,
+        commands::install_narration_engine,
         commands::list_bookmarks,
         commands::list_books,
         commands::list_system_fonts,
         commands::open_book,
         commands::probe_book_import_source,
+        commands::prepare_manifest_narration,
         commands::publish_android_background_playback,
         commands::report_app_error,
         commands::remove_narration_storage_target,
