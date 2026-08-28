@@ -7,7 +7,6 @@ import { MobileNarrationDock } from "./mobile-narration-dock";
 describe("mobile narration dock", () => {
   it("projects compact playback truth and emits reader intents", () => {
     const onToggle = vi.fn();
-    const onStop = vi.fn();
     const container = document.createElement("div");
     document.body.append(container);
     const dispose = render(
@@ -30,7 +29,6 @@ describe("mobile narration dock", () => {
           onPrevious={vi.fn()}
           onToggle={onToggle}
           onNext={vi.fn()}
-          onStop={onStop}
         />
       ),
       container
@@ -45,10 +43,10 @@ describe("mobile narration dock", () => {
     expect(
       container.querySelector('[role="group"][aria-label="Narration transport"]')
     ).not.toBeNull();
+    expect(container.querySelectorAll('[aria-label="Narration transport"] button')).toHaveLength(3);
+    expect(container.querySelector('[aria-label="Stop narration"]')).toBeNull();
     container.querySelector<HTMLButtonElement>('[aria-label="Pause narration"]')?.click();
-    container.querySelector<HTMLButtonElement>('[aria-label="Stop narration"]')?.click();
     expect(onToggle).toHaveBeenCalledOnce();
-    expect(onStop).toHaveBeenCalledOnce();
 
     dispose();
     container.remove();
@@ -77,7 +75,6 @@ describe("mobile narration dock", () => {
           onPrevious={vi.fn()}
           onToggle={vi.fn()}
           onNext={vi.fn()}
-          onStop={vi.fn()}
         />
       ),
       container
@@ -115,7 +112,6 @@ describe("mobile narration dock", () => {
           onPrevious={vi.fn()}
           onToggle={vi.fn()}
           onNext={vi.fn()}
-          onStop={vi.fn()}
         />
       ),
       container

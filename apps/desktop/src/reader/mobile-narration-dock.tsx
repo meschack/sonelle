@@ -11,7 +11,6 @@ interface MobileNarrationDockProps {
   onPrevious(): void;
   onToggle(): void;
   onNext(): void;
-  onStop(): void;
 }
 
 export function MobileNarrationDock(props: MobileNarrationDockProps) {
@@ -68,14 +67,6 @@ export function MobileNarrationDock(props: MobileNarrationDockProps) {
           onClick={props.onNext}
         >
           <NextIcon />
-        </button>
-        <button
-          type="button"
-          aria-label="Stop narration"
-          disabled={props.status === "idle" || props.status === "ended"}
-          onClick={props.onStop}
-        >
-          <span class="mobile-narration-stop-glyph" aria-hidden="true" />
         </button>
       </div>
       <Show when={props.notice}>

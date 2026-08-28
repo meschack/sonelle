@@ -322,6 +322,7 @@ export interface ReaderSettingsInspectorModel {
   narrationVoices: readonly NarrationVoice[];
   offlineNarrationProfiles: Record<OfflineNarrationProfileId, OfflineNarrationProfileView>;
   readerContentFontSize: number;
+  readerContentFontSizeMax: number;
   readerContentFontFamily: string | null;
   uiFontFamily: string | null;
   narrationHighlightColor: string;
@@ -405,7 +406,7 @@ function SettingsPanel(componentProps: { model: ReaderSettingsInspectorModel }) 
             aria-label="Book text size"
             type="range"
             min="14"
-            max="24"
+            max={props.readerContentFontSizeMax}
             step="1"
             value={props.readerContentFontSize}
             onInput={(event) =>

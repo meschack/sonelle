@@ -2207,13 +2207,6 @@
   }
 }
 
-.mobile-narration-stop-glyph {
-  background: currentColor;
-  border-radius: 2px;
-  height: 10px;
-  width: 10px;
-}
-
 @media (max-width: 520px) {
   .mobile-narration-dock {
     padding-inline: 10px;

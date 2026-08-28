@@ -139,6 +139,10 @@ import { FocusIcon } from "./reader-icons";
 import { MobileReaderShell } from "./mobile-reader-shell";
 import { MobileNarrationDock } from "./mobile-narration-dock";
 import {
+  effectiveReaderContentFontSize,
+  readerContentFontSizeMaximum
+} from "./mobile-reader-typography";
+import {
   renderedLibraryGridColumnCount,
   resolveLibraryGridNavigationIndex,
   type LibraryGridNavigationDirection
@@ -247,6 +251,8 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const [mobileReaderShell, setMobileReaderShell] = createSignal(
     dependencies.readerShellViewport.isMobile()
   );
+  const renderedReaderContentFontSize = () =>
+    effectiveReaderContentFontSize(readerContentFontSize(), mobileReaderShell());
   const [mobileToolsOpen, setMobileToolsOpen] = createSignal(false);
   onCleanup(
     dependencies.readerShellViewport.listen((mobile) => {
@@ -1582,7 +1588,10 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         return offlineNarrationProfiles();
       },
       get readerContentFontSize() {
-        return readerContentFontSize();
+        return renderedReaderContentFontSize();
+      },
+      get readerContentFontSizeMax() {
+        return readerContentFontSizeMaximum(mobileReaderShell());
       },
       get readerContentFontFamily() {
         return readerContentFontFamily();
@@ -1764,7 +1773,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         <article
           class="page"
           aria-label={`${reader().chapter.title} text`}
-          style={{ "font-size": `${readerContentFontSize()}px` }}
+          style={{ "font-size": `${renderedReaderContentFontSize()}px` }}
         >
           <h1 class="article-title">{reader().chapter.title}</h1>
           <Show when={visibleSentenceRange().hiddenBefore > 0}>
@@ -1830,7 +1839,6 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       onPrevious={() => moveSentence(-1)}
       onToggle={togglePlayback}
       onNext={() => moveSentence(1)}
-      onStop={() => void stopReaderPlayback()}
     />
   );
 
