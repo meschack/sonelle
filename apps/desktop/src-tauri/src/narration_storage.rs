@@ -455,6 +455,8 @@ enum SafePathError {
     /// The identity was invalid, escaped its root, involved a symlink, or was
     /// not a real directory.
     Unsafe,
+    /// The requested narration directory has not been created yet.
+    Missing,
     Io,
 }
 
@@ -472,6 +474,7 @@ impl SafePathError {
             SafePathError::Unsafe => {
                 "Sonelle couldn't find a safe narration folder for that request.".to_string()
             }
+            SafePathError::Missing => "Sonelle couldn't find that narration folder.".to_string(),
             SafePathError::Io => "Sonelle couldn't inspect its narration files.".to_string(),
         })
     }
@@ -491,9 +494,9 @@ fn is_safe_component(value: &str) -> bool {
             .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
 }
 
-/// Resolves `components` under `root`, rejecting missing directories, symlinked
-/// segments, non-directories, and anything whose canonical location escapes
-/// the canonical root.
+/// Resolves `components` under `root`, returning `None` for directories that
+/// have not been created yet while rejecting symlinks, non-directories, and
+/// anything whose canonical location escapes the canonical root.
 #[cfg(any(
     desktop,
     all(
@@ -511,6 +514,7 @@ fn contained_descendant(root: &Path, components: &[&str]) -> Result<Option<PathB
     }
     let canonical_root = match ensure_real_directory(root) {
         Ok(canonical) => canonical,
+        Err(SafePathError::Missing) => return Ok(None),
         Err(SafePathError::Io) => return SafePathError::Io.into_outcome(),
         Err(_) => return unsafe_target(),
     };
@@ -520,6 +524,7 @@ fn contained_descendant(root: &Path, components: &[&str]) -> Result<Option<PathB
         current = current.join(component);
         match ensure_real_directory(&current) {
             Ok(_) => {}
+            Err(SafePathError::Missing) => return Ok(None),
             Err(SafePathError::Unsafe) => return unsafe_target(),
             Err(SafePathError::Io) => return SafePathError::Io.into_outcome(),
         }
@@ -562,7 +567,7 @@ fn contained_directory(target: &Path, canonical_root: &Path) -> Result<PathBuf, 
 ))]
 fn ensure_real_directory(path: &Path) -> Result<PathBuf, SafePathError> {
     let metadata = fs::symlink_metadata(path).map_err(|error| match error.kind() {
-        ErrorKind::NotFound => SafePathError::Unsafe,
+        ErrorKind::NotFound => SafePathError::Missing,
         _ => SafePathError::Io,
     })?;
     if metadata.file_type().is_symlink() || !metadata.is_dir() {
@@ -780,6 +785,18 @@ mod tests {
         );
         assert!(root.join("asset-a/audio.wav").exists());
 
+        let _ = fs::remove_dir_all(app_data);
+    }
+
+    #[test]
+    fn fresh_storage_reports_no_voice_packs_before_the_install_root_exists() {
+        let app_data = temp_root("fresh-storage");
+
+        let snapshot = inspect_storage_at(&app_data)
+            .expect("a fresh installation should be inspectable before any voice download");
+
+        assert!(snapshot.voice_packs.is_empty());
+        assert!(!engine_packs_root(&app_data).exists());
         let _ = fs::remove_dir_all(app_data);
     }
 

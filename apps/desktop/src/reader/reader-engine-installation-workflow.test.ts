@@ -62,8 +62,13 @@ describe("reader engine installation workflow", () => {
   });
 
   it("projects transient native progress without publishing a lifecycle event", async () => {
-    const harness = createHarness({ result: readyInstallation });
+    const harness = createHarness({ pending: true });
     const stop = await harness.workflow.start();
+
+    harness.workflow.request("kokoro");
+    await vi.waitFor(() =>
+      expect(harness.states[harness.states.length - 1]?.status).toBe("preparing")
+    );
 
     harness.emitProgress({
       ...readyInstallation,
@@ -78,9 +83,34 @@ describe("reader engine installation workflow", () => {
 
     stop();
   });
+
+  it("ignores delayed native progress after an installation has failed", async () => {
+    const harness = createHarness({ error: new Error("native detail") });
+    const stop = await harness.workflow.start();
+
+    harness.workflow.request("supertonic");
+    await vi.waitFor(() =>
+      expect(harness.states[harness.states.length - 1]?.status).toBe("failed")
+    );
+
+    harness.emitProgress({
+      ...readyInstallation,
+      engineId: "supertonic",
+      status: "preparing",
+      downloadSizeBytes: 200,
+      downloadedBytes: 75,
+      progress: 37.5
+    });
+    await Promise.resolve();
+
+    expect(harness.states[harness.states.length - 1]?.status).toBe("failed");
+    stop();
+  });
 });
 
-function createHarness(outcome: { result: EngineInstallationState } | { error: Error }) {
+function createHarness(
+  outcome: { result: EngineInstallationState } | { error: Error } | { pending: true }
+) {
   const dispatcher = createDomainEventDispatcher();
   const events: AnyDomainEvent[] = [];
   for (const name of [
@@ -96,6 +126,9 @@ function createHarness(outcome: { result: EngineInstallationState } | { error: E
   const notices: Array<string | null> = [];
   const install = vi.fn(async (engineId: NarrationEngineId) => {
     if ("error" in outcome) throw outcome.error;
+    if ("pending" in outcome) {
+      return await new Promise<EngineInstallationState>(() => undefined);
+    }
     return { ...outcome.result, engineId };
   });
   let progressListener: (state: EngineInstallationState) => void = () => undefined;
