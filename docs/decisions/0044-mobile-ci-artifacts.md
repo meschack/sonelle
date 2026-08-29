@@ -40,8 +40,10 @@ archive with `--archive-only --no-sign`. CI verifies that the application has no
 directory and that its executable is ARM64, then wraps the application in the standard
 `Payload/<application>.app` IPA layout and publishes a checksum.
 
-All three products are GitHub Actions artifacts retained for 30 days. They are not automatically
-attached to the public GitHub Release and do not change the Play Store workflow.
+All three products are first stored as GitHub Actions artifacts retained for 30 days. After the
+desktop release matrix succeeds, the release workflow retrieves the mobile artifacts from the exact
+CI run that triggered it, verifies their checksums, and permanently attaches them to the matching
+public GitHub Release. This does not change the Play Store workflow.
 
 ## Consequences
 
@@ -53,5 +55,6 @@ attached to the public GitHub Release and do not change the Play Store workflow.
   provisioning.
 - Mobile artifact generation becomes part of successful `main` CI, while pull requests avoid the
   cost and secret exposure of release packaging.
-- Public release attachment, App Store signing, TestFlight upload, and expanding the Android minimum
-  below API 24 remain separate distribution decisions.
+- The GitHub Release becomes the permanent download surface for the two APKs and unsigned IPA;
+  App Store signing, TestFlight upload, and expanding the Android minimum below API 24 remain
+  separate distribution decisions.
