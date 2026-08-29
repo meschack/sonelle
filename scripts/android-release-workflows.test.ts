@@ -2,6 +2,19 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("Android release workflow profiles", () => {
+  it.each([
+    ".github/workflows/android-internal.yml",
+    ".github/workflows/android-store-candidate.yml",
+    ".github/workflows/mobile-artifacts.yml"
+  ])("sets up the Android command-line tools before using sdkmanager in %s", (path) => {
+    const workflow = readFileSync(path, "utf8");
+    const sdkSetup = workflow.indexOf("uses: android-actions/setup-android@v4");
+    const sdkInstall = workflow.indexOf("sdkmanager");
+
+    expect(sdkSetup).toBeGreaterThan(-1);
+    expect(sdkInstall).toBeGreaterThan(sdkSetup);
+  });
+
   it("builds the internal artifact with the explicit arm64 voice candidate", () => {
     const workflow = readFileSync(".github/workflows/android-internal.yml", "utf8");
 
@@ -25,6 +38,8 @@ describe("Android release workflow profiles", () => {
 
   it("builds separate reader-only APKs for old and new ARM phones", () => {
     const workflow = readFileSync(".github/workflows/mobile-artifacts.yml", "utf8");
+    const sdkSetup = workflow.indexOf("uses: android-actions/setup-android@v4");
+    const sdkInstall = workflow.indexOf('sdkmanager \\\n            "platform-tools"');
 
     expect(workflow).toContain("target: armv7");
     expect(workflow).toContain("abi: armeabi-v7a");
@@ -33,6 +48,8 @@ describe("Android release workflow profiles", () => {
     expect(workflow).not.toContain("--features android-offline-voice-candidate");
     expect(workflow).toContain("--profile reader-only");
     expect(workflow).toContain('apksigner" verify --verbose');
+    expect(sdkSetup).toBeGreaterThan(-1);
+    expect(sdkInstall).toBeGreaterThan(sdkSetup);
   });
 
   it("packages an unsigned arm64 iOS archive without pretending it is installable", () => {
