@@ -61,4 +61,17 @@ describe("Android release workflow profiles", () => {
     expect(workflow).toContain('test ! -d "$APP_PATH/_CodeSignature"');
     expect(workflow).toContain("Payload sonelle-ios-arm64-unsigned.ipa");
   });
+
+  it("promotes successful mobile CI artifacts into the matching GitHub release", () => {
+    const workflow = readFileSync(".github/workflows/release.yml", "utf8");
+
+    expect(workflow).toContain("actions: read");
+    expect(workflow).toContain("uses: actions/download-artifact@v8");
+    expect(workflow).toContain("run-id: ${{ github.event.workflow_run.id }}");
+    expect(workflow).toContain("pattern: sonelle-*");
+    expect(workflow).toContain("merge-multiple: true");
+    expect(workflow).toContain("tagName: ${{ needs.version.outputs.tag }}");
+    expect(workflow).not.toContain("tagName: ${{ steps.version.outputs.tag }}");
+    expect(workflow).toContain('gh release upload "$RELEASE_TAG" artifacts/mobile/* --clobber');
+  });
 });
