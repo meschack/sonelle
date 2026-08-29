@@ -22,4 +22,26 @@ describe("Android release workflow profiles", () => {
     expect(workflow).toContain("--abi universal");
     expect(workflow).toContain("jarsigner -verify -strict");
   });
+
+  it("builds separate reader-only APKs for old and new ARM phones", () => {
+    const workflow = readFileSync(".github/workflows/mobile-artifacts.yml", "utf8");
+
+    expect(workflow).toContain("target: armv7");
+    expect(workflow).toContain("abi: armeabi-v7a");
+    expect(workflow).toContain("target: aarch64");
+    expect(workflow).toContain("abi: arm64-v8a");
+    expect(workflow).not.toContain("--features android-offline-voice-candidate");
+    expect(workflow).toContain("--profile reader-only");
+    expect(workflow).toContain('apksigner" verify --verbose');
+  });
+
+  it("packages an unsigned arm64 iOS archive without pretending it is installable", () => {
+    const workflow = readFileSync(".github/workflows/mobile-artifacts.yml", "utf8");
+
+    expect(workflow).toContain("--target aarch64");
+    expect(workflow).toContain("--archive-only");
+    expect(workflow).toContain("--no-sign");
+    expect(workflow).toContain('test ! -d "$APP_PATH/_CodeSignature"');
+    expect(workflow).toContain("Payload sonelle-ios-arm64-unsigned.ipa");
+  });
 });

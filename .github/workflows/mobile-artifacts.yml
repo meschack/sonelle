@@ -1,0 +1,271 @@
+name: Mobile Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      revision:
+        description: Git revision to package
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Git revision already merged into main
+        required: true
+        default: main
+        type: string
+
+concurrency:
+  group: mobile-artifacts-${{ inputs.revision }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve release revision
+    runs-on: ubuntu-24.04
+    outputs:
+      commit: ${{ steps.revision.outputs.commit }}
+
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.revision }}
+
+      - name: Require a revision already merged into main
+        id: revision
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  android:
+    name: Android ${{ matrix.abi }}
+    needs: resolve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    environment: internal-android
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: armv7
+            rust_target: armv7-linux-androideabi
+            abi: armeabi-v7a
+            lint_task: lintArmRelease
+            other_abi: arm64-v8a
+          - target: aarch64
+            rust_target: aarch64-linux-android
+            abi: arm64-v8a
+            lint_task: lintArm64Release
+            other_abi: armeabi-v7a
+
+    steps:
+      - name: Checkout resolved revision
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.resolve.outputs.commit }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache Rust builds
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+          shared-key: mobile-${{ matrix.target }}
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.1.0" \
+            "ndk;27.1.12297006"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit reader-only Android release
+        run: pnpm audit:android-release
+
+      - name: Configure Android artifact signing
+        env:
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_BASE64"
+          test -n "$ANDROID_KEY_PASSWORD"
+          echo "$ANDROID_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/sonelle-mobile.jks"
+          {
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "password=$ANDROID_KEY_PASSWORD"
+            echo "storeFile=$RUNNER_TEMP/sonelle-mobile.jks"
+          } > apps/desktop/src-tauri/gen/android/keystore.properties
+
+      - name: Build signed APK
+        env:
+          SONELLE_BUILD_COMMIT: ${{ needs.resolve.outputs.commit }}
+          SONELLE_BUILD_TYPE: mobile-ci-release
+          SONELLE_NARRATION_CATALOG_SHA256: none
+          SONELLE_NARRATION_MODEL_REVISION: none
+        run: |
+          export NDK_HOME="$ANDROID_HOME/ndk/27.1.12297006"
+          pnpm --filter @sonelle/desktop tauri android build \
+            --target ${{ matrix.target }} \
+            --apk \
+            --ci
+
+      - name: Verify Android manifest and lint
+        run: |
+          pnpm check:android-manifest
+          cd apps/desktop/src-tauri/gen/android
+          ./gradlew ${{ matrix.lint_task }}
+
+      - name: Verify and collect APK
+        env:
+          ABI: ${{ matrix.abi }}
+          OTHER_ABI: ${{ matrix.other_abi }}
+          COMMIT: ${{ needs.resolve.outputs.commit }}
+        run: |
+          APK_PATH=$(find apps/desktop/src-tauri/gen/android/app/build/outputs/apk -type f -name '*release*.apk' ! -name '*unsigned*' -print -quit)
+          test -n "$APK_PATH"
+          "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify --verbose "$APK_PATH"
+          unzip -l "$APK_PATH" | grep -F "lib/$ABI/libsonelle_lib.so" >/dev/null
+          ! unzip -l "$APK_PATH" | grep -F "lib/$OTHER_ABI/libsonelle_lib.so" >/dev/null
+          mkdir -p artifacts/android
+          ARTIFACT="artifacts/android/sonelle-android-$ABI.apk"
+          cp "$APK_PATH" "$ARTIFACT"
+          node scripts/create-android-build-metadata.mjs \
+            --artifact "$ARTIFACT" \
+            --commit "$COMMIT" \
+            --abi "$ABI" \
+            --build-type mobile-ci-release \
+            --profile reader-only \
+            --output "artifacts/android/sonelle-android-$ABI.json"
+          sha256sum "$ARTIFACT" > "artifacts/android/sonelle-android-$ABI.sha256"
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sonelle-android-${{ matrix.abi }}-${{ needs.resolve.outputs.commit }}
+          retention-days: 30
+          if-no-files-found: error
+          path: artifacts/android/*
+
+      - name: Remove Android signing material
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/sonelle-mobile.jks"
+          rm -f apps/desktop/src-tauri/gen/android/keystore.properties
+
+  ios:
+    name: iOS arm64 unsigned
+    needs: resolve
+    runs-on: macos-15
+    timeout-minutes: 75
+
+    steps:
+      - name: Checkout resolved revision
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.resolve.outputs.commit }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Cache Rust builds
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+          shared-key: mobile-ios-arm64
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Initialize the generated iOS project
+        run: pnpm --filter @sonelle/desktop tauri ios init --ci
+
+      - name: Build unsigned iOS archive
+        env:
+          SONELLE_BUILD_COMMIT: ${{ needs.resolve.outputs.commit }}
+          SONELLE_BUILD_TYPE: mobile-ci-release
+          SONELLE_NARRATION_CATALOG_SHA256: none
+          SONELLE_NARRATION_MODEL_REVISION: none
+        run: |
+          pnpm --filter @sonelle/desktop tauri ios build \
+            --target aarch64 \
+            --archive-only \
+            --no-sign \
+            --ci
+
+      - name: Package and verify unsigned IPA
+        run: |
+          ARCHIVE_PATH=$(find apps/desktop/src-tauri/gen/apple/build -type d -name '*.xcarchive' -print -quit)
+          test -n "$ARCHIVE_PATH"
+          APP_PATH=$(find "$ARCHIVE_PATH/Products/Applications" -maxdepth 1 -type d -name '*.app' -print -quit)
+          test -n "$APP_PATH"
+          test ! -d "$APP_PATH/_CodeSignature"
+          if codesign --verify --deep --strict "$APP_PATH" >/dev/null 2>&1; then
+            echo "Expected an unsigned iOS application, but code signing verification passed." >&2
+            exit 1
+          fi
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Info.plist")
+          lipo -archs "$APP_PATH/$EXECUTABLE" | grep -Fx arm64
+          mkdir -p artifacts/ios/Payload
+          ditto "$APP_PATH" "artifacts/ios/Payload/$(basename "$APP_PATH")"
+          (
+            cd artifacts/ios
+            ditto -c -k --sequesterRsrc --keepParent Payload sonelle-ios-arm64-unsigned.ipa
+            rm -rf Payload
+            unzip -l sonelle-ios-arm64-unsigned.ipa | grep -E 'Payload/[^/]+\.app/Info\.plist' >/dev/null
+            shasum -a 256 sonelle-ios-arm64-unsigned.ipa > sonelle-ios-arm64-unsigned.sha256
+          )
+
+      - name: Upload unsigned iOS artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sonelle-ios-arm64-unsigned-${{ needs.resolve.outputs.commit }}
+          retention-days: 30
+          if-no-files-found: error
+          path: artifacts/ios/*

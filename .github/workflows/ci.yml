@@ -137,6 +137,15 @@ jobs:
       - name: Build desktop bundle
         run: pnpm build:desktop
 
+  mobile-artifacts:
+    name: Build mobile artifacts
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/mobile-artifacts.yml
+    with:
+      revision: ${{ github.sha }}
+    secrets: inherit
+
   release-candidate:
     name: Release candidate
     needs: bundle-linux
