@@ -73,6 +73,22 @@ export function LibraryIcon() {
   );
 }
 
+export function ContentsIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M9 6.5h10M9 12h10M9 17.5h10"
+        stroke="currentColor"
+        stroke-width="1.7"
+        stroke-linecap="round"
+      />
+      <circle cx="5" cy="6.5" r="1.25" fill="currentColor" />
+      <circle cx="5" cy="12" r="1.25" fill="currentColor" />
+      <circle cx="5" cy="17.5" r="1.25" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function BookmarkIcon() {
   return (
     <svg

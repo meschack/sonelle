@@ -11,6 +11,7 @@ import { createDomainEvent, type DomainEvent, type DomainEventDispatcher } from 
 import type { ReaderView } from "./reader-view";
 import { createReaderNarrationSessionChapter } from "./reader-narration";
 import type { ReaderNarrationPrefetchWorkflow } from "./reader-narration-prefetch-workflow";
+import { resolveNarrationFailure } from "@sonelle/audio/narration";
 
 export type ReaderNarrationProjectionEvent =
   | DomainEvent<"NarrationSentenceEntered">
@@ -99,13 +100,15 @@ export function createDesktopNarrationGateway(
       await dependencies.session.play(sentence.id);
     } catch (error) {
       reportErrorSafely(options, error, "playback", sentence.id);
+      const failure = resolveNarrationFailure(error);
       await publish(
         createDomainEvent("NarrationPlaybackFailed", {
           bookId: reader.book.id,
           chapterId: reader.chapter.id,
           passageId: `${reader.chapter.id}:unavailable-passage`,
           sentenceId: sentence.id,
-          reason: "Narration needs attention. Please try again."
+          outcome: failure.outcome,
+          reason: failure.message
         })
       );
     }
@@ -147,13 +150,15 @@ export function createDesktopNarrationGateway(
         await dependencies.session.prepare(sentenceId);
       } catch (error) {
         reportErrorSafely(options, error, "playback", sentenceId);
+        const failure = resolveNarrationFailure(error);
         await publish(
           createDomainEvent("NarrationPlaybackFailed", {
             bookId: reader.book.id,
             chapterId: reader.chapter.id,
             passageId: null,
             sentenceId,
-            reason: "Narration needs attention. Please try again."
+            outcome: failure.outcome,
+            reason: failure.message
           })
         );
       }

@@ -20,12 +20,16 @@ describe("Android stability capture", () => {
 
   it("binds a signed artifact to strict internal build metadata", () => {
     const metadata = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       applicationId: "app.sonelle.reader",
       version: "0.2.0",
       commitRevision: "a".repeat(40),
       buildType: "internal-release",
       abi: "arm64-v8a",
+      narration: {
+        profile: "offline-voice-candidate",
+        candidateStatus: "candidate-not-accepted"
+      },
       artifact: { fileName: "sonelle.apk", sizeBytes: 42, sha256: "deadbeef" }
     };
     expect(

@@ -362,6 +362,32 @@ describe("reader playback application", () => {
     expect(harness.pause).toHaveBeenCalledOnce();
     harness.application.dispose();
   });
+
+  it("retries the failed sentence without losing the book position or advancing twice", () => {
+    const harness = createHarness();
+    const bookId = harness.reader().book.id;
+    harness.setPlayback({ activeSentenceIndex: 1, status: "playing" });
+
+    harness.application.projectNarration(
+      createDomainEvent("NarrationPlaybackFailed", {
+        bookId: harness.reader().book.id,
+        chapterId: harness.reader().chapter.id,
+        sentenceId: harness.reader().sentences[1].id,
+        passageId: "passage-1",
+        outcome: "preparation-failed",
+        reason: "Narration couldn't be prepared. Please try again."
+      })
+    );
+    harness.application.retryNarration();
+    harness.application.playbackChanged();
+
+    expect(harness.reader().book.id).toBe(bookId);
+    expect(harness.playback()).toEqual({ activeSentenceIndex: 1, status: "playing" });
+    expect(harness.requestPlayback).toHaveBeenCalledExactlyOnceWith(
+      harness.reader().sentences[1].id
+    );
+    harness.application.dispose();
+  });
 });
 
 function createHarness(
@@ -420,6 +446,7 @@ function createHarness(
         currentPlayback = update(currentPlayback);
       },
       projectNotice: vi.fn(),
+      projectRecovery: vi.fn(),
       projectAudible: (audible) => {
         currentAudible = audible;
       },

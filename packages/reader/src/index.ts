@@ -350,7 +350,16 @@ export function projectNarrationEventToPlayback(
         status: "ended"
       };
     }
-    case "NarrationPlaybackFailed":
+    case "NarrationPlaybackFailed": {
+      const sentenceIndex = sentenceIds.indexOf(event.payload.sentenceId);
+      return {
+        activeSentenceIndex:
+          sentenceIndex < 0
+            ? state.activeSentenceIndex
+            : clampSentenceIndex(sentenceIndex, sentenceIds.length),
+        status: "paused"
+      };
+    }
     case "NarrationPlaybackInterrupted":
       return pausePlayback(state);
   }

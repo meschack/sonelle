@@ -24,27 +24,72 @@ use crate::audio::{
     SentenceAudioRequest,
 };
 use crate::library_import::{prepare_epub_import, BookImportPhase, BookImportProgress};
-#[cfg(mobile)]
+#[cfg(all(
+    mobile,
+    not(all(target_arch = "aarch64", feature = "android-offline-voice-candidate"))
+))]
 use crate::mobile_shell::{empty_audio_cache_stats, MobileAudioCacheStats};
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
+use crate::narration_cache::with_prepared_audio_lock;
 #[cfg(desktop)]
 use crate::narration_cache::NarrationChapterCacheStats;
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 use crate::narration_engine_pack::{
-    engine_status, install_engine, NarrationEngineInstallationStatus,
+    engine_status, install_engine, with_engine_installation_lock, NarrationEngineInstallationStatus,
 };
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 use crate::narration_manifest::{
-    cancel_manifest_narration as cancel_manifest_narration_request, clear_manifest_cache,
-    manifest_cache_summary, manifest_chapter_cache_summary,
+    cancel_manifest_narration as cancel_manifest_narration_request, manifest_cache_summary,
     prepare_manifest_narration as prepare_manifest_narration_asset, ManifestNarrationRequest,
     PreparedManifestNarration,
 };
-
 #[cfg(desktop)]
+use crate::narration_manifest::{clear_manifest_cache, manifest_chapter_cache_summary};
+use crate::narration_storage::{
+    inspect_storage_at, remove_prepared_audio_at, NarrationStorageRemovalTargetDto,
+    NarrationStorageSnapshotDto,
+};
+
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 #[tauri::command]
 pub fn cancel_manifest_narration(request_id: String) {
     cancel_manifest_narration_request(request_id);
 }
+
+#[cfg(all(
+    mobile,
+    not(all(target_arch = "aarch64", feature = "android-offline-voice-candidate"))
+))]
+#[tauri::command]
+pub fn cancel_manifest_narration(_request_id: String) {}
 use crate::storage::{
     BookExportView, BookMetadataView, BookmarkView, LibraryBookView, LibrarySearchRequest,
     LibrarySearchResultView, ReaderDocumentView, SaveBookmarkRequest, SaveReadingPositionRequest,
@@ -259,7 +304,14 @@ pub async fn prepare_sentence_audio(
     .await
 }
 
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 #[tauri::command]
 pub async fn prepare_manifest_narration(
     app: AppHandle,
@@ -269,6 +321,17 @@ pub async fn prepare_manifest_narration(
         prepare_manifest_narration_asset(&app, request)
     })
     .await
+}
+
+#[cfg(all(
+    mobile,
+    not(all(target_arch = "aarch64", feature = "android-offline-voice-candidate"))
+))]
+#[tauri::command]
+pub async fn prepare_manifest_narration(
+    _request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    Err(mobile_offline_voice_unavailable_message())
 }
 
 #[cfg(desktop)]
@@ -307,7 +370,14 @@ pub async fn install_narration_voice(
     run_blocking("voice.install", move || install_voice(&app, &voice_id)).await
 }
 
-#[cfg(desktop)]
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 #[tauri::command]
 pub async fn get_narration_engine_status(
     app: AppHandle,
@@ -319,7 +389,29 @@ pub async fn get_narration_engine_status(
     .await
 }
 
-#[cfg(desktop)]
+#[cfg(all(
+    mobile,
+    not(all(target_arch = "aarch64", feature = "android-offline-voice-candidate"))
+))]
+#[tauri::command]
+pub async fn get_narration_engine_status(engine_id: String) -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({
+        "engineId": engine_id,
+        "status": "unavailable",
+        "modelRevision": "",
+        "downloadSizeBytes": 0,
+        "message": mobile_offline_voice_unavailable_message()
+    }))
+}
+
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
 #[tauri::command]
 pub async fn install_narration_engine(
     app: AppHandle,
@@ -329,6 +421,29 @@ pub async fn install_narration_engine(
         install_engine(&app, &engine_id)
     })
     .await
+}
+
+#[cfg(all(
+    mobile,
+    not(all(target_arch = "aarch64", feature = "android-offline-voice-candidate"))
+))]
+#[tauri::command]
+pub async fn install_narration_engine(engine_id: String) -> Result<serde_json::Value, String> {
+    get_narration_engine_status(engine_id).await
+}
+
+#[cfg(all(
+    mobile,
+    not(all(target_arch = "aarch64", feature = "android-offline-voice-candidate"))
+))]
+fn mobile_offline_voice_unavailable_message() -> String {
+    if cfg!(target_arch = "aarch64") {
+        "This build does not include Sonelle's experimental offline voice. Device voices remain available."
+            .to_string()
+    } else {
+        "Sonelle's offline voice requires a 64-bit Android device. Device voices remain available."
+            .to_string()
+    }
 }
 
 #[cfg(desktop)]
@@ -343,7 +458,30 @@ pub async fn get_audio_cache_stats(
     .await
 }
 
-#[cfg(mobile)]
+#[cfg(all(
+    mobile,
+    target_arch = "aarch64",
+    feature = "android-offline-voice-candidate"
+))]
+#[tauri::command]
+pub async fn get_audio_cache_stats(
+    app: AppHandle,
+    book_id: String,
+) -> Result<serde_json::Value, String> {
+    run_blocking("audio-cache.summary", move || {
+        let stats = manifest_cache_summary(&app, &book_id)?;
+        Ok(serde_json::json!({
+            "sentenceCount": stats.covered_sentence_count,
+            "sizeBytes": stats.size_bytes
+        }))
+    })
+    .await
+}
+
+#[cfg(all(
+    mobile,
+    not(all(target_arch = "aarch64", feature = "android-offline-voice-candidate"))
+))]
 #[tauri::command]
 pub async fn get_audio_cache_stats(_book_id: String) -> Result<MobileAudioCacheStats, String> {
     Ok(empty_audio_cache_stats())
@@ -385,6 +523,97 @@ fn book_audio_cache_summary(app: &AppHandle, book_id: &str) -> Result<AudioCache
         sentence_count: legacy.sentence_count + manifest.covered_sentence_count,
         size_bytes: legacy.size_bytes + manifest.size_bytes,
     })
+}
+
+#[tauri::command]
+pub async fn inspect_narration_storage(
+    app: AppHandle,
+) -> Result<NarrationStorageSnapshotDto, String> {
+    run_blocking("narration-storage.inspect", move || {
+        inspect_storage_at(&narration_app_data_root(&app)?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn remove_narration_storage_target(
+    app: AppHandle,
+    target: NarrationStorageRemovalTargetDto,
+) -> Result<NarrationStorageSnapshotDto, String> {
+    run_blocking("narration-storage.remove", move || {
+        let root = narration_app_data_root(&app)?;
+        run_narration_removal(&root, target)
+    })
+    .await
+}
+
+fn narration_app_data_root(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    use tauri::Manager as _;
+    app.path()
+        .app_data_dir()
+        .map_err(|_| "Sonelle couldn't open its storage folder.".to_string())
+}
+
+/// Executes one approved removal while sharing the owner locks used by
+/// prepared-audio writes and pack installation.
+#[cfg(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+))]
+fn run_narration_removal(
+    root: &std::path::Path,
+    target: NarrationStorageRemovalTargetDto,
+) -> Result<NarrationStorageSnapshotDto, String> {
+    match target {
+        NarrationStorageRemovalTargetDto::PreparedAudio { book_id } => {
+            with_prepared_audio_lock(|| {
+                settle_narration_removal(root, remove_prepared_audio_at(root, &book_id))
+            })
+        }
+        NarrationStorageRemovalTargetDto::VoicePack { pack_id, revision } => {
+            with_engine_installation_lock(|| {
+                settle_narration_removal(
+                    root,
+                    crate::narration_storage::remove_voice_pack_at(root, &pack_id, &revision),
+                )
+            })
+        }
+    }
+}
+
+/// Builds without the native voice candidate do not own narration files.
+#[cfg(not(any(
+    desktop,
+    all(
+        target_os = "android",
+        target_arch = "aarch64",
+        feature = "android-offline-voice-candidate"
+    )
+)))]
+fn run_narration_removal(
+    root: &std::path::Path,
+    target: NarrationStorageRemovalTargetDto,
+) -> Result<NarrationStorageSnapshotDto, String> {
+    match target {
+        NarrationStorageRemovalTargetDto::PreparedAudio { book_id } => {
+            settle_narration_removal(root, remove_prepared_audio_at(root, &book_id))
+        }
+        NarrationStorageRemovalTargetDto::VoicePack { .. } => {
+            Err("Offline voice files aren't stored on this device yet.".to_string())
+        }
+    }
+}
+
+fn settle_narration_removal(
+    root: &std::path::Path,
+    outcome: Result<Option<u64>, String>,
+) -> Result<NarrationStorageSnapshotDto, String> {
+    outcome?;
+    inspect_storage_at(root)
 }
 
 #[tauri::command]

@@ -107,6 +107,7 @@ describe("reader playback", () => {
         narrationEvent("NarrationPlaybackFailed", {
           sentenceId: "sentence-2",
           passageId: "passage-1",
+          outcome: "unknown",
           reason: "needs attention"
         })
       )

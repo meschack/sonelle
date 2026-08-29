@@ -7,7 +7,7 @@ export interface NarrationEngineRoute {
   language: string;
 }
 
-export type NarrationRoutingMode = "legacy-piper" | "hybrid-v1";
+export type NarrationRoutingMode = "legacy-piper" | "hybrid-v1" | "mobile-supertonic-v1";
 
 export interface NarrationRoutingOptions {
   mode?: NarrationRoutingMode;
@@ -55,6 +55,17 @@ export function routeNarrationEngine(
   }
 
   const normalizedLanguage = normalizeLanguageCode(language);
+  if (options.mode === "mobile-supertonic-v1") {
+    return {
+      engineId: "supertonic",
+      preparationKind: "sentence-batch",
+      language:
+        normalizedLanguage === "en" ||
+        (normalizedLanguage != null && supertonicLanguages.has(normalizedLanguage))
+          ? normalizedLanguage
+          : "na"
+    };
+  }
   if (normalizedLanguage === "en") {
     return { engineId: "kokoro", preparationKind: "passage", language: "en" };
   }

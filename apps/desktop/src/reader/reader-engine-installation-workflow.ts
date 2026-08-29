@@ -25,6 +25,7 @@ export function createReaderEngineInstallationWorkflow(
   dependencies: ReaderEngineInstallationWorkflowDependencies
 ): ReaderEngineInstallationWorkflow {
   const statusRuns = new Map<NarrationEngineId, number>();
+  const activeInstallations = new Set<NarrationEngineId>();
 
   const nextStatusRun = (engineId: NarrationEngineId) => {
     const runId = (statusRuns.get(engineId) ?? 0) + 1;
@@ -81,6 +82,7 @@ export function createReaderEngineInstallationWorkflow(
           "OfflineNarrationFilesInstallationRequested",
           (event) => {
             const engineId = event.payload.engineId as NarrationEngineId;
+            activeInstallations.add(engineId);
             dependencies.projectInstallation(preparingEngineInstallation(engineId));
             dependencies.projectNotice(null);
           }
@@ -91,17 +93,21 @@ export function createReaderEngineInstallationWorkflow(
         ),
         dependencies.eventDispatcher.subscribe(
           "OfflineNarrationFilesInstallationProgressed",
-          (event) =>
+          (event) => {
+            const engineId = event.payload.engineId as NarrationEngineId;
+            if (!activeInstallations.has(engineId)) return;
             dependencies.projectInstallation({
               ...event.payload,
-              engineId: event.payload.engineId as NarrationEngineId
-            })
+              engineId
+            });
+          }
         ),
         dependencies.eventDispatcher.subscribe(
           "OfflineNarrationFilesInstallationReady",
           (event) => {
             dependencies.projectNotice(null);
             const engineId = event.payload.engineId as NarrationEngineId;
+            activeInstallations.delete(engineId);
             return dependencies.repository
               .getStatus(engineId)
               .then(dependencies.projectInstallation);
@@ -110,11 +116,10 @@ export function createReaderEngineInstallationWorkflow(
         dependencies.eventDispatcher.subscribe(
           "OfflineNarrationFilesInstallationFailed",
           (event) => {
+            const engineId = event.payload.engineId as NarrationEngineId;
+            activeInstallations.delete(engineId);
             dependencies.projectInstallation(
-              failedEngineInstallation(
-                event.payload.engineId as NarrationEngineId,
-                event.payload.reason
-              )
+              failedEngineInstallation(engineId, event.payload.reason)
             );
             dependencies.projectNotice(event.payload.reason);
           }
@@ -139,6 +144,7 @@ export function createReaderEngineInstallationWorkflow(
 
       return () => {
         statusRuns.clear();
+        activeInstallations.clear();
         subscriptions.forEach((unsubscribe) => unsubscribe());
         unlisten();
       };

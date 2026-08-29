@@ -57,7 +57,11 @@ export function createReaderNarrationSessionChapter(
   const routedVoiceId =
     routingMode === "hybrid-v1"
       ? resolveHybridNarrationVoiceForLanguage(currentReader.book.language, voiceId)
-      : voiceId;
+      : routingMode === "mobile-supertonic-v1"
+        ? voiceId.startsWith("supertonic:")
+          ? voiceId
+          : "supertonic:F1"
+        : voiceId;
 
   return {
     outline: createReaderNarrationOutline(currentReader),

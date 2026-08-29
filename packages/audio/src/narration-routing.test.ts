@@ -28,6 +28,20 @@ describe("narration engine routing", () => {
     });
   });
 
+  it("routes every Android book through the standard multilingual voice", () => {
+    expect(routeNarrationEngine("en-US", { mode: "mobile-supertonic-v1" })).toEqual({
+      engineId: "supertonic",
+      preparationKind: "sentence-batch",
+      language: "en"
+    });
+    expect(routeNarrationEngine("fr-FR", { mode: "mobile-supertonic-v1" })).toEqual({
+      engineId: "supertonic",
+      preparationKind: "sentence-batch",
+      language: "fr"
+    });
+    expect(routeNarrationEngine("tlh", { mode: "mobile-supertonic-v1" }).language).toBe("na");
+  });
+
   it("routes missing and unsupported languages to the language-agnostic fallback", () => {
     expect(routeNarrationEngine(null).language).toBe("na");
     expect(routeNarrationEngine("tlh").language).toBe("na");

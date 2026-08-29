@@ -9,6 +9,12 @@ export type {
   PreparedNarration
 } from "./narration-contracts";
 export { digestNarrationPassageText } from "./narration-identity";
+export {
+  NarrationFailureError,
+  narrationFailureMessage,
+  resolveNarrationFailure,
+  type ResolvedNarrationFailure
+} from "./narration-failure";
 export type {
   NarrationGateway,
   NarrationGatewayEvent,

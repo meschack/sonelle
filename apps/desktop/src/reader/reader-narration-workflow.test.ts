@@ -212,6 +212,7 @@ describe("desktop narration gateway", () => {
           : createDomainEvent(eventName, {
               ...base,
               sentenceId: reader.sentences[0].id,
+              outcome: "unknown",
               reason: "Narration needs attention."
             });
 

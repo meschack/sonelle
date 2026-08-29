@@ -130,6 +130,29 @@ describe("narration session", () => {
     expect(events.filter((event) => event.name === "NarrationPlaybackEnded")).toHaveLength(0);
   });
 
+  it("reports the last entered sentence when playback fails mid-passage", async () => {
+    const events: AnyDomainEvent[] = [];
+    const session = createNarrationSession({
+      adapter: new FakePassageNarrationAdapter(),
+      player: new FailingAfterSecondSentencePlayer(),
+      eventDispatcher: collectingEventDispatcher(events),
+      createRequestId: createIncrementingIds()
+    });
+    session.open({
+      outline: createOutline(),
+      engineId: "kokoro",
+      modelRevision: "fake-kokoro",
+      voiceId: "kokoro-en"
+    });
+
+    await session.play("s1");
+
+    expect(events.at(-1)).toMatchObject({
+      name: "NarrationPlaybackFailed",
+      payload: { sentenceId: "s2", outcome: "unknown" }
+    });
+  });
+
   it("fails closed when playback completes without every expected sentence callback", async () => {
     const events: AnyDomainEvent[] = [];
     const session = createNarrationSession({
@@ -601,6 +624,21 @@ class FailingManifestNarrationPlayer implements ManifestAwareNarrationPlayer {
   emitLate(sentenceId: string): void {
     this.handlers?.sentenceEntered(sentenceId);
   }
+}
+
+class FailingAfterSecondSentencePlayer implements ManifestAwareNarrationPlayer {
+  async play(input: ManifestPlaybackInput, handlers: ManifestPlaybackHandlers): Promise<void> {
+    handlers.sentenceEntered(input.startSentenceId);
+    const second = input.narration.sentences.find(
+      (sentence) => sentence.sentenceId !== input.startSentenceId
+    );
+    if (second != null) handlers.sentenceEntered(second.sentenceId);
+    throw new Error("platform playback failed");
+  }
+
+  setOutput(): void {}
+
+  stop(): void {}
 }
 
 class IncompleteManifestNarrationPlayer implements ManifestAwareNarrationPlayer {

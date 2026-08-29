@@ -34,9 +34,10 @@ supported non-English sentences into one manifest-backed WAV. Both providers reu
 sessions and accept terminable run options.
 
 The mobile candidate tool transforms the exact pinned Supertonic snapshot into a dynamic QInt8
-artifact set behind an ignored local catalog. Its manifest remains `candidate-not-accepted`; the
-production catalog cannot discover it implicitly. Candidate identity includes every measured size
-and SHA-256, and native synthesis must pass before the tool publishes the directory.
+artifact set. Its manifest remains `candidate-not-accepted`; the public application cannot discover
+it implicitly. An explicit internal arm64 Cargo feature compiles the Android Supertonic adapter and
+consumes a separate hosted-artifact catalog. Candidate identity includes every measured size and
+SHA-256, and native synthesis must pass before the tool publishes the directory.
 
 The session keeps three contextual Kokoro passages prepared. Supertonic groups at most two ordinary
 sentences per passage and keeps two passages prepared, while one reusable runtime and one ONNX thread
@@ -62,10 +63,42 @@ and preparation identity.
 The narration storage-maintenance module is the policy seam for mobile storage adapters. It checks
 manifest download requirements against available space while retaining a post-install reserve.
 Resumable staging counts toward bytes already present. Cleanup approves only a typed
-prepared-audio book identity or verified voice-pack identity; books, bookmarks, settings, and
-reading positions are absent from its interface. Prepared audio in an active listening session is
-protected, and a selected voice pack must be replaced before it can be removed. Both cleanup paths
-require explicit confirmation.
+prepared-audio book identity or a revision-qualified verified voice-pack identity; books,
+bookmarks, settings, and reading positions are absent from its interface. Prepared audio in an
+active listening session is protected, and a selected voice pack must be replaced before it can be
+removed. Both cleanup paths require explicit confirmation. A stale revision request resolves as
+not-found rather than deleting the newly installed revision, and ambiguous inventory fails closed.
+
+The reader storage application owns the guarded workflow around that policy: it refreshes the
+snapshot through `NarrationStorageMaintenanceRepository`, maps playback and selection state into
+activity, runs installation preflight before any installer call, holds pending confirmations as
+typed requests without filesystem paths, re-inspects storage and re-reads activity after the
+reader confirms, and executes only a freshly approved plan. It refuses to own filesystem traversal,
+pack verification, platform free-space APIs, playback execution, book deletion, or modal markup.
+Prepared-audio removal stays event-driven: after approval the workflow publishes
+`PreparedNarrationClearingRequested`, so preparation is cancelled through the existing reaction
+before the desktop executor deletes files; it never stops playback automatically and refuses
+active or paused listening instead. Voice-pack removal runs directly through the repository's
+narrow native command while sharing the owner lock with pack installation. The internal arm64
+candidate uses this same storage boundary; builds without that capability report no owned model or
+prepared-audio storage.
+
+The native storage module derives two canonical narration roots from the application-data
+directory — `$APPDATA/narration-v3` for prepared narration and `$APPDATA/narration-engines` for
+managed engines and packs — validates typed identifiers before joining paths, rejects symlinks,
+traversal, and canonical escapes, measures directories with saturating arithmetic, and removes one
+authorized target under the shared owner lock. It refuses everything else in application data,
+including `sonelle.sqlite3`, covers, import sources, Piper runtime files, and device TTS. Android
+reports an honest empty voice-pack inventory unless the internal arm64 candidate owns a verified
+installation.
+
+## Production Gaps
+
+- acceptance of the Android model and runtime on the baseline devices (#102)
+- listening and pronunciation acceptance of the candidate voices (#103)
+- Device QA proofs: actual low-space install failure and recovery, deletion of real prepared
+  narration, deletion of a real inactive accepted pack, playback races, and protected library
+  state on hardware
 
 ## Domain Events
 
@@ -116,7 +149,10 @@ pack verification, cache writes, provider input validation, manifests, and cance
 release-candidate provider smoke installs local packs and runs real Kokoro and Supertonic inference
 sequentially with one ONNX thread per provider.
 Storage-maintenance tests cover resumable-install space accounting, insufficient-space recovery,
-confirmation, verified-pack boundaries, active playback, and narrow narration-only deletion.
+confirmation, verified-pack boundaries, revision-qualified identity, active playback, and narrow
+narration-only deletion. Reader application tests prove the guarded workflow through fakes, the
+native suite proves containment and sentinel preservation in temporary application-data roots,
+and repository tests assert the exact invoke payloads while rejecting smuggled paths.
 The mobile-candidate suite covers deterministic identity, catalog projection, corruption, and the
 standard-pack size gate; candidate preparation additionally runs real native synthesis.
 Android adapter tests cover voice projection, network disclosure, command routing, sentence events,

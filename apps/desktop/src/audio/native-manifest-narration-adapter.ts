@@ -8,6 +8,7 @@ import type {
   NarrationPreparationRequest,
   PreparedNarration
 } from "@sonelle/audio/narration";
+import { NarrationFailureError } from "@sonelle/audio/narration";
 
 type NativeManifestNarration = PreparedNarration;
 
@@ -45,7 +46,10 @@ export function createNativeManifestNarrationAdapter(
         source: narration.sourceUrl
       });
       if (resolved.status !== "available") {
-        throw new Error("Prepared narration is not available to play.");
+        throw new NarrationFailureError(
+          "audio-unavailable",
+          "Prepared narration is not available to play."
+        );
       }
       return { ...narration, sourceUrl: resolved.url };
     }

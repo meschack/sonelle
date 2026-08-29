@@ -15,7 +15,11 @@ import {
   isAndroidDeviceVoiceId,
   type AudioSettings
 } from "@sonelle/audio";
-import { createDomainEvent, type AnyDomainEvent } from "@sonelle/domain";
+import {
+  createDomainEvent,
+  type AnyDomainEvent,
+  type NarrationFailureOutcome
+} from "@sonelle/domain";
 import {
   bookmarkedBookIds,
   filterLibraryBooks,
@@ -61,11 +65,7 @@ import { ReaderToast } from "./reader-feedback";
 import type { LibraryBookSummary } from "../library/library-models";
 import type { AppView, InspectorTab, SelectedWord } from "./reader-experience-types";
 import { cssFontFamilyStack, isTypingTarget } from "./reader-formatting";
-import {
-  MobileNarrationControls,
-  ReaderInspector,
-  type ReaderInspectorModel
-} from "./reader-inspector";
+import { ReaderInspector, type ReaderInspectorModel } from "./reader-inspector";
 import {
   clampSidebarWidth,
   getSidebarResizeBounds,
@@ -93,11 +93,22 @@ import { createReaderLibraryApplication } from "./reader-library-application";
 import { createReaderLibrarySearchWorkflow } from "./reader-library-search-workflow";
 import {
   createCheckingOfflineNarrationProfiles,
+  offlineNarrationEngineId,
   offlineNarrationReadinessMessage,
   createReaderOfflineNarrationApplication,
+  type OfflineNarrationProfileId,
   type OfflineVoiceView,
   type PreparedAudioView
 } from "./reader-offline-narration-application";
+import {
+  createReaderNarrationStorageApplication,
+  removableNarrationVoicePacks,
+  type NarrationStorageRemovalPrompt,
+  type NarrationVoicePackInstallationDescriptor
+} from "./reader-narration-storage-application";
+import { ReaderNarrationStorageDialog } from "./reader-narration-storage-dialog";
+import type { NarrationStorageSnapshot } from "@sonelle/audio/narration";
+import { routeNarrationEngine } from "@sonelle/audio/narration";
 import { createReaderNavigationApplication } from "./reader-navigation-application";
 import { createReaderOpeningWorkflow } from "./reader-opening-workflow";
 import { createReaderPlaybackApplication } from "./reader-playback-application";
@@ -111,6 +122,10 @@ import {
   type BookNarrationReadiness
 } from "./reader-book-narration-preparation";
 import { createReaderNarrationSettingsWorkflow } from "./reader-narration-settings-workflow";
+import {
+  narrationRecoveryFor,
+  type NarrationRecoveryActionKind
+} from "./reader-narration-recovery";
 import { createReaderAppearanceWorkflow } from "./reader-appearance-workflow";
 import { createReaderTypographyWorkflow } from "./reader-typography-workflow";
 import {
@@ -123,6 +138,10 @@ import { ReaderQuoteImageDialog } from "./reader-quote-image-dialog";
 import { FocusIcon } from "./reader-icons";
 import { MobileReaderShell } from "./mobile-reader-shell";
 import { MobileNarrationDock } from "./mobile-narration-dock";
+import {
+  effectiveReaderContentFontSize,
+  readerContentFontSizeMaximum
+} from "./mobile-reader-typography";
 import {
   renderedLibraryGridColumnCount,
   resolveLibraryGridNavigationIndex,
@@ -165,12 +184,16 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const bookmarkStore = dependencies.bookmarkStore;
   const narrationService = dependencies.narration;
   const usesLanguagePacks = narrationService.capabilities.offlineLibrary === "language-pack";
+  const usesMobileStandardVoice =
+    narrationService.capabilities.offlineLibrary === "mobile-standard";
+  const usesEnginePacks = usesLanguagePacks || usesMobileStandardVoice;
   const dictionaryRepository = dependencies.dictionaryRepository;
   const audioSettingsRepository = dependencies.audioSettingsRepository;
   const readerPreferencesRepository = dependencies.readerPreferencesRepository;
   const eventDispatcher = dependencies.eventDispatcher;
   const readerPreferences = readerPreferencesRepository.load();
   const sampleReader = buildFixtureReaderView();
+  const restoresLibraryOnStartup = dependencies.startupMode === "restore-library";
 
   const [reader, setReader] = createSignal<ReaderView>(sampleReader);
   const [libraryBooks, setLibraryBooks] = createSignal<LibraryBookSummary[]>([]);
@@ -222,18 +245,20 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const [inspectorRailWidth, setInspectorRailWidth] = createSignal(
     readerPreferences.inspectorRailWidth
   );
-  const [activeView, setActiveView] = createSignal<AppView>("reader");
+  const [activeView, setActiveView] = createSignal<AppView>(
+    restoresLibraryOnStartup ? "library" : "reader"
+  );
   const [mobileReaderShell, setMobileReaderShell] = createSignal(
     dependencies.readerShellViewport.isMobile()
   );
+  const renderedReaderContentFontSize = () =>
+    effectiveReaderContentFontSize(readerContentFontSize(), mobileReaderShell());
   const [mobileToolsOpen, setMobileToolsOpen] = createSignal(false);
-  const [mobileNarrationOpen, setMobileNarrationOpen] = createSignal(false);
   onCleanup(
     dependencies.readerShellViewport.listen((mobile) => {
       setMobileReaderShell(mobile);
       if (!mobile) {
         setMobileToolsOpen(false);
-        setMobileNarrationOpen(false);
       }
     })
   );
@@ -245,17 +270,25 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const [librarySidebarCollapsed, setLibrarySidebarCollapsed] = createSignal(false);
   const [inspectorSidebarCollapsed, setInspectorSidebarCollapsed] = createSignal(false);
   const [libraryRailMode, setLibraryRailMode] = createSignal(
-    createLibraryRailMode(sampleReader.book.id)
+    restoresLibraryOnStartup
+      ? transitionLibraryRailMode(createLibraryRailMode(sampleReader.book.id), {
+          type: "library-opened"
+        })
+      : createLibraryRailMode(sampleReader.book.id)
   );
   const sendLibraryRailEvent = (event: LibraryRailEvent) => {
     setLibraryRailMode((current) => transitionLibraryRailMode(current, event));
   };
-  const [isLibraryLoading, setIsLibraryLoading] = createSignal(false);
+  const [isLibraryLoading, setIsLibraryLoading] = createSignal(restoresLibraryOnStartup);
+  const [startupReady, setStartupReady] = createSignal(!restoresLibraryOnStartup);
   const [isLibrarySearching, setIsLibrarySearching] = createSignal(false);
   const [isImporting, setIsImporting] = createSignal(false);
   const [isLibraryDropTarget, setIsLibraryDropTarget] = createSignal(false);
   const [playback, setPlayback] = createSignal(createPlaybackState());
   const [narrationNotice, setNarrationNotice] = createSignal<string | null>(null);
+  const [narrationRecovery, setNarrationRecovery] = createSignal<NarrationFailureOutcome | null>(
+    null
+  );
   const [narrationPreparing, setNarrationPreparing] = createSignal(false);
   const [showNarrationPreparation, setShowNarrationPreparation] = createSignal(false);
   const [narrationAudible, setNarrationAudible] = createSignal(false);
@@ -279,6 +312,12 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   );
   const [audioCacheStats, setAudioCacheStats] = createSignal<PreparedAudioView | null>(null);
   const [audioCacheNotice, setAudioCacheNotice] = createSignal<string | null>(null);
+  const [storagePrompt, setStoragePrompt] = createSignal<NarrationStorageRemovalPrompt | null>(
+    null
+  );
+  const [storageNotice, setStorageNotice] = createSignal<string | null>(null);
+  const [storageBusy, setStorageBusy] = createSignal(false);
+  const [storageSnapshot, setStorageSnapshot] = createSignal<NarrationStorageSnapshot | null>(null);
   const [bookNarrationReadiness, setBookNarrationReadiness] =
     createSignal<BookNarrationReadiness | null>(null);
   const [bookNarrationProgress, setBookNarrationProgress] =
@@ -419,16 +458,24 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       narrationReadinessMessage: () =>
         isAndroidDeviceVoiceId(audioSettings().voiceId)
           ? null
-          : usesLanguagePacks
-            ? offlineNarrationReadinessMessage(offlineNarrationProfiles(), reader().book.language)
-            : voiceInstallation().status === "ready"
-              ? null
-              : "Download this voice to listen offline.",
+          : usesEnginePacks
+            ? offlineNarrationReadinessMessage(
+                offlineNarrationProfiles(),
+                reader().book.language,
+                usesMobileStandardVoice ? "standard" : undefined
+              )
+            : narrationService.capabilities.offlineLibrary === "unavailable"
+              ? "Choose an Android device voice to listen on this phone."
+              : voiceInstallation().status === "ready"
+                ? null
+                : "Download this voice to listen offline.",
       projectPlayback: setPlayback,
       projectNotice: (message) => {
         if (message != null) setInspectorTab("settings");
+        if (message == null) setNarrationRecovery(null);
         setNarrationNotice(message);
       },
+      projectRecovery: setNarrationRecovery,
       projectAudible: setNarrationAudible,
       projectPreparing: setNarrationPreparing,
       projectJump(update) {
@@ -513,6 +560,48 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       projectVoiceInstallation: setVoiceInstallation
     }
   );
+  const narrationStorageActivity = createMemo(() => ({
+    playback: narrationPreparing()
+      ? ("preparing" as const)
+      : playback().status === "playing"
+        ? ("playing" as const)
+        : playback().status === "idle"
+          ? ("idle" as const)
+          : ("paused" as const),
+    activeBookId: reader().book.id,
+    activeVoicePackId: usesEnginePacks
+      ? routeNarrationEngine(reader().book.language, {
+          mode: usesMobileStandardVoice ? "mobile-supertonic-v1" : "hybrid-v1"
+        }).engineId
+      : null
+  }));
+  const narrationStorageApplication = createReaderNarrationStorageApplication(
+    {
+      repository: dependencies.narrationStorageRepository,
+      eventDispatcher,
+      friendlyError: toFriendlyNarrationError
+    },
+    {
+      currentActivity: narrationStorageActivity,
+      projectPrompt: setStoragePrompt,
+      projectNotice: setStorageNotice,
+      projectBusy: setStorageBusy,
+      projectSnapshot: setStorageSnapshot
+    }
+  );
+  const requestNarrationProfileWithSpaceCheck = (profileId: OfflineNarrationProfileId) => {
+    const profile = offlineNarrationProfiles()[profileId];
+    const descriptor: NarrationVoicePackInstallationDescriptor = {
+      packId: offlineNarrationEngineId(profileId),
+      downloadSizeBytes: profile.downloadSizeBytes,
+      stagedBytes: profile.downloadedBytes > 0 ? profile.downloadedBytes : undefined
+    };
+    void narrationStorageApplication
+      .requestVoicePackInstallation(descriptor, () =>
+        offlineNarrationApplication.requestNarrationProfile(profileId)
+      )
+      .catch((error) => reportAppError("narration-storage.preflight", error, [profileId]));
+  };
   const bookNarrationPreparationApplication = createReaderBookNarrationPreparationApplication(
     {
       audioCache: dependencies.audioCacheRepository,
@@ -786,6 +875,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     let disposed = false;
     let stopLibraryApplication: (() => void) | undefined;
     let stopOfflineNarrationApplication: (() => void) | undefined;
+    let stopNarrationStorageRefresh: (() => void) | undefined;
     const disconnectNarration = narrationGateway.connect();
     const stopNarrationSettingsWorkflow = narrationSettingsWorkflow.start();
     const stopTypographyWorkflow = typographyWorkflow.start();
@@ -804,16 +894,36 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         void reportAppError(scope, error, details);
       }
     );
-    void libraryApplication.start().then((stop) => {
-      if (disposed) stop();
-      else stopLibraryApplication = stop;
-    });
-    void libraryApplication.refresh();
-    void libraryApplication.refreshBookmarks();
-    void offlineNarrationApplication.start().then((stop) => {
-      if (disposed) stop();
-      else stopOfflineNarrationApplication = stop;
-    });
+    void (async () => {
+      if (restoresLibraryOnStartup) await libraryApplication.refresh();
+      let stop: (() => void) | undefined;
+      try {
+        stop = await libraryApplication.start();
+      } catch (error) {
+        setLibraryNotice(toFriendlyLibraryError(error));
+        reportEventReactionFailure(error);
+      }
+      if (disposed) {
+        stop?.();
+        return;
+      }
+      stopLibraryApplication = stop;
+      setStartupReady(true);
+      if (!restoresLibraryOnStartup) void libraryApplication.refresh();
+
+      void libraryApplication.refreshBookmarks();
+      const stopStorage = narrationStorageApplication.start();
+      if (disposed) {
+        stopStorage();
+        return;
+      } else {
+        stopNarrationStorageRefresh = stopStorage;
+        void narrationStorageApplication.refresh().catch(reportEventReactionFailure);
+      }
+      const stopOfflineNarration = await offlineNarrationApplication.start();
+      if (disposed) stopOfflineNarration();
+      else stopOfflineNarrationApplication = stopOfflineNarration;
+    })();
     void dependencies.fontCatalog
       .listFamilies()
       .then((families) => {
@@ -834,6 +944,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       stopAppLifecycle();
       stopLibraryApplication?.();
       stopOfflineNarrationApplication?.();
+      stopNarrationStorageRefresh?.();
       disconnectNarration();
       stopNarrationSettingsWorkflow();
       stopTypographyWorkflow();
@@ -913,6 +1024,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   });
 
   createEffect(() => {
+    if (!startupReady()) return;
     const language = reader().book.language;
     setNarrationVoices(narrationService.voices(language));
     let current = true;
@@ -935,18 +1047,22 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   });
 
   createEffect(() => {
+    if (!startupReady()) return;
     onCleanup(playbackApplication.playbackChanged());
   });
 
   createEffect(() => {
+    if (!startupReady()) return;
     playbackApplication.autoAdvanceChanged();
   });
 
   createEffect(() => {
+    if (!startupReady()) return;
     playbackApplication.prefetchChanged();
   });
 
   createEffect(() => {
+    if (!startupReady()) return;
     playbackApplication.positionChanged();
   });
 
@@ -1033,7 +1149,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         openAppView("library");
         break;
       case "import-book":
-        void libraryApplication.importFromDialog();
+        if (startupReady()) void libraryApplication.importFromDialog();
         break;
       case "focus-library-search":
         document
@@ -1138,6 +1254,69 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   const togglePlayback = playbackApplication.toggle;
   const moveSentence = playbackApplication.move;
   const selectSentence = playbackApplication.select;
+  const openNarrationSettings = () => {
+    setInspectorTab("settings");
+    if (mobileReaderShell()) setMobileToolsOpen(true);
+  };
+  const requestActiveOfflineVoice = () => {
+    if (usesEnginePacks) {
+      const engine = routeNarrationEngine(reader().book.language, {
+        mode: usesMobileStandardVoice ? "mobile-supertonic-v1" : "hybrid-v1"
+      }).engineId;
+      requestNarrationProfileWithSpaceCheck(
+        usesMobileStandardVoice ? "standard" : engine === "kokoro" ? "english" : "multilingual"
+      );
+      return;
+    }
+    if (narrationService.capabilities.offlineLibrary === "individual-voice") {
+      const installation = voiceInstallation();
+      void narrationStorageApplication
+        .requestVoicePackInstallation(
+          {
+            packId: installation.voiceId,
+            downloadSizeBytes: installation.downloadSizeBytes,
+            stagedBytes: installation.downloadedBytes > 0 ? installation.downloadedBytes : undefined
+          },
+          offlineNarrationApplication.requestSelectedVoice
+        )
+        .catch((error) => reportAppError("narration-storage.preflight", error));
+    }
+  };
+  const performNarrationRecovery = (kind: NarrationRecoveryActionKind) => {
+    setNarrationNotice(null);
+    setNarrationRecovery(null);
+    switch (kind) {
+      case "retry":
+        playbackApplication.retryNarration();
+        return;
+      case "install-voice":
+      case "repair-voice":
+        openNarrationSettings();
+        requestActiveOfflineVoice();
+        return;
+      case "manage-storage":
+        setStorageNotice("Remove unused narration files, then retry narration.");
+        openNarrationSettings();
+        return;
+      case "choose-voice":
+        openNarrationSettings();
+    }
+  };
+  const narrationRecoveryActions = createMemo(() => {
+    const outcome = narrationRecovery();
+    if (outcome == null) return [];
+    const recovery = narrationRecoveryFor(
+      outcome,
+      !isAndroidDeviceVoiceId(audioSettings().voiceId) &&
+        narrationVoices().some((voice) => isAndroidDeviceVoiceId(voice.id))
+    );
+    return [recovery.primary, recovery.secondary]
+      .filter((action) => action != null)
+      .map((action) => ({
+        label: action.label,
+        onSelect: () => performNarrationRecovery(action.kind)
+      }));
+  });
 
   const moveChapter = (direction: -1 | 1) => {
     const currentReader = reader();
@@ -1267,12 +1446,17 @@ export function ReaderExperience(props: ReaderExperienceProps) {
     get importing() {
       return isImporting();
     },
+    get mutationsDisabled() {
+      return !startupReady();
+    },
     get notice() {
       return libraryNotice();
     },
     onQueryChange: setLibraryQuery,
     onFilterChange: setLibraryFilter,
-    onImport: libraryApplication.importFromDialog,
+    onImport: () => {
+      if (startupReady()) void libraryApplication.importFromDialog();
+    },
     onOpenBook: libraryApplication.open,
     onRetryLibrary: libraryApplication.refresh,
     onOpenSample: openSampleReader
@@ -1327,9 +1511,13 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       return librarySearchResults();
     },
     onOpenSearchResult: openLibrarySearchResult,
-    onDragEnter: () => setIsLibraryDropTarget(true),
+    onDragEnter: () => {
+      if (startupReady()) setIsLibraryDropTarget(true);
+    },
     onDragLeave: () => setIsLibraryDropTarget(false),
-    onDropFiles: libraryApplication.handleBrowserDrop
+    onDropFiles: (files) => {
+      if (startupReady()) libraryApplication.handleBrowserDrop(files);
+    }
   } satisfies LibraryWorkspaceModel;
 
   const inspectorModel = {
@@ -1400,7 +1588,10 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         return offlineNarrationProfiles();
       },
       get readerContentFontSize() {
-        return readerContentFontSize();
+        return renderedReaderContentFontSize();
+      },
+      get readerContentFontSizeMax() {
+        return readerContentFontSizeMaximum(mobileReaderShell());
       },
       get readerContentFontFamily() {
         return readerContentFontFamily();
@@ -1424,6 +1615,16 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       get audioCacheNotice() {
         return audioCacheNotice();
       },
+      get narrationStorage() {
+        return {
+          removableVoicePacks: removableNarrationVoicePacks(
+            storageSnapshot(),
+            narrationStorageActivity()
+          ),
+          notice: storageNotice(),
+          busy: storageBusy()
+        };
+      },
       get bookNarrationReadiness() {
         const readiness = bookNarrationReadiness();
         return readiness?.bookId === reader().book.id ? readiness : null;
@@ -1437,10 +1638,12 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       get canPrepareBook() {
         return (
           reader().source === "library" &&
-          (usesLanguagePacks
+          !usesMobileStandardVoice &&
+          (usesEnginePacks
             ? offlineNarrationReadinessMessage(
                 offlineNarrationProfiles(),
-                reader().book.language
+                reader().book.language,
+                usesMobileStandardVoice ? "standard" : undefined
               ) == null
             : voiceInstallation().status === "ready")
         );
@@ -1449,8 +1652,21 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         return exportNotice();
       },
       onAudioSettingsChange: updateAudioSettings,
-      onInstallVoice: offlineNarrationApplication.requestSelectedVoice,
-      onInstallNarrationProfile: offlineNarrationApplication.requestNarrationProfile,
+      onInstallVoice: () => {
+        const installation = voiceInstallation();
+        void narrationStorageApplication
+          .requestVoicePackInstallation(
+            {
+              packId: installation.voiceId,
+              downloadSizeBytes: installation.downloadSizeBytes,
+              stagedBytes:
+                installation.downloadedBytes > 0 ? installation.downloadedBytes : undefined
+            },
+            offlineNarrationApplication.requestSelectedVoice
+          )
+          .catch((error) => reportAppError("narration-storage.preflight", error));
+      },
+      onInstallNarrationProfile: requestNarrationProfileWithSpaceCheck,
       onRefreshEngines: offlineNarrationApplication.refreshNarrationFiles,
       onReaderContentFontSizeChange: updateReaderContentFontSize,
       onReaderContentFontFamilyChange: updateReaderContentFontFamily,
@@ -1464,7 +1680,12 @@ export function ReaderExperience(props: ReaderExperienceProps) {
           bookNarrationPreparationApplication.refresh()
         ]);
       },
-      onClearCache: offlineNarrationApplication.clearPreparedAudio,
+      onClearCache: () => {
+        void narrationStorageApplication.requestPreparedAudioRemoval();
+      },
+      onRequestVoicePackRemoval: (packId, revision) => {
+        void narrationStorageApplication.requestVoicePackRemoval(packId, revision);
+      },
       onPrepareBook: bookNarrationPreparationApplication.request,
       onCancelBookPreparation: bookNarrationPreparationApplication.cancel,
       onSessionLimitChange: sessionControlApplication.set,
@@ -1516,7 +1737,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
   } satisfies ReaderContentInteractions;
 
   const readerNavigation = () => (
-    <>
+    <div class="reader-chapter-controls">
       <ChapterNavigator
         chapters={reader().chapters}
         activeChapterId={reader().chapter.id}
@@ -1529,7 +1750,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         activeChapterId={reader().chapter.id}
         onOpenLocation={navigationApplication.openLocation}
       />
-    </>
+    </div>
   );
 
   const readerReadingColumn = () => (
@@ -1552,7 +1773,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         <article
           class="page"
           aria-label={`${reader().chapter.title} text`}
-          style={{ "font-size": `${readerContentFontSize()}px` }}
+          style={{ "font-size": `${renderedReaderContentFontSize()}px` }}
         >
           <h1 class="article-title">{reader().chapter.title}</h1>
           <Show when={visibleSentenceRange().hiddenBefore > 0}>
@@ -1610,7 +1831,6 @@ export function ReaderExperience(props: ReaderExperienceProps) {
 
   const mobileNarrationDock = () => (
     <MobileNarrationDock
-      chapterTitle={reader().chapter.title}
       progress={readerProgress()}
       sentenceCount={reader().sentences.length}
       status={playback().status}
@@ -1619,10 +1839,6 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       onPrevious={() => moveSentence(-1)}
       onToggle={togglePlayback}
       onNext={() => moveSentence(1)}
-      onStop={() => void stopReaderPlayback()}
-      onOpenControls={() => {
-        setMobileNarrationOpen(true);
-      }}
     />
   );
 
@@ -1649,7 +1865,16 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         </Show>
       }
     >
-      {(notice) => <ReaderToast message={notice()} onDismiss={() => setNarrationNotice(null)} />}
+      {(notice) => (
+        <ReaderToast
+          message={notice()}
+          actions={narrationRecoveryActions()}
+          onDismiss={() => {
+            setNarrationNotice(null);
+            setNarrationRecovery(null);
+          }}
+        />
+      )}
     </Show>
   );
 
@@ -1662,7 +1887,6 @@ export function ReaderExperience(props: ReaderExperienceProps) {
         setActiveView("library");
         setDistractionFree(false);
         setMobileToolsOpen(false);
-        setMobileNarrationOpen(false);
         sendLibraryRailEvent({ type: "library-opened" });
       });
     }),
@@ -1692,6 +1916,7 @@ export function ReaderExperience(props: ReaderExperienceProps) {
       <Show when={activeView() !== "reader" || !mobileReaderShell()}>
         <ProductBar
           showQuoteImageAction={activeView() === "reader"}
+          showShortcutReference={!mobileReaderShell()}
           canSaveQuoteImage={
             reader().sentences.length > 0 && quoteImageNotice()?.tone !== "pending"
           }
@@ -1734,6 +1959,21 @@ export function ReaderExperience(props: ReaderExperienceProps) {
             quoteImageWorkflow.request(sentenceIds);
           }}
         />
+      </Show>
+      <Show when={storagePrompt()}>
+        {(prompt) => (
+          <ReaderNarrationStorageDialog
+            title={prompt().title}
+            body={prompt().body}
+            confirmAction={prompt().confirmAction}
+            cancelAction={prompt().cancelAction}
+            busy={storageBusy()}
+            onConfirm={() => {
+              void narrationStorageApplication.confirmRemoval();
+            }}
+            onCancel={() => narrationStorageApplication.cancelRemoval()}
+          />
+        )}
       </Show>
       <Show when={activeView() !== "reader" || !mobileReaderShell()}>
         <LibraryRail model={libraryRailModel} />
@@ -1787,12 +2027,10 @@ export function ReaderExperience(props: ReaderExperienceProps) {
             navigation={readerNavigation()}
             content={readerReadingColumn()}
             tools={<ReaderInspector model={inspectorModel} />}
-            narration={<MobileNarrationControls model={inspectorModel.settings} />}
             playback={mobileNarrationDock()}
             libraryBooks={libraryBooks()}
             activeBookId={reader().book.id}
             toolsOpen={mobileToolsOpen()}
-            narrationOpen={mobileNarrationOpen()}
             onOpenBook={(bookId) => libraryApplication.open(bookId)}
             onOpenFullLibrary={() => openAppView("library")}
             onOpenSearch={() => {
@@ -1804,7 +2042,6 @@ export function ReaderExperience(props: ReaderExperienceProps) {
               setMobileToolsOpen(true);
             }}
             onCloseTools={() => setMobileToolsOpen(false)}
-            onCloseNarration={() => setMobileNarrationOpen(false)}
           />
         </Show>
         {readerFeedback()}

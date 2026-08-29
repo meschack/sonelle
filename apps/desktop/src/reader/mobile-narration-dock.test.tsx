@@ -7,14 +7,11 @@ import { MobileNarrationDock } from "./mobile-narration-dock";
 describe("mobile narration dock", () => {
   it("projects compact playback truth and emits reader intents", () => {
     const onToggle = vi.fn();
-    const onStop = vi.fn();
-    const onOpenControls = vi.fn();
     const container = document.createElement("div");
     document.body.append(container);
     const dispose = render(
       () => (
         <MobileNarrationDock
-          chapterTitle="A quiet chapter"
           progress={{
             chapterIndex: 0,
             chapterCount: 5,
@@ -32,38 +29,35 @@ describe("mobile narration dock", () => {
           onPrevious={vi.fn()}
           onToggle={onToggle}
           onNext={vi.fn()}
-          onStop={onStop}
-          onOpenControls={onOpenControls}
         />
       ),
       container
     );
 
-    expect(container.textContent).toContain("Listening");
-    expect(container.textContent).toContain("Sentence 2 of 8");
+    expect(container.querySelector(".mobile-narration-copy")).toBeNull();
+    expect(container.textContent).not.toContain("A quiet chapter");
+    expect(container.textContent).not.toContain("Sentence 2 of 8");
+    expect(container.querySelector('[aria-label="Open narration controls"]')).toBeNull();
+    expect(container.querySelector(".reader-visually-hidden")?.textContent).toContain("Listening");
     expect(container.querySelector('[role="status"], [role="alert"]')).toBeNull();
     expect(
       container.querySelector('[role="group"][aria-label="Narration transport"]')
     ).not.toBeNull();
+    expect(container.querySelectorAll('[aria-label="Narration transport"] button')).toHaveLength(3);
+    expect(container.querySelector('[aria-label="Stop narration"]')).toBeNull();
     container.querySelector<HTMLButtonElement>('[aria-label="Pause narration"]')?.click();
-    container.querySelector<HTMLButtonElement>('[aria-label="Stop narration"]')?.click();
-    container.querySelector<HTMLButtonElement>('[aria-label="Open narration controls"]')?.click();
     expect(onToggle).toHaveBeenCalledOnce();
-    expect(onStop).toHaveBeenCalledOnce();
-    expect(onOpenControls).toHaveBeenCalledOnce();
 
     dispose();
     container.remove();
   });
 
-  it("links needs-attention state to recovery controls", () => {
-    const onOpenControls = vi.fn();
+  it("announces needs-attention state without adding a second settings route", () => {
     const container = document.createElement("div");
     document.body.append(container);
     const dispose = render(
       () => (
         <MobileNarrationDock
-          chapterTitle="A quiet chapter"
           progress={{
             chapterIndex: 0,
             chapterCount: 1,
@@ -81,19 +75,15 @@ describe("mobile narration dock", () => {
           onPrevious={vi.fn()}
           onToggle={vi.fn()}
           onNext={vi.fn()}
-          onStop={vi.fn()}
-          onOpenControls={onOpenControls}
         />
       ),
       container
     );
 
-    expect(container.textContent).toContain("Narration needs attention");
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       "Download narration files"
     );
-    container.querySelector<HTMLButtonElement>('[aria-label="Open narration recovery"]')?.click();
-    expect(onOpenControls).toHaveBeenCalledOnce();
+    expect(container.querySelector('[aria-label="Open narration recovery"]')).toBeNull();
 
     dispose();
     container.remove();
@@ -105,7 +95,6 @@ describe("mobile narration dock", () => {
     const dispose = render(
       () => (
         <MobileNarrationDock
-          chapterTitle="A quiet chapter"
           progress={{
             chapterIndex: 0,
             chapterCount: 1,
@@ -123,8 +112,6 @@ describe("mobile narration dock", () => {
           onPrevious={vi.fn()}
           onToggle={vi.fn()}
           onNext={vi.fn()}
-          onStop={vi.fn()}
-          onOpenControls={vi.fn()}
         />
       ),
       container

@@ -11,10 +11,12 @@ use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager};
 
 use crate::error_log::record_native_error;
+#[cfg(desktop)]
 use crate::kokoro_manifest::render_kokoro_manifest_with_options;
+#[cfg(desktop)]
+use crate::narration_cache::NarrationChapterCacheStats;
 use crate::narration_cache::{
-    NarrationAssetCache, NarrationCacheStats, NarrationChapterCacheStats, NarrationSentenceSpan,
-    PreparedNarrationManifest,
+    NarrationAssetCache, NarrationCacheStats, NarrationSentenceSpan, PreparedNarrationManifest,
 };
 use crate::narration_engine_pack::{
     engine_installation_path, engine_is_ready, engine_model_revision,
@@ -37,9 +39,11 @@ trait NarrationProvider: Sync {
     ) -> Result<RenderedManifestAudio, String>;
 }
 
+#[cfg(desktop)]
 struct KokoroProvider;
 struct SupertonicProvider;
 
+#[cfg(desktop)]
 impl NarrationProvider for KokoroProvider {
     fn preparation_revision(&self) -> &'static str {
         "kokoro-text-v3"
@@ -70,6 +74,7 @@ impl NarrationProvider for SupertonicProvider {
     }
 }
 
+#[cfg(desktop)]
 static KOKORO_PROVIDER: KokoroProvider = KokoroProvider;
 static SUPERTONIC_PROVIDER: SupertonicProvider = SupertonicProvider;
 
@@ -271,6 +276,7 @@ impl Drop for NarrationCancellation {
 
 fn narration_provider(engine_id: &str) -> Result<&'static dyn NarrationProvider, String> {
     match engine_id {
+        #[cfg(desktop)]
         "kokoro" => Ok(&KOKORO_PROVIDER),
         "supertonic" => Ok(&SUPERTONIC_PROVIDER),
         _ => Err("Prepared narration engine is not available yet.".to_string()),
@@ -284,6 +290,7 @@ pub fn manifest_cache_summary(
     NarrationAssetCache::open(manifest_cache_root(app)?).book_stats(book_id)
 }
 
+#[cfg(desktop)]
 pub fn manifest_chapter_cache_summary(
     app: &AppHandle,
     book_id: &str,
@@ -297,6 +304,7 @@ pub fn manifest_chapter_cache_summary(
     )
 }
 
+#[cfg(desktop)]
 pub fn clear_manifest_cache(app: &AppHandle, book_id: &str) -> Result<NarrationCacheStats, String> {
     NarrationAssetCache::open(manifest_cache_root(app)?).clear_book(book_id)
 }
@@ -364,7 +372,11 @@ pub fn prepare_manifest_narration_at(
 }
 
 fn validate_request(request: &ManifestNarrationRequest) -> Result<(), String> {
-    if !matches!(request.engine_id.as_str(), "kokoro" | "supertonic") {
+    #[cfg(desktop)]
+    let supported_engine = matches!(request.engine_id.as_str(), "kokoro" | "supertonic");
+    #[cfg(not(desktop))]
+    let supported_engine = request.engine_id == "supertonic";
+    if !supported_engine {
         return Err("Prepared narration engine is not available yet.".to_string());
     }
     if request.passage.sentences.is_empty() {

@@ -5,8 +5,8 @@
 - selecting phone or desktop reader composition at the application boundary
 - the phone reader's compact header and explicit navigation, content, tools, and playback slots
 - the compact narration dock's phone-sized projection of shared playback state and intents
-- touch-first Library, contextual reading-tools, and focused narration sheets, including focus
-  restoration and Back behavior
+- touch-first Library and contextual reading-tools sheets, including focus restoration and Back
+  behavior
 
 ## Refuses To Own
 
@@ -29,26 +29,24 @@ Library remains available as an explicit management action. The reading column o
 scroll region, so opening sheets or mounting playback does not resize the text column.
 
 The mobile playback slot receives `MobileNarrationDock`, a deliberately smaller projection than the
-desktop rail. It shows current narration truth and emits previous, play/pause/resume, next, stop, and
-open-controls intents into the existing playback application. Readiness or attention state changes
-the controls affordance into a recovery link. A focused listening sheet exposes voice, speed,
-volume, sleep, and offline preparation controls while deliberately omitting book metadata, reading
-appearance, export, and legal sections that belong to Reading tools. The dock and sheet do not
-prepare audio, persist position, or interpret engine callbacks; they project shared settings and
-invoke existing intents.
+desktop rail. It is a controls-only transport that emits previous, play/pause/resume, next, and stop
+intents into the existing playback application. Voice, speed, volume, sleep, offline preparation,
+appearance, and book settings remain in the single Reading tools route in the header. The dock does
+not prepare audio, persist position, interpret engine callbacks, or duplicate settings navigation.
 
-The dock exposes one named narration group and transport group. Its visible playback label describes
-current truth without becoming a live region. Only preparation and actionable attention messages use
-polite/status or alert announcements, so sentence highlighting and ordinary playback transitions do
-not flood accessibility services.
+The dock exposes one named narration group and transport group. Playback truth is visually omitted
+to keep the transport quiet, but remains its accessible description. Only preparation and actionable
+attention messages use polite/status or alert announcements, so sentence highlighting and ordinary
+playback transitions do not flood accessibility services.
 
-The EPUB contents navigator remains owned by shared reader chrome. On mobile it uses the same
-touch-safe sheet language as the Library while preserving publisher hierarchy and anchor targets.
+The EPUB contents navigator remains owned by shared reader chrome. Its icon button sits beside the
+chapter selector rather than creating a second navigation row. On mobile it uses the same touch-safe
+sheet language as the Library while preserving publisher hierarchy and anchor targets.
 Both sheets push a temporary history entry, close on Android Back or their scrim, move focus into the
 sheet on open, and restore focus to their trigger on dismissal. None of those presentation actions
 changes the active sentence or scroll container.
 
-Library, tools, narration, and contents dialogs share `containMobileDialogFocus`. It keeps Tab and Shift+Tab
+Library, tools, and contents dialogs share `containMobileDialogFocus`. It keeps Tab and Shift+Tab
 inside the active modal, closes on Escape, and leaves Back/history ownership with each surface.
 Dialogs expose labelled headings; Library rows summarize book identity and progress as one control.
 Focus containment owns no navigation or application state.
@@ -66,9 +64,9 @@ SpaceMono Nerd Font Propo labels the current book, the existing green and paper 
 and a fixed four-slot frame replaces the desktop rails rather than compressing them onto a phone.
 
 The shell defines one 48-pixel minimum interaction target for its header, dock, contents, Library,
-and contextual tools. Narrow widths wrap the narration transport beneath its status instead of
-shrinking controls. `viewport-fit=cover` and safe-area insets protect the header, reading column,
-dock, contents, and bottom sheets on cutout and gesture-navigation devices. Short landscape layouts
+and contextual tools. Narrow widths preserve the centered dock controls without shrinking them.
+`viewport-fit=cover` and safe-area insets protect the header, reading column, dock, contents, and
+bottom sheets on cutout and gesture-navigation devices. Short landscape layouts
 reduce decorative spacing while keeping the same document order and scrollable reading region.
 Browser text adjustment remains enabled at 100%; larger reader text scrolls inside the reading slot
 without pushing navigation or narration controls out of reach.
@@ -105,15 +103,14 @@ and Notes, opens the exact sentence from each result, and dismisses through the 
 reading scroll offset constant and proves no narration pause was requested throughout. The shell
 component separately covers system Back and focus restoration for the tools sheet.
 
-The dock component projects playing and needs-attention states and verifies each transport intent.
-The composed-reader tracer proves the phone mounts the dock instead of the desktop rail and routes
-its controls affordance to the focused narration sheet. It verifies the shared 150% volume contract,
-voice and session controls, preparation recovery, and the absence of desktop-only settings. Shell
-coverage exercises narration-sheet focus restoration and Android Back behavior.
+The dock component projects playing and needs-attention states accessibly and verifies each transport
+intent without rendering status copy or a duplicate settings action. The composed-reader tracer proves
+the phone mounts the dock instead of the desktop rail and keeps voice, session, appearance, and book
+settings in the one Reading tools sheet.
 
 The mobile layout contract pins representative portrait/narrow, large-text, and short-landscape
 rules: edge-to-edge viewport support, 48-pixel targets, safe-area coverage, ordered scroll regions,
-and the wrapped narrow dock. Rendered device QA remains the final check for manufacturer-specific
+and the centered narrow dock. Rendered device QA remains the final check for manufacturer-specific
 system bars and font scaling.
 
 Focus tests cover forward and reverse wrapping plus Escape. Component and composed-reader coverage

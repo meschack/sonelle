@@ -3,6 +3,8 @@ use std::{
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
+    thread,
+    time::Duration,
 };
 
 use serde::{Deserialize, Serialize};
@@ -14,10 +16,80 @@ use crate::narration_pack::{
     NarrationPackDownloadClient, NarrationPackDownloadError,
 };
 
+#[cfg(desktop)]
 const ENGINE_CATALOG: &str = include_str!("../../../../tools/narration-spike/engines.json");
+#[cfg(all(
+    target_os = "android",
+    target_arch = "aarch64",
+    feature = "android-offline-voice-candidate"
+))]
+const ENGINE_CATALOG: &str =
+    include_str!("../../../../tools/narration-spike/android-supertonic-candidate.json");
 const ENGINE_INSTALLATION_PROGRESS_EVENT: &str = "narration-engine-installation-progress";
 
 static ENGINE_INSTALLATION_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static ENGINE_HTTP_AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+const ENGINE_DOWNLOAD_ATTEMPTS: usize = 3;
+const ENGINE_STREAM_ATTEMPTS: usize = 3;
+
+/// Runs `work` while holding the same lock that guards engine-pack
+/// installation, so narration cleanup cannot interleave with an installer.
+pub(crate) fn with_engine_installation_lock<T>(
+    work: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    let _guard = ENGINE_INSTALLATION_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .map_err(|_| "Narration setup is already busy. Please try again.".to_string())?;
+    work()
+}
+
+/// The trusted catalog source for storage maintenance. Storage code never
+/// parses renderer data as a catalog.
+pub(crate) fn trusted_catalog_json_for_storage() -> Result<String, String> {
+    engine_catalog_json()
+}
+
+/// Every engine id in one parsed catalog.
+pub(crate) fn catalog_ids_from(catalog_json: &str) -> Result<Vec<String>, String> {
+    let catalog: EngineCatalog = serde_json::from_str(catalog_json)
+        .map_err(|_| "Offline narration catalog is invalid.".to_string())?;
+    Ok(catalog.engines.into_iter().map(|entry| entry.id).collect())
+}
+
+/// The catalog pack for one engine id, or `None` when the id is unknown.
+pub(crate) fn catalog_pack_from(
+    catalog_json: &str,
+    engine_id: &str,
+) -> Result<Option<NarrationPack>, String> {
+    let catalog: EngineCatalog = serde_json::from_str(catalog_json)
+        .map_err(|_| "Offline narration catalog is invalid.".to_string())?;
+    Ok(catalog
+        .engines
+        .into_iter()
+        .find(|entry| entry.id == engine_id)
+        .map(|entry| NarrationPack {
+            id: entry.id,
+            revision: entry.model.revision.clone(),
+            artifacts: entry
+                .model
+                .artifacts
+                .into_iter()
+                .map(|artifact| NarrationPackArtifact {
+                    id: artifact.target_path.clone(),
+                    relative_path: PathBuf::from(&artifact.target_path),
+                    url: artifact.url.unwrap_or_else(|| {
+                        format!(
+                            "https://huggingface.co/{}/resolve/{}/{}",
+                            entry.model.repository, entry.model.revision, artifact.remote_path
+                        )
+                    }),
+                    sha256: artifact.sha256,
+                    size_bytes: artifact.size_bytes,
+                })
+                .collect(),
+        }))
+}
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -73,6 +145,102 @@ struct EngineArtifactCatalogEntry {
 
 struct NativeEngineDownloadClient;
 
+fn engine_http_agent() -> &'static ureq::Agent {
+    ENGINE_HTTP_AGENT.get_or_init(ureq::Agent::new_with_defaults)
+}
+
+fn request_with_retries<T, E>(mut request: impl FnMut() -> Result<T, E>) -> Result<T, E>
+where
+    E: std::fmt::Display,
+{
+    for attempt in 1..=ENGINE_DOWNLOAD_ATTEMPTS {
+        match request() {
+            Ok(response) => return Ok(response),
+            Err(error) if attempt < ENGINE_DOWNLOAD_ATTEMPTS => {
+                record_native_error(
+                    "narration-download.request",
+                    &format!("attempt={attempt} error={error}"),
+                );
+                thread::sleep(Duration::from_millis(250 * attempt as u64));
+            }
+            Err(error) => {
+                record_native_error(
+                    "narration-download.request",
+                    &format!("attempt={attempt} final=true error={error}"),
+                );
+                return Err(error);
+            }
+        }
+    }
+    unreachable!("the fixed attempt range always returns")
+}
+
+enum EngineHttpStreamError {
+    UnsupportedResume,
+    Failed(String),
+}
+
+fn stream_http(
+    url: &str,
+    start_byte: u64,
+    on_chunk: &mut dyn FnMut(&[u8]) -> Result<(), String>,
+) -> Result<(), EngineHttpStreamError> {
+    let mut next_byte = start_byte;
+    let mut interruptions = 0;
+
+    loop {
+        let request_start = next_byte;
+        let mut response = request_with_retries(|| {
+            let request = engine_http_agent()
+                .get(url)
+                .header("User-Agent", "Sonelle narration engine installer");
+            if request_start > 0 {
+                request
+                    .header("Range", format!("bytes={request_start}-"))
+                    .call()
+            } else {
+                request.call()
+            }
+        })
+        .map_err(|_| {
+            EngineHttpStreamError::Failed(
+                "The narration files couldn't be downloaded. Check your connection and retry."
+                    .to_string(),
+            )
+        })?;
+
+        if request_start > 0 && response.status().as_u16() != 206 {
+            return Err(EngineHttpStreamError::UnsupportedResume);
+        }
+
+        let mut reader = response.body_mut().as_reader();
+        let mut buffer = [0_u8; 64 * 1024];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => return Ok(()),
+                Ok(count) => {
+                    on_chunk(&buffer[..count]).map_err(EngineHttpStreamError::Failed)?;
+                    next_byte = next_byte.saturating_add(count as u64);
+                }
+                Err(error) => {
+                    interruptions += 1;
+                    record_native_error(
+                        "narration-download.stream",
+                        &format!("attempt={interruptions} offset={next_byte} error={error}"),
+                    );
+                    if interruptions >= ENGINE_STREAM_ATTEMPTS {
+                        return Err(EngineHttpStreamError::Failed(
+                            "The narration download was interrupted. Please retry.".to_string(),
+                        ));
+                    }
+                    thread::sleep(Duration::from_millis(250 * interruptions as u64));
+                    break;
+                }
+            }
+        }
+    }
+}
+
 impl NarrationPackDownloadClient for NativeEngineDownloadClient {
     fn stream(
         &self,
@@ -96,24 +264,12 @@ impl NarrationPackDownloadClient for NativeEngineDownloadClient {
             }
         }
 
-        let mut response = ureq::get(url)
-            .header("User-Agent", "Sonelle narration engine installer")
-            .call()
-            .map_err(|_| {
-                "The narration files couldn't be downloaded. Check your connection and retry."
-                    .to_string()
-            })?;
-        let mut reader = response.body_mut().as_reader();
-        let mut buffer = [0_u8; 64 * 1024];
-
-        loop {
-            let count = reader
-                .read(&mut buffer)
-                .map_err(|_| "The narration download was interrupted. Please retry.".to_string())?;
-            if count == 0 {
-                return Ok(());
+        match stream_http(url, 0, on_chunk) {
+            Ok(()) => Ok(()),
+            Err(EngineHttpStreamError::UnsupportedResume) => {
+                Err("The narration download was interrupted. Please retry.".to_string())
             }
-            on_chunk(&buffer[..count])?;
+            Err(EngineHttpStreamError::Failed(error)) => Err(error),
         }
     }
 
@@ -150,32 +306,14 @@ impl NarrationPackDownloadClient for NativeEngineDownloadClient {
             }
         }
 
-        let mut response = ureq::get(url)
-            .header("User-Agent", "Sonelle narration engine installer")
-            .header("Range", format!("bytes={start_byte}-"))
-            .call()
-            .map_err(|_| {
-                NarrationPackDownloadError::Failed(
-                    "The narration files couldn't be downloaded. Check your connection and retry."
-                        .to_string(),
-                )
-            })?;
-        if response.status().as_u16() != 206 {
-            return Err(NarrationPackDownloadError::UnsupportedResume);
-        }
-
-        let mut reader = response.body_mut().as_reader();
-        let mut buffer = [0_u8; 64 * 1024];
-        loop {
-            let count = reader.read(&mut buffer).map_err(|_| {
-                NarrationPackDownloadError::Failed(
-                    "The narration download was interrupted. Please retry.".to_string(),
-                )
-            })?;
-            if count == 0 {
-                return Ok(());
+        match stream_http(url, start_byte, on_chunk) {
+            Ok(()) => Ok(()),
+            Err(EngineHttpStreamError::UnsupportedResume) => {
+                Err(NarrationPackDownloadError::UnsupportedResume)
             }
-            on_chunk(&buffer[..count]).map_err(NarrationPackDownloadError::Failed)?;
+            Err(EngineHttpStreamError::Failed(error)) => {
+                Err(NarrationPackDownloadError::Failed(error))
+            }
         }
     }
 }
@@ -402,8 +540,8 @@ fn emit_engine_progress(
 #[cfg(test)]
 mod tests {
     use super::{
-        engine_is_ready_at, engine_pack, engine_status_at, file_url_path, resolve_catalog_path,
-        NativeEngineDownloadClient,
+        engine_is_ready_at, engine_pack, engine_status_at, file_url_path, request_with_retries,
+        resolve_catalog_path, NativeEngineDownloadClient,
     };
     use crate::kokoro_manifest::{render_kokoro_manifest, resolve_kokoro_assets};
     use crate::narration_manifest::{
@@ -537,6 +675,23 @@ mod tests {
 
         assert_eq!(contents, b"Sonelle");
         fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn retries_transient_engine_requests_before_succeeding() {
+        let mut attempts = 0;
+
+        let result = request_with_retries(|| {
+            attempts += 1;
+            if attempts < 3 {
+                Err("host not found")
+            } else {
+                Ok("download response")
+            }
+        });
+
+        assert_eq!(result, Ok("download response"));
+        assert_eq!(attempts, 3);
     }
 
     #[test]

@@ -32,7 +32,8 @@ product domain events.
 Run the `Android Store Candidate` workflow with a full commit SHA already merged into `main`, a
 semantic version name, and a version code greater than every code previously uploaded to Play. The
 workflow targets API 36, builds a universal signed AAB, verifies its JAR signature and base manifest,
-and uploads the AAB plus SHA-256 checksum. It does not call the Play Developer API.
+and uploads the AAB, schema-2 reader-only build metadata, and SHA-256 checksum. The store workflow
+does not enable the unaccepted offline-voice feature and does not call the Play Developer API.
 
 The first AAB upload is manual. Confirm Play reports the expected package, version, supported devices,
 permissions, signing certificate, download size, and no unexpected SDK or policy warning.

@@ -7,8 +7,10 @@ import { createNoopMediaSessionGateway, type MediaSessionGateway } from "@sonell
 import {
   activateAudioSettingsForLanguage,
   activateHybridAudioSettingsForLanguage,
+  activateMobileAudioSettings,
   hybridNarrationVoicesForLanguage,
   isAndroidDeviceVoiceId,
+  mobileNarrationVoices,
   SUPPORTED_NARRATION_VOICES,
   type AudioSettings,
   type NarrationVoice
@@ -58,6 +60,10 @@ import {
   type AndroidDeviceVoice
 } from "../audio/android-device-voice-repository";
 import { createNarrationRepository } from "../audio/narration-repository";
+import {
+  createNarrationStorageMaintenanceRepository,
+  type NarrationStorageMaintenanceRepository
+} from "../audio/narration-storage-maintenance-repository";
 import {
   createVoiceInstallationRepository,
   type VoiceInstallationRepository
@@ -122,9 +128,12 @@ export interface ReaderBookNarrationIdentity {
   modelRevision: string;
 }
 
+export type OfflineNarrationLibrary =
+  "individual-voice" | "language-pack" | "mobile-standard" | "unavailable";
+
 export interface ReaderNarrationService {
   capabilities: {
-    offlineLibrary: "individual-voice" | "language-pack";
+    offlineLibrary: OfflineNarrationLibrary;
     preparesAcrossChapters: boolean;
   };
   activateSettings(settings: AudioSettings, language: string | null): AudioSettings;
@@ -144,6 +153,8 @@ export interface ReaderNarrationService {
     }
   ): Promise<{ sentenceCount: number }>;
 }
+
+export type ReaderStartupMode = "sample-preview" | "restore-library";
 
 export interface ReaderExperienceDependencies {
   appLifecycle: AppLifecycleGateway;
@@ -166,37 +177,43 @@ export interface ReaderExperienceDependencies {
   librarySearch: LibrarySearch;
   mediaSession: MediaSessionGateway;
   narration: ReaderNarrationService;
+  narrationStorageRepository: NarrationStorageMaintenanceRepository;
   quoteImageExporter: QuoteImageExporter;
   readerShellViewport: ReaderShellViewport;
   readerPreferencesRepository: ReaderPreferencesRepository;
   readingPositionStore: ReadingPositionStore;
+  startupMode: ReaderStartupMode;
   voiceInstallationRepository: VoiceInstallationRepository;
 }
 
 export function createReaderExperienceDependencies(): ReaderExperienceDependencies {
   const eventDispatcher = createDomainEventDispatcher();
+  const androidRuntime = isAndroidRuntime();
   const mediaSources = createPlatformMediaSourceGateway();
   const htmlAudioPlayer = createHtmlAudioPlayer();
   const narrationRepository = createPrefetchingNarrationGateway(
     createNarrationRepository(mediaSources)
   );
-  const narrationSessionRoutingMode = resolveDevelopmentNarrationSessionRoutingMode(
-    import.meta.env.VITE_SONELLE_NARRATION_SESSION
-  );
+  const narrationSessionRoutingMode = androidRuntime
+    ? "mobile-supertonic-v1"
+    : resolveDevelopmentNarrationSessionRoutingMode(import.meta.env.VITE_SONELLE_NARRATION_SESSION);
   const narrationPreparationAdapter = createNarrationPreparationAdapterForMode(
     narrationSessionRoutingMode,
     narrationRepository,
     { createNativeAdapter: () => createNativeManifestNarrationAdapter({ mediaSources }) }
   );
   const bookCatalog = createBookCatalog(mediaSources);
-  const usesLanguagePacks = narrationSessionRoutingMode === "hybrid-v1";
+  const usesLanguagePacks = narrationSessionRoutingMode !== "legacy-piper";
+  const offlineLibrary = resolveOfflineNarrationLibrary(androidRuntime, usesLanguagePacks);
   const engineInstallations: Partial<Record<NarrationEngineId, EngineInstallationState>> = {};
   const deviceVoices = createAndroidDeviceVoiceRepository();
   let availableDeviceVoices: readonly AndroidDeviceVoice[] = [];
   const voicesForLanguage = (language: string | null): readonly NarrationVoice[] => {
-    const sonelleVoices = usesLanguagePacks
-      ? availableHybridNarrationVoicesForLanguage(language, engineInstallations)
-      : SUPPORTED_NARRATION_VOICES;
+    const sonelleVoices = androidRuntime
+      ? mobileNarrationVoices()
+      : usesLanguagePacks
+        ? availableHybridNarrationVoicesForLanguage(language, engineInstallations)
+        : SUPPORTED_NARRATION_VOICES;
     const languageCode = normalizeLanguageCode(language);
     const matchingDeviceVoices = availableDeviceVoices.filter(
       (voice) => languageCode == null || normalizeLanguageCode(voice.locale) === languageCode
@@ -225,20 +242,22 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
     externalLinkOpener: createExternalLinkOpener(),
     fontCatalog: createSystemFontCatalog(),
     librarySearch: createLibrarySearch(),
-    mediaSession: isAndroidRuntime()
+    mediaSession: androidRuntime
       ? createAndroidMediaSessionGateway({
           reportError: (error) => void reportAppError("android.audio-focus", error)
         })
       : createNoopMediaSessionGateway(),
     narration: {
       capabilities: {
-        offlineLibrary: usesLanguagePacks ? "language-pack" : "individual-voice",
-        preparesAcrossChapters: usesLanguagePacks
+        offlineLibrary,
+        preparesAcrossChapters: usesLanguagePacks && !androidRuntime
       },
       activateSettings(settings, language) {
-        return usesLanguagePacks
-          ? activateHybridAudioSettingsForLanguage(settings, language)
-          : activateAudioSettingsForLanguage(settings, language);
+        return androidRuntime
+          ? activateMobileAudioSettings(settings, language)
+          : usesLanguagePacks
+            ? activateHybridAudioSettingsForLanguage(settings, language)
+            : activateAudioSettingsForLanguage(settings, language);
       },
       voices(language) {
         return voicesForLanguage(language);
@@ -288,7 +307,7 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
         );
       },
       bookIdentity(document, voiceId) {
-        if (isAndroidDeviceVoiceId(voiceId)) return null;
+        if (androidRuntime || isAndroidDeviceVoiceId(voiceId)) return null;
         const chapter = document.chapters[0];
         if (chapter == null) return null;
         const sessionChapter = createReaderNarrationSessionChapter(
@@ -303,6 +322,9 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
         };
       },
       async prepareBook(document, voiceId, options) {
+        if (androidRuntime) {
+          throw new Error("Book narration preparation is not available on Android yet.");
+        }
         if (isAndroidDeviceVoiceId(voiceId)) {
           throw new Error("Device voices read while the book is open.");
         }
@@ -326,7 +348,9 @@ export function createReaderExperienceDependencies(): ReaderExperienceDependenci
     readerShellViewport: createReaderShellViewport(),
     readerPreferencesRepository: createReaderPreferencesRepository(),
     readingPositionStore: createReadingPositionStore(),
-    voiceInstallationRepository: createVoiceInstallationRepository()
+    startupMode: isTauriRuntime() ? "restore-library" : "sample-preview",
+    voiceInstallationRepository: createVoiceInstallationRepository(),
+    narrationStorageRepository: createNarrationStorageMaintenanceRepository()
   };
 }
 
@@ -343,6 +367,14 @@ export function resolveDevelopmentNarrationSessionRoutingMode(mode: unknown): Na
   return mode === "legacy-piper" ? mode : "hybrid-v1";
 }
 
+export function resolveOfflineNarrationLibrary(
+  androidRuntime: boolean,
+  usesLanguagePacks: boolean
+): OfflineNarrationLibrary {
+  if (androidRuntime) return "mobile-standard";
+  return usesLanguagePacks ? "language-pack" : "individual-voice";
+}
+
 export function createNarrationPreparationAdapterForMode(
   routingMode: NarrationRoutingMode,
   narrationRepository: LegacyPrefetchingNarrationGateway,
@@ -353,7 +385,7 @@ export function createNarrationPreparationAdapterForMode(
   } = {}
 ): NarrationPreparationAdapter {
   if (routingMode === "legacy-piper") return new PiperCompatibilityAdapter(narrationRepository);
-  if (routingMode === "hybrid-v1") {
+  if (routingMode === "hybrid-v1" || routingMode === "mobile-supertonic-v1") {
     const nativeRuntime = options.nativeRuntime ?? isTauriRuntime();
     if (nativeRuntime)
       return (options.createNativeAdapter ?? createNativeManifestNarrationAdapter)();

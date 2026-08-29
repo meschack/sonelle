@@ -3,7 +3,8 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { isTauriRuntime } from "../platform/tauri-runtime";
 
 export type NarrationEngineId = "kokoro" | "supertonic";
-export type EngineInstallationReadiness = "not-installed" | "preparing" | "ready" | "failed";
+export type EngineInstallationReadiness =
+  "not-installed" | "preparing" | "ready" | "failed" | "unavailable";
 
 export interface EngineInstallationState {
   engineId: NarrationEngineId;
@@ -17,7 +18,7 @@ export interface EngineInstallationState {
 
 interface NativeEngineInstallationStatus {
   engineId: NarrationEngineId;
-  status: "not-installed" | "ready";
+  status: "not-installed" | "ready" | "unavailable";
   modelRevision: string;
   downloadSizeBytes: number;
   message: string;

@@ -22,10 +22,12 @@ Before any signing secret is exposed, the requested revision must be an ancestor
 The internal key proves installability only. It is not a developer's personal debug key, a Play
 upload key, or a production distribution identity.
 
-Build metadata records the application version, commit, build type, ABI, artifact SHA-256,
-narration-catalog SHA-256, and pinned engine model revisions. Commit and catalog identity also enter
-local error diagnostics through compile-time values. No book, device, or signing data enters this
-metadata.
+The internal workflow builds only the explicit ARM64 offline-voice candidate feature. Public store
+builds remain reader-only until model acceptance. Schema-2 build metadata records the application
+version, commit, build type, ABI, artifact SHA-256, narration capability, candidate status,
+narration-catalog SHA-256, and pinned model revision. The same identity enters startup output, the
+native status command, and local error diagnostics through compile-time values. No book, device, or
+signing data enters this metadata.
 
 ## Consequences
 

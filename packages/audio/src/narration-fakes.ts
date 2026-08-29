@@ -19,6 +19,7 @@ import type {
 } from "./narration-gateway";
 import { createNarrationAssetIdentity } from "./narration-identity";
 import { assertPreparedNarration } from "./narration-manifest";
+import { resolveNarrationFailure } from "./narration-failure";
 
 export class FakePassageNarrationAdapter implements NarrationPreparationAdapter {
   private readonly adapter = new DeterministicNarrationAdapter("kokoro", 24_000);
@@ -207,11 +208,13 @@ export class FakeNarrationGateway implements NarrationGateway {
     this.activeSentenceId = null;
     this.run += 1;
     this.state = "needs-attention";
+    const failure = resolveNarrationFailure(reason);
     this.emit(
       createDomainEvent("NarrationPlaybackFailed", {
         ...this.sentenceRef(sentenceId),
         passageId: this.passageId(sentenceId),
-        reason
+        outcome: failure.outcome,
+        reason: failure.message
       })
     );
   }

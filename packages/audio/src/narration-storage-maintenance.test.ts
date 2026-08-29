@@ -101,13 +101,21 @@ describe("narration storage maintenance", () => {
     const snapshot: NarrationStorageSnapshot = {
       availableBytes: 1_000 * mib,
       preparedAudio: [],
-      voicePacks: [{ packId: "supertonic:standard", sizeBytes: 96 * mib, verified: true }]
+      voicePacks: [
+        {
+          packId: "supertonic:standard",
+          revision: "rev-1",
+          sizeBytes: 96 * mib,
+          verified: true
+        }
+      ]
     };
 
     expect(
       planNarrationStorageRemoval(snapshot, idle, {
         kind: "voice-pack",
         packId: "supertonic:standard",
+        revision: "rev-1",
         confirmed: false
       })
     ).toMatchObject({ status: "needs-confirmation" });
@@ -119,7 +127,7 @@ describe("narration storage maintenance", () => {
           activeBookId: "book-1",
           activeVoicePackId: "supertonic:standard"
         },
-        { kind: "voice-pack", packId: "supertonic:standard", confirmed: true }
+        { kind: "voice-pack", packId: "supertonic:standard", revision: "rev-1", confirmed: true }
       )
     ).toEqual({
       status: "needs-attention",
@@ -132,8 +140,8 @@ describe("narration storage maintenance", () => {
       availableBytes: 1_000 * mib,
       preparedAudio: [],
       voicePacks: [
-        { packId: "kokoro:standard", sizeBytes: 96 * mib, verified: true },
-        { packId: "supertonic:standard", sizeBytes: 120 * mib, verified: true }
+        { packId: "kokoro:standard", revision: "rev-2", sizeBytes: 96 * mib, verified: true },
+        { packId: "supertonic:standard", revision: "rev-7", sizeBytes: 120 * mib, verified: true }
       ]
     };
 
@@ -145,11 +153,11 @@ describe("narration storage maintenance", () => {
           activeBookId: "book-1",
           activeVoicePackId: "kokoro:standard"
         },
-        { kind: "voice-pack", packId: "supertonic:standard", confirmed: true }
+        { kind: "voice-pack", packId: "supertonic:standard", revision: "rev-7", confirmed: true }
       )
     ).toEqual({
       status: "approved",
-      target: { kind: "voice-pack", packId: "supertonic:standard" },
+      target: { kind: "voice-pack", packId: "supertonic:standard", revision: "rev-7" },
       expectedReclaimedBytes: 120 * mib
     });
   });
@@ -158,13 +166,16 @@ describe("narration storage maintenance", () => {
     const snapshot: NarrationStorageSnapshot = {
       availableBytes: 1_000 * mib,
       preparedAudio: [],
-      voicePacks: [{ packId: "supertonic:partial", sizeBytes: 4 * mib, verified: false }]
+      voicePacks: [
+        { packId: "supertonic:partial", revision: "rev-1", sizeBytes: 4 * mib, verified: false }
+      ]
     };
 
     expect(
       planNarrationStorageRemoval(snapshot, idle, {
         kind: "voice-pack",
         packId: "supertonic:partial",
+        revision: "rev-1",
         confirmed: true
       })
     ).toMatchObject({ status: "needs-attention" });
@@ -188,8 +199,92 @@ describe("narration storage maintenance", () => {
       planNarrationStorageRemoval(snapshot, idle, {
         kind: "voice-pack",
         packId: "missing-pack",
+        revision: "rev-1",
         confirmed: true
       })
     ).toEqual({ status: "not-found" });
+  });
+
+  it("does not resolve a stale revision request to a newly installed revision", () => {
+    const snapshot: NarrationStorageSnapshot = {
+      availableBytes: 1_000 * mib,
+      preparedAudio: [],
+      voicePacks: [
+        { packId: "supertonic:standard", revision: "rev-9", sizeBytes: 120 * mib, verified: true }
+      ]
+    };
+
+    expect(
+      planNarrationStorageRemoval(snapshot, idle, {
+        kind: "voice-pack",
+        packId: "supertonic:standard",
+        revision: "rev-8",
+        confirmed: true
+      })
+    ).toEqual({ status: "not-found" });
+  });
+
+  it("does not remove a different pack that happens to share the requested revision", () => {
+    const snapshot: NarrationStorageSnapshot = {
+      availableBytes: 1_000 * mib,
+      preparedAudio: [],
+      voicePacks: [
+        { packId: "kokoro:standard", revision: "rev-1", sizeBytes: 96 * mib, verified: true }
+      ]
+    };
+
+    expect(
+      planNarrationStorageRemoval(snapshot, idle, {
+        kind: "voice-pack",
+        packId: "supertonic:standard",
+        revision: "rev-1",
+        confirmed: true
+      })
+    ).toEqual({ status: "not-found" });
+  });
+
+  it("fails closed when the inventory holds ambiguous copies of the same identity", () => {
+    const snapshot: NarrationStorageSnapshot = {
+      availableBytes: 1_000 * mib,
+      preparedAudio: [],
+      voicePacks: [
+        { packId: "supertonic:standard", revision: "rev-1", sizeBytes: 10 * mib, verified: true },
+        { packId: "supertonic:standard", revision: "rev-1", sizeBytes: 12 * mib, verified: true }
+      ]
+    };
+
+    expect(
+      planNarrationStorageRemoval(snapshot, idle, {
+        kind: "voice-pack",
+        packId: "supertonic:standard",
+        revision: "rev-1",
+        confirmed: true
+      })
+    ).toMatchObject({ status: "needs-attention" });
+  });
+
+  it("keeps the approved voice-pack target free of filesystem paths", () => {
+    const snapshot: NarrationStorageSnapshot = {
+      availableBytes: 1_000 * mib,
+      preparedAudio: [],
+      voicePacks: [
+        { packId: "supertonic:standard", revision: "rev-1", sizeBytes: 96 * mib, verified: true }
+      ]
+    };
+
+    const plan = planNarrationStorageRemoval(snapshot, idle, {
+      kind: "voice-pack",
+      packId: "supertonic:standard",
+      revision: "rev-1",
+      confirmed: true
+    });
+    expect(plan.status).toBe("approved");
+    if (plan.status !== "approved") return;
+    expect(JSON.stringify(plan.target)).not.toMatch(/[\\/]/);
+    expect(plan.target).toEqual({
+      kind: "voice-pack",
+      packId: "supertonic:standard",
+      revision: "rev-1"
+    });
   });
 });

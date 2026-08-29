@@ -22,14 +22,20 @@ Each `reader-*-application.ts` or `reader-*-workflow.ts` file exposes one constr
 interface. Dependencies are ports or other application interfaces. `ReaderExperience` is the
 composition root and projects results into Solid signals.
 
-Offline narration exposes English and multilingual product profiles. Kokoro and Supertonic mapping
-stays inside the offline-narration application. `ReaderOpeningWorkflow` correlates a loaded
+Desktop offline narration exposes English and multilingual product profiles; Android exposes one
+standard Sonelle voice profile. Provider mapping stays inside the offline-narration application.
+`ReaderOpeningWorkflow` correlates a loaded
 `ReaderView` with one `ReaderOpened` fact, then independent listeners activate playback, show the
 reader, update the library rail, clear notices, and refresh bookmarks.
 
 `BookOpenRequestAdapter` drains native cold-start requests and listens for later requests. It only
 delivers file paths; `ReaderLibraryApplication` turns them into the same `BookImportRequested` flow
 used by dialogs and drag and drop.
+
+Native cold start keeps the library surface inert until catalog restoration settles. It does not
+publish sample-book media state or start bookmark, prepared-audio, voice-file, and storage work
+against the latent browser fixture. If a native listener cannot attach, startup reports the failure
+and enables the library instead of trapping the reader behind a permanent loading surface.
 
 Closing a reader flushes and awaits the latest reading-position save before playback stops. An
 independent `ReaderClosed` listener then refreshes the library projection, so collection cards show

@@ -1,6 +1,15 @@
 export type EntityId = string;
 export type IsoDateTime = string;
 
+export type NarrationFailureOutcome =
+  | "voice-files-missing"
+  | "voice-files-invalid"
+  | "storage-full"
+  | "preparation-failed"
+  | "audio-unavailable"
+  | "device-voice-unavailable"
+  | "unknown";
+
 export interface NarrationSettingsSnapshot {
   playbackRate: number;
   volume: number;
@@ -73,7 +82,11 @@ export interface DomainEventPayloadMap {
     passageId: EntityId;
     lastSentenceId: EntityId;
   };
-  NarrationPlaybackFailed: SentenceRef & { passageId: EntityId | null; reason: string };
+  NarrationPlaybackFailed: SentenceRef & {
+    passageId: EntityId | null;
+    outcome: NarrationFailureOutcome;
+    reason: string;
+  };
   NarrationPlaybackInterrupted: SentenceRef & { passageId: EntityId | null };
   NarrationSessionLimitChanged: {
     bookId: EntityId;

@@ -13,6 +13,7 @@ import { createSavedDictionary } from "@sonelle/learning";
 import {
   createNoopMediaSessionGateway,
   createReaderPreferences,
+  type MediaSessionGateway,
   type ReaderPreferences
 } from "@sonelle/reader";
 import type { ReaderExperienceDependencies } from "./reader-dependencies";
@@ -36,6 +37,119 @@ beforeAll(() => {
 });
 
 describe("ReaderExperience integration", () => {
+  it("keeps native startup on the library surface until the saved book is restored", async () => {
+    const savedBook = createLibraryBook("saved-book", "Saved Book", 3);
+    let resolveBooks!: (books: LibraryBookSummary[]) => void;
+    const listBooks = vi.fn(
+      () =>
+        new Promise<LibraryBookSummary[]>((resolve) => {
+          resolveBooks = resolve;
+        })
+    );
+    const openBook = vi.fn(async (bookId: string) => createReaderDocument(bookId));
+    const importBook = vi.fn().mockResolvedValue({ status: "cancelled" as const });
+    const publishMediaSession = vi.fn();
+    const getAudioCacheStats = vi.fn().mockResolvedValue({ sentenceCount: 0, sizeBytes: 0 });
+    const getEngineStatus = vi.fn(async (engineId: "kokoro" | "supertonic") => ({
+      engineId,
+      status: "ready" as const,
+      modelRevision: `${engineId}-test`,
+      downloadSizeBytes: 0,
+      downloadedBytes: 0,
+      progress: 100,
+      message: "Ready"
+    }));
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      listBooks,
+      openBook,
+      importBook,
+      getAudioCacheStats,
+      getEngineStatus,
+      offlineLibrary: "language-pack",
+      mediaSession: {
+        publish: publishMediaSession,
+        subscribe: () => () => undefined,
+        clear: vi.fn()
+      },
+      startupMode: "restore-library"
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    try {
+      expect(container.querySelector(".reader-surface")).toBeNull();
+      expect(container.textContent).toContain("Opening library");
+      expect(container.textContent).not.toContain("Failure helps Mara notice the room");
+      expect(publishMediaSession).not.toHaveBeenCalled();
+      expect(getAudioCacheStats).not.toHaveBeenCalled();
+      expect(getEngineStatus).not.toHaveBeenCalled();
+      expect(container.querySelector<HTMLButtonElement>(".library-add-button")?.disabled).toBe(
+        true
+      );
+
+      dispatchShortcut("o", { ctrlKey: true });
+      expect(importBook).not.toHaveBeenCalled();
+
+      resolveBooks([savedBook]);
+
+      await vi.waitFor(() => expect(openBook).toHaveBeenCalledWith("saved-book", undefined));
+      await vi.waitFor(() =>
+        expect(container.querySelector(".reader-surface")?.textContent).toContain(
+          "Opened from the Library."
+        )
+      );
+      await vi.waitFor(() =>
+        expect(publishMediaSession).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            book: expect.objectContaining({ id: "saved-book" })
+          })
+        )
+      );
+      await vi.waitFor(() => expect(getAudioCacheStats).toHaveBeenCalledWith("saved-book"));
+      expect(getEngineStatus).toHaveBeenCalled();
+    } finally {
+      dispose();
+      container.remove();
+    }
+  });
+
+  it("unblocks the library when a native startup listener cannot attach", async () => {
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      startDropsError: new Error("drop listener unavailable"),
+      libraryBooks: [],
+      startupMode: "restore-library"
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    try {
+      await vi.waitFor(() =>
+        expect(container.querySelector<HTMLButtonElement>(".library-add-button")?.disabled).toBe(
+          false
+        )
+      );
+      expect(container.querySelector(".library-workspace")?.textContent).not.toContain(
+        "Opening library"
+      );
+      expect(container.textContent).not.toContain("Failure helps Mara notice the room");
+    } finally {
+      dispose();
+      container.remove();
+    }
+  });
+
   it("drives narration settings and chapter navigation through keyboard shortcuts", async () => {
     const saveAudioSettings = vi.fn();
     const dependencies = createDependencies({
@@ -361,11 +475,11 @@ describe("ReaderExperience integration", () => {
     expect(container.querySelector(".mobile-reader-playback-slot .audio-rail")).toBeNull();
     expect(container.querySelector(".mobile-reader-title")?.textContent).toContain("Pocket Reader");
 
-    container.querySelector<HTMLButtonElement>('[aria-label="Open narration controls"]')?.click();
+    expect(container.querySelector('[aria-label="Open narration controls"]')).toBeNull();
+    expect(container.querySelector(".mobile-narration-copy")).toBeNull();
+    container.querySelector<HTMLButtonElement>('[aria-label="Open reading tools"]')?.click();
     await vi.waitFor(() =>
-      expect(
-        container.querySelector('[role="dialog"][aria-label="Narration controls"]')
-      ).not.toBeNull()
+      expect(container.querySelector('[role="dialog"][aria-label="Reading tools"]')).not.toBeNull()
     );
     expect(container.querySelector('[aria-label="Narration voice"]')).not.toBeNull();
     const mobileVolume = container.querySelector<HTMLInputElement>(
@@ -375,11 +489,12 @@ describe("ReaderExperience integration", () => {
     expect(mobileVolume?.value).toBe("1.2");
     expect(mobileVolume?.getAttribute("aria-valuetext")).toBe("120 percent");
     expect(container.querySelector('[aria-label="Narration stop setting"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="Book text size"]')).toBeNull();
-    expect(container.textContent).not.toContain("Book details");
-    container.querySelector<HTMLButtonElement>(".mobile-narration-sheet > header button")?.click();
+    expect(container.querySelector('[aria-label="Book text size"]')).not.toBeNull();
+    container
+      .querySelector<HTMLButtonElement>(".mobile-reader-tools-sheet > header button")
+      ?.click();
     await vi.waitFor(() =>
-      expect(container.querySelector('[role="dialog"][aria-label="Narration controls"]')).toBeNull()
+      expect(container.querySelector('[role="dialog"][aria-label="Reading tools"]')).toBeNull()
     );
 
     const chapter = container.querySelector<HTMLSelectElement>(
@@ -448,6 +563,16 @@ describe("ReaderExperience integration", () => {
       expect(container.querySelector('[role="dialog"][aria-label="Library"]')).toBeNull()
     );
     expect(container.querySelector(".mobile-reader-title")?.textContent).toContain("Another Book");
+
+    container.querySelector<HTMLButtonElement>('[aria-label="Open library"]')?.click();
+    await vi.waitFor(() =>
+      expect(container.querySelector('[role="dialog"][aria-label="Library"]')).not.toBeNull()
+    );
+    container
+      .querySelector<HTMLButtonElement>(".mobile-reader-library-sheet > footer button")
+      ?.click();
+    await vi.waitFor(() => expect(container.querySelector(".product-bar")).not.toBeNull());
+    expect(container.querySelector('[aria-label="Keyboard shortcuts"]')).toBeNull();
 
     dispose();
     container.remove();
@@ -624,6 +749,63 @@ describe("ReaderExperience integration", () => {
       })
     );
     expect(pause).not.toHaveBeenCalled();
+
+    dispose();
+    container.remove();
+  });
+
+  it("offers one relevant recovery action and retries the failed sentence", async () => {
+    const requestPlayback = vi.fn();
+    let projectNarration: ((event: ReaderNarrationProjectionEvent) => void) | undefined;
+    const reader = buildFixtureReaderView();
+    const failedSentence = reader.sentences[1];
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      requestPlayback,
+      captureNarrationProjection: (project) => {
+        projectNarration = project;
+      }
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+    await vi.waitFor(() => expect(projectNarration).toBeTypeOf("function"));
+    await vi.waitFor(() => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Play"]')?.click();
+      expect(requestPlayback).toHaveBeenCalled();
+    });
+    requestPlayback.mockClear();
+
+    projectNarration?.(
+      createDomainEvent("NarrationPlaybackFailed", {
+        bookId: reader.book.id,
+        chapterId: reader.chapter.id,
+        sentenceId: failedSentence.id,
+        passageId: "failed-passage",
+        outcome: "preparation-failed",
+        reason: "Narration couldn't be prepared. Please try again."
+      })
+    );
+
+    const retry = await vi.waitFor(() => {
+      const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+        (candidate) => candidate.textContent?.trim() === "Retry narration"
+      );
+      expect(button).not.toBeUndefined();
+      return button;
+    });
+    expect(container.textContent).not.toContain("Repair voice");
+    expect(container.querySelector(".sentence.active")?.textContent).toContain(failedSentence.text);
+
+    retry?.click();
+    await vi.waitFor(() =>
+      expect(requestPlayback).toHaveBeenCalledExactlyOnceWith(failedSentence.id)
+    );
+    expect(container.querySelector(".sentence.active")?.textContent).toContain(failedSentence.text);
 
     dispose();
     container.remove();
@@ -1458,9 +1640,7 @@ describe("ReaderExperience integration", () => {
     const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
 
     const browse = await vi.waitFor(() => {
-      const button = Array.from(container.querySelectorAll("button")).find(
-        (candidate) => candidate.textContent?.trim() === "Browse contents"
-      );
+      const button = container.querySelector<HTMLButtonElement>('[aria-label="Browse contents"]');
       expect(button).not.toBeUndefined();
       return button;
     });
@@ -1675,6 +1855,66 @@ describe("ReaderExperience integration", () => {
     dispose();
     container.remove();
   });
+
+  it("offers device voices without desktop narration downloads when Android packs are unavailable", async () => {
+    const requestPlayback = vi.fn();
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      requestPlayback,
+      offlineLibrary: "unavailable"
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    clickInspectorTab(container, "Tools");
+    await vi.waitFor(() => expect(container.textContent).toContain("Sonelle offline voice"));
+    expect(container.textContent).toContain("Choose an Android device voice for now.");
+    expect(container.textContent).not.toContain("Download files");
+    container.querySelector<HTMLButtonElement>('[aria-label="Play"]')?.click();
+
+    await vi.waitFor(() => {
+      expect(requestPlayback).not.toHaveBeenCalled();
+      expect(container.textContent).toContain(
+        "Choose an Android device voice to listen on this phone."
+      );
+    });
+
+    dispose();
+    container.remove();
+  });
+
+  it("shows one honest Sonelle voice profile when the Android candidate is unavailable", async () => {
+    const dependencies = createDependencies({
+      dispatcher: createDomainEventDispatcher(),
+      pause: vi.fn().mockResolvedValue(undefined),
+      stopNarration: vi.fn(),
+      stopDrops: vi.fn(),
+      stopVoiceEvents: vi.fn(),
+      engineStatus: "unavailable",
+      offlineLibrary: "mobile-standard"
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const dispose = render(() => <ReaderExperience dependencies={dependencies} />, container);
+
+    clickInspectorTab(container, "Tools");
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain(
+        "This build does not include Sonelle's experimental offline voice."
+      )
+    );
+    expect(container.textContent).toContain("Sonelle offline voice");
+    expect(container.textContent).not.toContain("English narration");
+    expect(container.textContent).not.toContain("Download files");
+
+    dispose();
+    container.remove();
+  });
 });
 
 function clickInspectorTab(container: HTMLElement, label: string) {
@@ -1694,8 +1934,8 @@ interface DependencySpies {
   savePreferences?: (preferences: ReaderPreferences) => void;
   saveAudioSettings?: (settings: AudioSettings) => void;
   requestPlayback?: (sentenceId: string) => void;
-  engineStatus?: "ready" | "not-installed";
-  offlineLibrary?: "individual-voice" | "language-pack";
+  engineStatus?: "ready" | "not-installed" | "unavailable";
+  offlineLibrary?: "individual-voice" | "language-pack" | "mobile-standard" | "unavailable";
   readerPreferences?: ReaderPreferences;
   exportQuoteImage?: (content: {
     sentenceTexts: string[];
@@ -1705,8 +1945,10 @@ interface DependencySpies {
   }) => Promise<string>;
   importBook?: BookImportGateway["importBook"];
   getAudioCacheStats?: (bookId: string) => Promise<{ sentenceCount: number; sizeBytes: number }>;
+  getEngineStatus?: ReaderExperienceDependencies["engineInstallationRepository"]["getStatus"];
   toggleFullscreen?: () => Promise<void>;
   libraryBooks?: LibraryBookSummary[];
+  listBooks?: () => Promise<LibraryBookSummary[]>;
   openBook?: (bookId: string, chapterId?: string) => Promise<ReaderDocumentDto>;
   searchLibrary?: LibrarySearch["search"];
   chooseBookCover?: BookMetadataEditor["chooseCover"];
@@ -1718,6 +1960,9 @@ interface DependencySpies {
   bookmarkStore?: BookmarkStore;
   mobileReaderShell?: boolean;
   lookupWord?: DictionaryRepository["lookupWord"];
+  startupMode?: ReaderExperienceDependencies["startupMode"];
+  mediaSession?: MediaSessionGateway;
+  startDropsError?: Error;
 }
 
 function createDependencies(spies: DependencySpies): ReaderExperienceDependencies {
@@ -1764,10 +2009,15 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       save: spies.saveAudioSettings ?? vi.fn()
     },
     bookCatalog: {
-      list: vi.fn().mockResolvedValue(spies.libraryBooks ?? []),
+      list: spies.listBooks ?? vi.fn().mockResolvedValue(spies.libraryBooks ?? []),
       open: spies.openBook ?? vi.fn().mockRejectedValue(new Error("No library book selected"))
     },
-    bookDropAdapter: { listen: vi.fn().mockResolvedValue(spies.stopDrops) },
+    bookDropAdapter: {
+      listen:
+        spies.startDropsError == null
+          ? vi.fn().mockResolvedValue(spies.stopDrops)
+          : vi.fn().mockRejectedValue(spies.startDropsError)
+    },
     bookOpenRequestAdapter: { listen: vi.fn().mockResolvedValue(() => undefined) },
     bookExporter: {
       exportData: vi.fn().mockRejectedValue(new Error("No library book selected"))
@@ -1795,18 +2045,22 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
       saveSavedDictionary: vi.fn()
     },
     engineInstallationRepository: {
-      getStatus: vi.fn(async (engineId) => ({
-        engineId,
-        status: spies.engineStatus ?? "ready",
-        modelRevision: `${engineId}-test`,
-        downloadSizeBytes: spies.engineStatus === "not-installed" ? 100 : 0,
-        downloadedBytes: 0,
-        progress: spies.engineStatus === "not-installed" ? null : 100,
-        message:
-          spies.engineStatus === "not-installed"
-            ? "Download narration files to listen offline."
-            : "Ready"
-      })),
+      getStatus:
+        spies.getEngineStatus ??
+        vi.fn(async (engineId) => ({
+          engineId,
+          status: spies.engineStatus ?? "ready",
+          modelRevision: `${engineId}-test`,
+          downloadSizeBytes: spies.engineStatus === "not-installed" ? 100 : 0,
+          downloadedBytes: 0,
+          progress: spies.engineStatus === "not-installed" ? null : 100,
+          message:
+            spies.engineStatus === "not-installed"
+              ? "Download narration files to listen offline."
+              : spies.engineStatus === "unavailable"
+                ? "This build does not include Sonelle's experimental offline voice."
+                : "Ready"
+        })),
       install: vi.fn(async (engineId) => ({
         engineId,
         status: "ready" as const,
@@ -1824,7 +2078,7 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
     },
     fontCatalog: { listFamilies: vi.fn().mockResolvedValue(["Inter", "Literata"]) },
     librarySearch: { search: spies.searchLibrary ?? vi.fn().mockResolvedValue([]) },
-    mediaSession: createNoopMediaSessionGateway(),
+    mediaSession: spies.mediaSession ?? createNoopMediaSessionGateway(),
     narration: {
       capabilities: {
         offlineLibrary: spies.offlineLibrary ?? "individual-voice",
@@ -1854,10 +2108,23 @@ function createDependencies(spies: DependencySpies): ReaderExperienceDependencie
     readingPositionStore: {
       save: spies.saveReadingPosition ?? vi.fn().mockResolvedValue(undefined)
     },
+    startupMode: spies.startupMode ?? "sample-preview",
     voiceInstallationRepository: {
       getStatus: vi.fn().mockResolvedValue(readyVoice),
       install: vi.fn().mockResolvedValue(readyVoice),
       listen: vi.fn().mockResolvedValue(spies.stopVoiceEvents)
+    },
+    narrationStorageRepository: {
+      inspect: vi.fn().mockResolvedValue({
+        availableBytes: 0,
+        preparedAudio: [],
+        voicePacks: []
+      }),
+      remove: vi.fn().mockResolvedValue({
+        availableBytes: 0,
+        preparedAudio: [],
+        voicePacks: []
+      })
     }
   };
 }

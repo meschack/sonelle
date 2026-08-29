@@ -155,6 +155,32 @@ export function hybridNarrationVoicesForLanguage(
   return HYBRID_NARRATION_VOICES.filter((voice) => voice.id.startsWith(enginePrefix));
 }
 
+export function mobileNarrationVoices(): readonly NarrationVoice[] {
+  return HYBRID_NARRATION_VOICES.filter((voice) => voice.id.startsWith("supertonic:"));
+}
+
+export function resolveMobileNarrationVoice(currentVoiceId: string): string {
+  if (isAndroidDeviceVoiceId(currentVoiceId)) return currentVoiceId;
+  return currentVoiceId.toLocaleLowerCase().includes("male") || currentVoiceId.endsWith(":M1")
+    ? "supertonic:M1"
+    : "supertonic:F1";
+}
+
+export function activateMobileAudioSettings(
+  settings: AudioSettings,
+  language: string | null | undefined
+): AudioSettings {
+  const languageCode = normalizeLanguageCode(language) ?? "*";
+  const preferredVoiceId =
+    settings.voicePreferences[languageCode] ?? settings.voicePreferences["*"] ?? settings.voiceId;
+  const voiceId = resolveMobileNarrationVoice(preferredVoiceId);
+  return createAudioSettings({
+    ...settings,
+    voiceId,
+    voicePreferences: { ...settings.voicePreferences, [languageCode]: voiceId }
+  });
+}
+
 export function resolveHybridNarrationVoiceForLanguage(
   language: string | null | undefined,
   currentVoiceId: string

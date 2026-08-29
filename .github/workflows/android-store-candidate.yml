@@ -134,6 +134,9 @@ jobs:
       - name: Build signed store AAB
         env:
           SONELLE_BUILD_COMMIT: ${{ inputs.revision }}
+          SONELLE_BUILD_TYPE: store-release
+          SONELLE_NARRATION_CATALOG_SHA256: none
+          SONELLE_NARRATION_MODEL_REVISION: none
         run: |
           export NDK_HOME="$ANDROID_HOME/ndk/27.1.12297006"
           pnpm --filter @sonelle/desktop tauri android build \
@@ -141,14 +144,28 @@ jobs:
             --ci \
             --config "$RUNNER_TEMP/android-store.conf.json"
 
+      - name: Verify generated manifest and Android lint
+        run: |
+          pnpm check:android-manifest
+          cd apps/desktop/src-tauri/gen/android
+          ./gradlew lintUniversalRelease
+
       - name: Verify and collect store candidate
         run: |
           AAB_PATH=$(find apps/desktop/src-tauri/gen/android/app/build/outputs/bundle -type f -name '*release*.aab' -print -quit)
           test -n "$AAB_PATH"
           jarsigner -verify -strict "$AAB_PATH"
-          unzip -l "$AAB_PATH" | grep -q 'base/manifest/AndroidManifest.xml'
+          unzip -l "$AAB_PATH" | grep 'base/manifest/AndroidManifest.xml' >/dev/null
           mkdir -p artifacts/android-store
           cp "$AAB_PATH" artifacts/android-store/sonelle-${{ inputs.version_name }}-${{ inputs.version_code }}.aab
+          node scripts/create-android-build-metadata.mjs \
+            --artifact artifacts/android-store/sonelle-${{ inputs.version_name }}-${{ inputs.version_code }}.aab \
+            --commit "${{ inputs.revision }}" \
+            --abi universal \
+            --build-type store-release \
+            --profile reader-only \
+            --version "${{ inputs.version_name }}" \
+            --output artifacts/android-store/build-metadata.json
           sha256sum artifacts/android-store/*.aab > artifacts/android-store/SHA256SUMS
 
       - name: Upload store candidate

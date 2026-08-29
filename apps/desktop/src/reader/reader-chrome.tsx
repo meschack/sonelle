@@ -3,6 +3,7 @@ import type { PlaybackStatus, ReaderProgress } from "@sonelle/reader";
 import type { ReaderChapterNavigationItem, ReaderContentsItem } from "./reader-view";
 import {
   BookmarkIcon,
+  ContentsIcon,
   FocusIcon,
   HelpIcon,
   NextIcon,
@@ -18,6 +19,7 @@ import { containMobileDialogFocus } from "./mobile-dialog-focus";
 
 interface ProductBarProps {
   showQuoteImageAction: boolean;
+  showShortcutReference: boolean;
   canSaveQuoteImage: boolean;
   onSaveQuoteImage: () => void;
   onOpenShortcutReference: () => void;
@@ -45,16 +47,18 @@ export function ProductBar(props: ProductBarProps) {
             <ShareIcon />
           </button>
         </Show>
-        <button
-          class="product-icon-action"
-          type="button"
-          aria-label="Keyboard shortcuts"
-          aria-keyshortcuts="?"
-          title="Keyboard shortcuts (?)"
-          onClick={props.onOpenShortcutReference}
-        >
-          <HelpIcon />
-        </button>
+        <Show when={props.showShortcutReference}>
+          <button
+            class="product-icon-action"
+            type="button"
+            aria-label="Keyboard shortcuts"
+            aria-keyshortcuts="?"
+            title="Keyboard shortcuts (?)"
+            onClick={props.onOpenShortcutReference}
+          >
+            <HelpIcon />
+          </button>
+        </Show>
       </div>
     </header>
   );
@@ -216,11 +220,13 @@ export function ReaderContentsNavigator(props: ReaderContentsNavigatorProps) {
           ref={trigger}
           class="mobile-contents-trigger"
           type="button"
+          aria-label="Browse contents"
+          title="Browse contents"
           aria-expanded={open()}
           aria-controls="reader-contents-panel"
           onClick={openContents}
         >
-          Browse contents
+          <ContentsIcon />
         </button>
       </Show>
       <Show when={open()}>

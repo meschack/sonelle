@@ -8,6 +8,18 @@ import org.junit.Test
 
 class LockScreenControlPolicyTest {
   @Test
+  fun `visible playback controls expose only previous toggle and next`() {
+    assertEquals(
+      listOf("previous", "pause", "next"),
+      visiblePlaybackControls(playing = true).map { it.command }
+    )
+    assertEquals(
+      listOf("Previous sentence", "Resume", "Next sentence"),
+      visiblePlaybackControls(playing = false).map { it.label }
+    )
+  }
+
+  @Test
   fun `repeated play and pause callbacks are idempotent`() {
     val policy = LockScreenControlPolicy()
 

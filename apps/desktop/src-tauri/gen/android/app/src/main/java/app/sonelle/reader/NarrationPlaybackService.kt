@@ -179,12 +179,19 @@ class NarrationPlaybackService : Service() {
     val contentIntent = launchIntent?.let {
       PendingIntent.getActivity(this, 0, it, pendingIntentFlags())
     }
-    val toggleControl = if (controlPolicy.playing) "pause" else "play"
     val toggleIcon = if (controlPolicy.playing) android.R.drawable.ic_media_pause
       else android.R.drawable.ic_media_play
-    val toggleLabel = if (controlPolicy.playing) "Pause" else "Resume"
     val subtitle = listOf(chapterTitle, author).filter(String::isNotBlank).joinToString(" · ")
-    val notification = Notification.Builder(this, CHANNEL_ID)
+    val builder =
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Notification.Builder(this, CHANNEL_ID)
+      } else {
+        // Notification channels only exist on API 26+; the channel is created
+        // there, so pre-O devices use the legacy builder without a channel id.
+        @Suppress("DEPRECATION")
+        Notification.Builder(this)
+      }
+    val notificationBuilder = builder
       .setSmallIcon(android.R.drawable.ic_media_play)
       .setContentTitle(bookTitle)
       .setContentText(subtitle.ifBlank { "Reading with Sonelle" })
@@ -194,11 +201,17 @@ class NarrationPlaybackService : Service() {
       .setCategory(Notification.CATEGORY_TRANSPORT)
       .setStyle(Notification.MediaStyle().setMediaSession(mediaSession.sessionToken)
         .setShowActionsInCompactView(0, 1, 2))
-      .addAction(notificationAction(android.R.drawable.ic_media_previous, "Previous sentence", "previous", 1))
-      .addAction(notificationAction(toggleIcon, toggleLabel, toggleControl, 2))
-      .addAction(notificationAction(android.R.drawable.ic_media_next, "Next sentence", "next", 3))
-      .addAction(notificationAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", "stop", 4))
-      .build()
+    visiblePlaybackControls(controlPolicy.playing).forEachIndexed { index, control ->
+      val icon = when (control.command) {
+        "previous" -> android.R.drawable.ic_media_previous
+        "next" -> android.R.drawable.ic_media_next
+        else -> toggleIcon
+      }
+      notificationBuilder.addAction(
+        notificationAction(icon, control.label, control.command, index + 1)
+      )
+    }
+    val notification = notificationBuilder.build()
 
     ServiceCompat.startForeground(
       this,
@@ -263,7 +276,15 @@ class NarrationPlaybackService : Service() {
     private const val NOTIFICATION_ID = 814
     private const val LOCK_SCREEN_ACTIONS = PlaybackState.ACTION_PLAY or
       PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE or
-      PlaybackState.ACTION_STOP or PlaybackState.ACTION_SKIP_TO_PREVIOUS or
+      PlaybackState.ACTION_SKIP_TO_PREVIOUS or
       PlaybackState.ACTION_SKIP_TO_NEXT
   }
 }
+
+internal data class VisiblePlaybackControl(val command: String, val label: String)
+
+internal fun visiblePlaybackControls(playing: Boolean): List<VisiblePlaybackControl> = listOf(
+  VisiblePlaybackControl("previous", "Previous sentence"),
+  VisiblePlaybackControl(if (playing) "pause" else "play", if (playing) "Pause" else "Resume"),
+  VisiblePlaybackControl("next", "Next sentence")
+)

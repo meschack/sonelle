@@ -2,17 +2,16 @@
 
 ## Status
 
-Partially complete for issue #132. This review describes the Android artifact that exists now and
-separately records the obligations for the proposed standard offline voice. It is not legal advice.
-The issue remains blocked on the final implementations of the downloadable voice (#104) and optional
-device voice (#114); their eventual artifacts and behavior must be reviewed again before release.
+Partially complete for issue #132. This review separates the reader-only store profile from the
+internal offline-voice candidate profile. It is not legal advice. The candidate still requires the
+physical-device and listening acceptance gates before its disclosure can become a public-release
+disclosure.
 
 ## Current Android release disclosure
 
-The current signed Android build is a reader-only proof. Its Cargo target graph contains no ONNX
-Runtime, Supertonic integration, Kokoro integration, or Android device-voice adapter. It does not
-bundle or download a narration model. Claiming the model review is “done” for that artifact would be
-technically easy and spectacularly useless.
+The store profile remains reader-only. Its Cargo target graph contains no ONNX Runtime, Supertonic,
+or Kokoro integration and it does not bundle or download a narration model. Android device voices
+remain an explicitly selected platform fallback rather than a bundled narration runtime.
 
 | Shipped component                  | Source and revision                                                  | License                              | Notice and disposition                                                                                   |
 | ---------------------------------- | -------------------------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
@@ -20,16 +19,17 @@ technically easy and spectacularly useless.
 | Rust target dependencies           | exact versions in `Cargo.lock`, filtered for `aarch64-linux-android` | approved SPDX allowlist              | `pnpm audit:android-release` rejects missing or unapproved expressions, including GPL/LGPL/AGPL families |
 | Production JavaScript dependencies | exact versions in `pnpm-lock.yaml`                                   | MIT and/or Apache-2.0 at this review | the same audit rejects unapproved production dependency licenses                                         |
 
-The Rust allowlist is `0BSD`, `Apache-2.0`, `BSD-3-Clause`, `CC0-1.0`, `MIT`, `MIT-0`, `MPL-2.0`,
-`Unicode-3.0`, `Unlicense`, and `Zlib`. MPL-2.0 is permitted for unmodified dependencies because its
-source obligation is file-scoped; any future modification to an MPL-covered file requires a new
-review and source-offer handling. The audit is a dependency-metadata guard, not a substitute for
-reading the license files.
+The Rust allowlist is `0BSD`, `Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`, `CC0-1.0`,
+`CDLA-Permissive-2.0`, `ISC`, `MIT`, `MIT-0`, `MPL-2.0`, `Unicode-3.0`, `Unlicense`, and `Zlib`.
+MPL-2.0 is permitted for unmodified dependencies because its source obligation is file-scoped; any
+future modification to an MPL-covered file requires a new review and source-offer handling. The
+audit is a dependency-metadata guard, not a substitute for reading the license files.
 
 ## Standard offline voice candidate
 
-These entries are **not** part of the current Android release disclosure. They are the conditions
-that #104 must satisfy before the candidate can ship.
+These entries are part of the protected internal ARM64 candidate and are **not** part of the
+reader-only store profile. The model pack is downloaded after an explicit request rather than
+bundled in the APK.
 
 | Candidate component                 | Pinned source                                                                                                                        | License                               | Required release behavior                                                                                                                                                                                                              |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -38,11 +38,11 @@ that #104 must satisfy before the candidate can ship.
 | `ort` / `ort-sys` wrapper           | [`pykeio/ort` v2.0.0-rc.12](https://github.com/pykeio/ort/releases/tag/v2.0.0-rc.12)                                                 | MIT OR Apache-2.0                     | retain the selected license notice                                                                                                                                                                                                     |
 | ONNX Runtime 1.24.2 binary          | Microsoft ONNX Runtime, checksum pinned by `ort-sys` for `aarch64-linux-android`                                                     | MIT plus upstream third-party notices | preserve the [MIT license](https://github.com/microsoft/onnxruntime/blob/main/LICENSE) and the matching [third-party notices](https://github.com/microsoft/onnxruntime/blob/main/ThirdPartyNotices.txt) in the distributed application |
 
-The narration catalog now pins both the Supertonic code license and the model's OpenRAIL-M license.
+The internal catalog pins both the Supertonic code license and the model's OpenRAIL-M license.
 The model pack already treats `assets/LICENSE` as a checksummed artifact, so the installer cannot
 commit a “ready” pack without its terms. The accessible model notice and full license text are shown
 only when the application's narration capabilities say that the standard offline voice is available;
-the current reader-only Android build does not advertise an unshipped model.
+the reader-only profile reports the capability unavailable and offers no fake download action.
 
 OpenRAIL-M is not a plain permissive software license. Distribution must include its restrictions and
 license text, and downstream users must be placed on notice of those restrictions. Its generated-
@@ -54,10 +54,9 @@ separate mobile acceptance work succeeds and receives its own artifact-level rev
 
 ## Device-provided voices
 
-The current Android build does not offer a device voice. When #114 adds the deliberate fallback,
-Sonelle must enumerate Android `Voice` capabilities, clearly label the voice as device-provided, and
-distinguish embedded voices from voices whose engine reports `isNetworkConnectionRequired()`. Android
-documents that distinction in its
+Android device voices are enumerated deliberately, clearly labeled as device-provided, and distinguish
+embedded voices from voices whose engine reports `isNetworkConnectionRequired()`. Android documents
+that distinction in its
 [`TextToSpeech.Engine` reference](https://developer.android.com/reference/android/speech/tts/TextToSpeech.Engine).
 
 Sonelle does not distribute or relicense the selected Android speech engine. Its privacy disclosure
@@ -74,8 +73,8 @@ The in-app **Privacy and licenses** section now states:
 - offline narration is machine-generated audio;
 - bounded diagnostics are written locally, never uploaded automatically, and should be reviewed
   before sharing;
-- the current build does not activate a device-provided voice, and any later adapter must disclose
-  network requirements before sending text to a speech engine.
+- a device-provided voice is used only after explicit selection and discloses reported network
+  requirements before sending text to that speech engine.
 
 This disclosure covers Sonelle behavior. It does not promise that a future selected third-party
 device voice is private; that would be a very polished lie.
@@ -86,6 +85,7 @@ Run:
 
 ```bash
 pnpm audit:android-release
+pnpm audit:android-release -- --profile offline-voice-candidate
 ```
 
 The command uses Cargo's exact Android-target resolution and pnpm's production license inventory. It
@@ -94,10 +94,8 @@ pack. CI runs it after the native Android-capable dependency graph has resolved.
 
 Before closing #132:
 
-1. #104 must move the reviewed runtime/model components into the actual Android target, preserve the
-   matching ONNX Runtime notices, and prove the installed license remains accessible after restart.
-2. #114 must identify the selected device engine and its network requirement in the UI and privacy
-   disclosure.
-3. The audit must be rerun against the final signed artifact's exact revision and dependency graph.
-4. The final release disclosure must contain only components that artifact actually bundles or makes
+1. The internal candidate must preserve the matching ONNX Runtime notices and prove the installed
+   model license remains accessible after restart.
+2. The audit must be rerun against the final signed artifact's exact revision and dependency graph.
+3. The final release disclosure must contain only components that artifact actually bundles or makes
    downloadable.

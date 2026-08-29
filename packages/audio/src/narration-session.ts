@@ -11,6 +11,7 @@ import { assertPreparedNarration } from "./narration-manifest";
 import { digestNarrationPassageText } from "./narration-identity";
 import { createNarrationPassages, type NarrationPassageOptions } from "./narration-outline";
 import type { ManifestAwareNarrationPlayer, NarrationOutputSettings } from "./narration-player";
+import { resolveNarrationFailure } from "./narration-failure";
 
 export interface NarrationSessionChapter {
   outline: NarrationChapterOutline;
@@ -112,13 +113,15 @@ export function createNarrationSession(options: NarrationSessionOptions): Narrat
     } catch (error) {
       if (run !== generation) return;
       reportError(error);
+      const failure = resolveNarrationFailure(error);
       await publish(
         createDomainEvent("NarrationPlaybackFailed", {
           bookId: currentChapter.outline.bookId,
           chapterId: currentChapter.outline.chapterId,
           sentenceId,
           passageId: passage.id,
-          reason: friendlyNarrationSessionError(error)
+          outcome: failure.outcome,
+          reason: failure.message
         })
       );
       return;
@@ -181,13 +184,16 @@ export function createNarrationSession(options: NarrationSessionOptions): Narrat
       if (run !== generation) return;
       generation += 1;
       reportError(error);
+      const failure = resolveNarrationFailure(error);
+      const failedSentenceId = active?.passageId === passage.id ? active.sentenceId : sentenceId;
       await publish(
         createDomainEvent("NarrationPlaybackFailed", {
           bookId: passage.bookId,
           chapterId: passage.chapterId,
           passageId: passage.id,
-          sentenceId,
-          reason: friendlyNarrationSessionError(error)
+          sentenceId: failedSentenceId,
+          outcome: failure.outcome,
+          reason: failure.message
         })
       );
       return;
@@ -443,9 +449,4 @@ function nextSentenceAfterPassage(
 function requireOpenChapter(chapter: OpenChapter | null): OpenChapter {
   if (chapter == null) throw new Error("Open a narration chapter before controlling playback.");
   return chapter;
-}
-
-function friendlyNarrationSessionError(error: unknown): string {
-  void error;
-  return "Narration needs attention. Please try again.";
 }
