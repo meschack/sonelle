@@ -94,7 +94,7 @@ jobs:
           packages: ""
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.120.0
         with:
           targets: ${{ matrix.rust_target }}
 
@@ -215,7 +215,7 @@ jobs:
           corepack prepare pnpm@11.7.0 --activate
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.95.0
+        uses: dtolnay/rust-toolchain@1.120.0
         with:
           targets: aarch64-apple-ios
 
