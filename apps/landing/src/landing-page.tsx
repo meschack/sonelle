@@ -1,4 +1,4 @@
-import { For, Match, Switch, createSignal, onMount } from "solid-js";
+import { For, Match, Show, Switch, createSignal, onMount } from "solid-js";
 
 import { detectDesktopPlatform, type DesktopPlatform } from "./platform";
 
@@ -9,21 +9,27 @@ const INSTALL_COMMAND =
 
 const features = [
   {
+    label: "Read & listen",
     title: "The voice stays with the page.",
-    copy: "Sentence-level highlighting keeps your place without turning the reader into a music player.",
+    copy: "Listen as you read, with the spoken sentence gently highlighted. Find your place at a glance and follow the story at your own pace.",
     image: "/media/narration.png",
+    visual: "reader",
     alt: "Sonelle highlighting the sentence currently being narrated"
   },
   {
+    label: "Made for your library",
     title: "Your library stays where it belongs.",
-    copy: "Books, bookmarks, narration, and reading progress stay on your device.",
+    copy: "Bring your own EPUBs. Keep your books, bookmarks, prepared narration, and reading progress on your device. Your reading desk goes offline with you.",
     image: "/media/local-library.png",
-    alt: "Sonelle's private local library"
+    visual: "book",
+    alt: "Illustrative cover of A Map of Quiet Water, a sample EPUB book"
   },
   {
+    label: "Room for curiosity",
     title: "Stay curious without leaving the story.",
-    copy: "Look up a word, save a passage, or find a line across your library.",
+    copy: "Meet an unfamiliar word? Look it up beside the page. Save words and passages to revisit, then carry on right where you left off.",
     image: "/media/lookup.png",
+    visual: "reader",
     alt: "A word definition beside the open book in Sonelle"
   }
 ] as const;
@@ -62,39 +68,143 @@ function DownloadIcon() {
 function Hero() {
   return (
     <section class="hero section-shell" id="top">
-      <div class="hero-copy reveal">
+      <div class="hero-copy">
+        <p class="eyebrow">A private EPUB reader</p>
         <h1>
-          Read with your eyes.
-          <br />
-          Listen at your pace.
+          A good book.
+          <br />A little <span>company.</span>
         </h1>
-        <p>Sonelle keeps narration with the page, so you can stay inside the story.</p>
+        <p class="hero-description">
+          Read your books. Listen along. Sonelle keeps the spoken sentence in view, and your library
+          right on your device.
+        </p>
         <div class="hero-actions">
           <a class="button button-primary" href="#install">
-            Get Sonelle
+            Get Sonelle <ArrowIcon />
           </a>
-          <a class="button button-secondary" href="#film">
-            Watch the film
+          <a class="film-link" href="#film">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m9 6 9 6-9 6V6Z" />
+            </svg>
+            Watch the film <span>1:09</span>
           </a>
         </div>
+        <p class="hero-note">Linux downloads · macOS early access</p>
       </div>
-      <div class="hero-product reveal reveal-later" aria-label="Sonelle reader preview">
-        <img src="/media/film-poster.png" alt="Sonelle open to a narrated EPUB book" />
+      <ReadingPreview />
+      <div class="hero-details" aria-label="Sonelle at a glance">
+        <span>Bring your EPUBs</span>
+        <span>Read & listen together</span>
+        <span>Keep your library local</span>
       </div>
     </section>
+  );
+}
+
+function ReadingPreview() {
+  const sentences = [
+    "By the time Mara reached the harbor, the rain had polished every window into a small mirror.",
+    "She paused beneath the station clock and listened as the chapter unfolded in a measured, familiar voice.",
+    "The page no longer asked her to choose between reading closely and letting the story carry her."
+  ];
+  const [selected, setSelected] = createSignal(1);
+
+  return (
+    <figure class="reading-preview" aria-label="Interactive sentence highlighting preview">
+      <div class="reader-surround">
+        <div class="reader-topline">
+          <span>Between the lines</span>
+          <span>Reading preview</span>
+        </div>
+        <div class="reader-sheet">
+          <div class="reader-book">
+            <span>A Map of Quiet Water</span>
+            <span>Chapter 3</span>
+          </div>
+          <h2>Harbor Light</h2>
+          <div class="reader-passage">
+            <For each={sentences}>
+              {(sentence, index) => (
+                <div class="preview-sentence" data-active={selected() === index()}>
+                  <button
+                    class="sentence-marker"
+                    type="button"
+                    aria-label={`Highlight sentence ${index() + 1}`}
+                    aria-pressed={selected() === index()}
+                    onClick={() => setSelected(index())}
+                  >
+                    <span />
+                  </button>
+                  <p>
+                    <span>{sentence}</span>
+                  </p>
+                </div>
+              )}
+            </For>
+          </div>
+          <div class="reader-controls">
+            <span aria-live="polite" aria-atomic="true">
+              Sentence {selected() + 1} of {sentences.length}
+            </span>
+            <div>
+              <button
+                type="button"
+                aria-label="Previous sentence"
+                onClick={() => setSelected((selected() + sentences.length - 1) % sentences.length)}
+              >
+                <span class="previous-arrow">
+                  <ArrowIcon />
+                </span>
+              </button>
+              <button
+                type="button"
+                aria-label="Next sentence"
+                onClick={() => setSelected((selected() + 1) % sentences.length)}
+              >
+                <ArrowIcon />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption>
+        <span class="caption-line" /> Try the controls. Follow one sentence at a time.
+      </figcaption>
+    </figure>
   );
 }
 
 function ProductFilm() {
   let videoElement!: HTMLVideoElement;
   const [playing, setPlaying] = createSignal(false);
+  const [failed, setFailed] = createSignal(false);
+
+  const playFilm = async () => {
+    try {
+      await videoElement.play();
+      setFailed(false);
+    } catch {
+      setFailed(true);
+    }
+  };
 
   return (
     <section class="film-section" id="film">
       <div class="film-inner section-shell">
         <div class="film-heading">
-          <h2>See reading and listening move together.</h2>
-          <p>A quiet tour of Sonelle, from importing a book to listening offline.</p>
+          <div>
+            <p class="eyebrow">Meet your reading desk</p>
+            <h2>
+              Less between you
+              <br />
+              and your next chapter.
+            </h2>
+          </div>
+          <p>
+            From the first import to the next sentence.
+            <br />
+            Take a quiet, one-minute look around.
+          </p>
         </div>
         <figure class="film-frame">
           <div class="film-video" data-playing={playing()}>
@@ -104,8 +214,10 @@ function ProductFilm() {
               playsinline
               preload="metadata"
               poster="/media/film-poster.png"
+              aria-label="Sonelle product film"
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
+              onEnded={() => setPlaying(false)}
             >
               <source src="/media/sonelle-product-film.mp4" type="video/mp4" />
               Your browser cannot play the Sonelle product film.
@@ -114,7 +226,8 @@ function ProductFilm() {
               class="film-play"
               type="button"
               aria-label="Play Sonelle product film"
-              onClick={() => void videoElement.play()}
+              onClick={() => void playFilm()}
+              tabIndex={playing() ? -1 : 0}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m9 7 8 5-8 5V7Z" />
@@ -122,8 +235,15 @@ function ProductFilm() {
             </button>
           </div>
           <figcaption>
-            Sonelle product film <span>·</span> 1:09
+            <span>Read. Listen. Stay with the story.</span>
+            <span>Sonelle in 1:09</span>
           </figcaption>
+          <Show when={failed()}>
+            <p class="film-error" role="alert">
+              The film couldn’t play.{" "}
+              <a href="/media/sonelle-product-film.mp4">Open the film directly</a>.
+            </p>
+          </Show>
         </figure>
       </div>
     </section>
@@ -133,19 +253,33 @@ function ProductFilm() {
 function FeatureStory() {
   return (
     <section class="features section-shell" id="features" aria-label="What Sonelle does">
+      <div class="features-heading">
+        <p class="eyebrow">Built around the book</p>
+        <h2>
+          A reading desk.
+          <br />
+          <span>Nothing in the way.</span>
+        </h2>
+        <p>
+          A place for the story, a voice to follow,
+          <br />
+          and a little room to make it yours.
+        </p>
+      </div>
       <For each={features}>
-        {(feature, index) => (
+        {(feature) => (
           <article class="feature-row">
             <div class="feature-copy">
-              <h2>{feature.title}</h2>
+              <p class="eyebrow">{feature.label}</p>
+              <h3>{feature.title}</h3>
               <p>{feature.copy}</p>
             </div>
-            <div class="feature-image">
+            <div
+              class="feature-image"
+              classList={{ "feature-image-book": feature.visual === "book" }}
+            >
               <img src={feature.image} alt={feature.alt} loading="lazy" />
             </div>
-            <span class="feature-number" aria-hidden="true">
-              0{index() + 1}
-            </span>
           </article>
         )}
       </For>
@@ -161,8 +295,14 @@ function LinuxInstall() {
   ] as const;
 
   return (
-    <div class="platform-panel" id="platform-linux" role="tabpanel" aria-labelledby="tab-linux">
-      <p>Sonelle detected Linux. Choose the package that fits your system.</p>
+    <div
+      class="platform-panel"
+      id="platform-linux"
+      role="tabpanel"
+      aria-labelledby="tab-linux"
+      tabIndex={0}
+    >
+      <p>Choose the Linux package that fits your system.</p>
       <div class="platform-actions">
         <a class="button button-primary" href={RELEASES_URL}>
           <DownloadIcon /> Download for Linux
@@ -220,7 +360,13 @@ function MacInstall() {
   };
 
   return (
-    <div class="platform-panel" id="platform-macos" role="tabpanel" aria-labelledby="tab-macos">
+    <div
+      class="platform-panel"
+      id="platform-macos"
+      role="tabpanel"
+      aria-labelledby="tab-macos"
+      tabIndex={0}
+    >
       <p>
         The guided installer builds a pinned Sonelle release locally and places it in your
         Applications folder.
@@ -248,6 +394,7 @@ function WindowsInstall() {
       id="platform-windows"
       role="tabpanel"
       aria-labelledby="tab-windows"
+      tabIndex={0}
     >
       <h3>Windows needs a little more cooking.</h3>
       <p>
@@ -268,39 +415,78 @@ function InstallSection() {
     setPlatform(detectDesktopPlatform(navigator.userAgent, navigator.platform));
   });
 
+  const navigatePlatforms = (event: KeyboardEvent, currentIndex: number) => {
+    let nextIndex: number;
+    switch (event.key) {
+      case "ArrowRight":
+        nextIndex = (currentIndex + 1) % platforms.length;
+        break;
+      case "ArrowLeft":
+        nextIndex = (currentIndex + platforms.length - 1) % platforms.length;
+        break;
+      case "Home":
+        nextIndex = 0;
+        break;
+      case "End":
+        nextIndex = platforms.length - 1;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    setPlatform(platforms[nextIndex].id);
+    document.getElementById(`tab-${platforms[nextIndex].id}`)?.focus();
+  };
+
   return (
     <section class="install-section section-shell" id="install">
       <div class="install-heading">
-        <h2>Ready when your next book is.</h2>
-        <p>Choose your computer and we’ll show the clearest way in.</p>
+        <p class="eyebrow">Make yourself at home</p>
+        <h2>
+          Your next chapter
+          <br />
+          starts here.
+        </h2>
+        <p>Bring a book. We’ll keep your place.</p>
+        <p class="install-context">
+          Choose your computer for installation details. Sonelle is in early access, and
+          availability varies by platform.
+        </p>
+        <a class="text-link" href={SOURCE_URL}>
+          Explore the source <ArrowIcon />
+        </a>
       </div>
-      <div class="platform-tabs" role="tablist" aria-label="Choose your computer">
-        <For each={platforms}>
-          {(item) => (
-            <button
-              id={`tab-${item.id}`}
-              type="button"
-              role="tab"
-              aria-selected={platform() === item.id}
-              aria-controls={`platform-${item.id}`}
-              onClick={() => setPlatform(item.id)}
-            >
-              {item.label}
-            </button>
-          )}
-        </For>
+      <div class="install-options">
+        <div class="platform-tabs" role="tablist" aria-label="Choose your computer">
+          <For each={platforms}>
+            {(item, index) => (
+              <button
+                id={`tab-${item.id}`}
+                type="button"
+                role="tab"
+                aria-selected={platform() === item.id}
+                aria-controls={`platform-${item.id}`}
+                tabIndex={platform() === item.id ? 0 : -1}
+                onClick={() => setPlatform(item.id)}
+                onKeyDown={(event) => navigatePlatforms(event, index())}
+              >
+                {item.label}
+              </button>
+            )}
+          </For>
+        </div>
+        <Switch>
+          <Match when={platform() === "linux"}>
+            <LinuxInstall />
+          </Match>
+          <Match when={platform() === "macos"}>
+            <MacInstall />
+          </Match>
+          <Match when={platform() === "windows"}>
+            <WindowsInstall />
+          </Match>
+        </Switch>
       </div>
-      <Switch>
-        <Match when={platform() === "linux"}>
-          <LinuxInstall />
-        </Match>
-        <Match when={platform() === "macos"}>
-          <MacInstall />
-        </Match>
-        <Match when={platform() === "windows"}>
-          <WindowsInstall />
-        </Match>
-      </Switch>
     </section>
   );
 }
@@ -309,18 +495,11 @@ function Footer() {
   return (
     <footer>
       <div class="footer-inner section-shell">
-        <div class="footer-cta">
-          <h2>
-            The story is ready
-            <br />
-            when you are.
-          </h2>
-          <a class="button button-light" href="#install">
-            Get Sonelle <ArrowIcon />
-          </a>
+        <div class="footer-brand">
+          <Brand />
+          <p>A little closer to the story.</p>
         </div>
         <div class="footer-meta">
-          <Brand />
           <nav aria-label="Footer navigation">
             <a href={SOURCE_URL}>GitHub</a>
             <a href={RELEASES_URL}>Releases</a>
@@ -336,20 +515,25 @@ function Footer() {
 export function LandingPage() {
   return (
     <>
+      <a class="skip-link" href="#main">
+        Skip to content
+      </a>
       <header class="site-header">
         <div class="header-inner section-shell">
           <Brand />
           <nav aria-label="Main navigation">
-            <a href="#film">How it works</a>
+            <a href="#film">The experience</a>
             <a href="#features">Features</a>
-            <a href="#install">Install</a>
+            <a href={SOURCE_URL}>
+              Source <span aria-hidden="true">↗</span>
+            </a>
           </nav>
           <a class="button button-primary header-action" href="#install">
-            Get Sonelle
+            Get Sonelle <ArrowIcon />
           </a>
         </div>
       </header>
-      <main>
+      <main id="main" tabIndex={-1}>
         <Hero />
         <ProductFilm />
         <FeatureStory />
